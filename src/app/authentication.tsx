@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { signIn, signUp, logOut } from "./firebase/auth.js";
 import { useEffect } from "react";
-import { auth, provider } from "./firebase/config.js";
+import { auth, provider } from "./firebase/config";
 import { signInWithPopup, signOut, User } from "firebase/auth";
 
 

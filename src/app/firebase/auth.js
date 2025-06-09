@@ -1,4 +1,4 @@
-import { auth, provic, provider } from "./config.js";
+import { auth, provic, provider } from "./config.ts";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
