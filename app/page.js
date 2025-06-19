@@ -1,9 +1,8 @@
-import svg from "@/public/Landingpage.svg";
 import Image from "next/image";
 export default function Home() {
   return (
     <>
-      <div className="bg-[url(@/public/Landingpage.svg)] bg-cover h-screen">
+      <div className="bg-[url(/Landingpage.svg)] bg-cover h-screen">
         <div className="h-full z-1 bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
           <div className="hud h-full z-1">
             <div className="flex justify-center items-center h-screen ">

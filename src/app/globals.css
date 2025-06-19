@@ -1,9 +1,0 @@
-@import "tailwindcss";
-
-.font-orbitron {
-  font-family: var(--font-orbitron);
-}
-
-.font-oxanium {
-  font-family: var(--font-oxanium);
-}
