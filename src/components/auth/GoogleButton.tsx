@@ -7,7 +7,7 @@ export default function GoogleButton() {
   return (
     <button
       onClick={signInWithGoogle}
-      className="bg-white text-gray-800 font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-gray-100 flex items-center"
+      className="bg-white border-gray-800 text-gray-800 font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-gray-100 flex items-center"
     >
       <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
         <path

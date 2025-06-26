@@ -1,50 +1,96 @@
 "use client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import Navbar from "@/components/shared/Navbar";
+import BarChart from "@/components/shared/BarChart";
+import Button from "@/components/shared/button";
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
-  const router = useRouter();
+  const router = useRouter(); 
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Welcome, {user?.email}</h1>
+    <>
+      <div className="min-h-screen bg-[url('/bg.svg')] bg-cover bg-center flex text-white justify-center h-[100vh]">
+        <div className="flex justify-between items-center flex-col p-4 w-[80vw] h-full">
+          <div className="w-full flex-0.5 h-22 mb-4 bg-white">
+            <Navbar />
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div
-          className="bg-white p-6 rounded-lg shadow-md cursor-pointer hover:bg-blue-50 transition"
-          onClick={() => router.push("/create")}
-        >
-          <h2 className="text-xl font-semibold mb-2">Create Room</h2>
-          <p className="text-gray-600">Start a new coding battle</p>
-        </div>
+          <div className="flex flex-0.8 h-32 w-full">
+            <div className="flex-1 bg-amber-200 h-32 rounded-lg flex items-center justify-center text-gray-800">hellow</div>
+            <div className="flex-1 bg-red-100 h-32 rounded-lg flex items-center justify-center text-gray-800">hellow</div>
+            <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800 gap-5">
+              <Button content="JOIN" onClick={() => router.push('/join')}/>
+              <Button content="CREATE" onClick={() => router.push('/create')}/>
+            </div>
+          </div>
 
-        <div
-          className="bg-white p-6 rounded-lg shadow-md cursor-pointer hover:bg-blue-50 transition"
-          onClick={() => router.push("/join")}
-        >
-          <h2 className="text-xl font-semibold mb-2">Join Room</h2>
-          <p className="text-gray-600">Enter an existing battle</p>
+          <div className="flex flex-0.5 w-full h-15"></div>          
+          <div className="flex flex-2 gap-4 px-6 w-full ">
+            <div 
+              className="flex-1 p-4 h-fill rounded-lg bg-black/50 flex flex-col border-2 border-transparent"
+              style={{
+                background: 'rgba(0, 0, 0, 0.5)',
+                borderImage: 'linear-gradient(45deg, #fbbf24, #f59e0b, #d97706) 1',
+                borderRadius: '0.5rem'
+              }}
+            >
+              <p className="text-white text-center flex-[0.3] flex justify-center items-center font-oxanium mb-4 text-3xl">QUESTIONS SOLVED</p>
+              <div className="flex-1 w-full">
+                <BarChart />
+              </div>
+            </div>
+
+
+            <div className="flex-1 border border-amber-600 p-4 h-fill rounded-lg flex flex-col items-center justify-center text-gray-800">
+              <div className = "flex-[0.23] flex items-center justify-center">
+                <p className = "font-oxanium text-white text-3xl">WINNING STREAK</p>
+              </div>
+              <div className = "flex-[0.4]">
+              <img src = "/fire.svg" className="h-40 w-auto object-contain" alt="fire" />
+              </div>
+              <div className = "flex-[0.1]">
+                <p className="text-white text-2xl fonr-oxanium">3 days</p>
+              </div>
+              <div className = "flex-[0.27]"></div>
+            </div>
+
+          </div>
+
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-4">Your Stats</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <StatCard title="Matches Played" value="12" />
-          <StatCard title="Win Rate" value="75%" />
-          <StatCard title="Rank" value="#42" />
+
+      <div className="min-h-screen bg-[url('/bg.svg')] bg-cover bg-center flex text-white justify-center h-[100vh]">
+        <div className="flex justify-between items-center flex-col w-[80vw] h-full">'
+
+          <div className="flex flex-0.5 w-full bg-white h-10"></div>
+
+          <div className="flex flex-1 h-32 w-full bg-blue-500"></div>
+
+          <div className="flex flex-0.5 w-full bg-white h-15"></div>
+
+          <div className="flex flex-1 h-32 w-full bg-red-500"></div>
+
+          <div className="flex flex-0.5 w-full bg-white h-15"></div>
+
+          <div className="flex flex-1 h-32 w-full bg-green-500"></div>
+
+
         </div>
       </div>
-    </div>
+    </>
+
+
+
   );
 }
 
 function StatCard({ title, value }: { title: string; value: string }) {
   return (
-    <div className="bg-gray-50 p-4 rounded-lg">
-      <p className="text-gray-500 text-sm">{title}</p>
-      <p className="text-2xl font-bold">{value}</p>
+    <div className="bg-gray-800 rounded-lg w-2xl h-[40vw] flex flex-col items-center justify-center shadow-lg">
+
     </div>
   );
 }

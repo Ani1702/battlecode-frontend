@@ -1,4 +1,27 @@
+"use client"
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth } from '../path/to/your/firebase/config'; // Adjust path as needed
+import { useAuth } from '@/contexts/AuthContext';
+
 const Hero = () => {
+  const router = useRouter();
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        router.push('/login');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [router]);
+  const { signInWithGoogle } = useAuth();
+
   return (
     <div className="bg-[url('/Landingpage.svg')] bg-cover h-screen">
       <div className="h-full z-1 bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
@@ -44,6 +67,9 @@ const Hero = () => {
               </h1>
             </div>
           </div>
+          <div>
+            <button className = "opacity-45 text-3xl font-medium border-2 border-amber-700 translate-y-25 w-30 h-10" onClick = {signInWithGoogle}>login</button>
+          </div>
           <div className="w-[458px] quote flex absolute bottom-0  justify-center">
             <p className="z-1  text-center uppercase tracking-[4px] absolute bottom-[5rem] text-[0.85rem]">
               This is more than just programming—it's precision under pressure.
@@ -61,3 +87,5 @@ const Hero = () => {
 };
 
 export default Hero;
+
+

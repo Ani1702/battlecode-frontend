@@ -14,10 +14,8 @@ export async function GET(request: Request) {
 
       // Exchange the code for a session
       await supabase.auth.exchangeCodeForSession(code);
-    }
-
-    // URL to redirect to after sign in process completes
-    return NextResponse.redirect(requestUrl.origin);
+    }    // URL to redirect to after sign in process completes
+    return NextResponse.redirect(new URL("/dashboard", requestUrl.origin));
   } catch (error) {
     console.error("Auth callback error:", error);
     return NextResponse.redirect(new URL("/auth-error", request.url));

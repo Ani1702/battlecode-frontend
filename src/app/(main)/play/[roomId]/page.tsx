@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
 import CodeEditor from "@/components/editor/CodeEditor";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Problem = {
   id: string;
@@ -13,9 +14,16 @@ type Problem = {
 };
 
 export default function PlayRoom() {
+  
+
   const { roomId } = useParams();
   const { socket } = useSocket();
   const router = useRouter();
+  const { user} = useAuth();
+  if (!user) {
+    router.push("/login");
+    return null;
+  }
 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState("");
@@ -26,7 +34,9 @@ export default function PlayRoom() {
 
   useEffect(() => {
     if (!socket) {
+      console.log("No socket")
       router.push("/dashboard");
+      
       return;
     }
 
