@@ -1,9 +1,13 @@
-import { Orbitron } from "next/font/google";
+import { Orbitron, Oxanium } from "next/font/google";
 import "./globals.css";
 
 const orbitron = Orbitron({
   subsets: ["latin"],
   variable: "--font-orbitron",
+});
+const oxanium = Oxanium({
+  subsets: ["latin"],
+  variable: "--font-oxanium",
 });
 
 export const metadata = {
@@ -14,7 +18,9 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${orbitron.variable} antialiased`}>{children}</body>
+      <body className={`${orbitron.variable} ${oxanium.variable} antialiased`}>
+        {children}
+      </body>
     </html>
   );
 }

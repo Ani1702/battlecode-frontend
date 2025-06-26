@@ -1,0 +1,21 @@
+<div className="relative w-fit h-fit">
+  {/* Sharp text layer */}
+  <div className="absolute top-0 left-0 z-20 drop-shadow-[0_4px_#000]">
+    <h1 className="text-8xl tracking-wide font-medium stickyMask text-shadow-heading text-white">
+      BATTLECODE
+    </h1>
+    <h1 className="text-8xl tracking-wide font-medium blur-sm absolute top-0 left-0 text-white">
+      BATTLECODE
+    </h1>
+  </div>
+
+  {/* Glow layer */}
+  <div className="absolute top-0 left-0 blur-3xl mix-blend-color-dodge z-10">
+    <h1 className="text-8xl tracking-wider font-medium stickyMask text-shadow-heading text-white">
+      BATTLECODE
+    </h1>
+    <h1 className="text-8xl tracking-wider font-medium blur-md absolute top-0 left-0 text-white">
+      BATTLECODE
+    </h1>
+  </div>
+</div>
