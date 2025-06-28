@@ -1,16 +1,26 @@
-import { Inter } from "next/font/google";
+import { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SocketProvider } from "@/contexts/SocketContext";
-import { Oxanium } from 'next/font/google'
+import { Oxanium, Orbitron } from "next/font/google";
 import Protected from "@/components/shared/Protected";
 
-const oxanium = Oxanium({
-  subsets: ['latin'],
-  weight: ['400', '700'], // Choose weights you need
-  display: 'swap',
-})
+export const metadata: Metadata = {
+  title: "BattleCode IEEE-CS VIT",
+  description: "One v One Gamified Programming Platform",
+};
 
+// const oxanium = Oxanium({
+//   variable: "--font-oxanium",
+//   subsets: ["latin"],
+//   weight: ["400", "700"],
+//   display: "swap",
+// });
+
+const orbitron = Orbitron({
+  variable: "--font-orbitron",
+  subsets: ["latin"],
+});
 
 export default function RootLayout({
   children,
@@ -19,8 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className = {oxanium.className}>
-        
+      <body className={`${orbitron.variable} antialiased`}>
         <AuthProvider>
           <Protected>
             <SocketProvider>{children}</SocketProvider>

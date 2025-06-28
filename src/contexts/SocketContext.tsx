@@ -29,10 +29,6 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const socketInstance = io(process.env.NEXT_PUBLIC_SOCKET_URL!, {
       auth: {
         token: session.access_token,
-        authorization: `Bearer ${session.access_token}`,
-      },
-      extraHeaders: {
-        Authorization: `Bearer ${session.access_token}`,
       },
       autoConnect: true,
       reconnectionAttempts: 5,
@@ -43,20 +39,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const onConnect = () => {
       setIsConnected(true);
       setIsLoading(false);
+      console.log("Socket connected");
     };
 
     const onDisconnect = () => {
       setIsConnected(false);
+      console.log("Socket disconnected");
     };
 
-    const onConnectError = (error: any) => {
+    const onConnectError = (error: Error) => {
       console.error("Socket connection error:", error);
-      console.error("Error details:", {
-        message: error.message,
-        description: error.description,
-        context: error.context,
-        type: error.type,
-      });
+      setIsConnected(false);
       setIsLoading(false);
     };
 
@@ -72,7 +65,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       socketInstance.off("connect_error", onConnectError);
       socketInstance.disconnect();
     };
-  }, [session]);
+  }, [session?.access_token]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected, isLoading }}>

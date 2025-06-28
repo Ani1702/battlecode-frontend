@@ -57,11 +57,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
-        console.error('Sign-in error:', error);
+        console.error("Sign-in error:", error);
         throw error;
       }
+
+      router.push("/dashboard");
     } catch (error) {
-      console.error('Error during Google sign-in:', error);
+      console.error("Error during Google sign-in:", error);
     }
   };
 
