@@ -1,0 +1,165 @@
+"use client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import Navbar from "@/components/shared/Navbar";
+import BarChart from "@/components/shared/BarChart";
+import Button from "@/components/shared/button";
+import PieChart from "@/components/shared/Piechart";
+import ContributionsGrid from "@/components/shared/ContributionsGrid";
+import Rewards from "@/components/shared/Rewards";
+import WinStreak from '@/components/shared/WinStreak';
+
+export default function Dashboard() {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
+
+  const timeSpentData = {
+    labels: ['Coding', 'Analysing', 'Practice', 'Other'],
+    values: [45, 25, 15, 15],
+    colors: ['#ff6b00', '#dc2626', '#f59e0b', '#9ca3af'],
+  };
+
+  const matchesData = {
+    labels: ['Won', 'Lost', 'Tie'],
+    values: [12, 6, 2],
+    colors: ['#22c55e', '#ef4444', '#f59e0b'],
+  };
+  const totalMatches = matchesData.values.reduce((a, b) => a + b, 0);
+
+  // Mock data for the contributions grid (7 rows, 32 columns)
+  const contributionsData = new Array(7 * 32).fill(0);
+  contributionsData[75] = 1; // Corresponds to a red block in the grid
+  contributionsData[157] = 1; // Corresponds to another red block
+
+  const userBadges = [
+    { id: 1, name: 'FIRST MATCH', imageUrl: 'b-1.svg' },
+    { id: 2, name: 'FIRST WIN', imageUrl: 'b-2.svg' },
+    { id: 3, name: '5 DAY STREAK', imageUrl: 'b-3.svg' },
+    { id: 4, name: '10 DAY STREAK', imageUrl: 'b-4.svg' },
+  ];
+
+  return (
+    <>
+      <div className="flex flex-col min-h-screen bg-[url('/bg.svg')] bg-cover bg-center bg-fixed">
+        <div className="hidden flex-1">
+          <Navbar />
+        </div>
+
+
+
+        <div className="flex flex-3">
+          <div className="relative z-10 flex-[1.5]">
+            <p className="text-gray-400 text-lg font-sans">Welcome</p>
+            <h1 className="text-white text-3xl font-bold font-orbitron tracking-wider my-1 uppercase">{user?.email?.split('@')[0] || 'USER'}</h1>
+            <p className="text-white text-2xl font-sans flex items-center">
+              <span className="text-yellow-400 mr-2">⭐</span>
+              2450
+            </p>
+          </div>
+
+          <div className = "flex-[1.5]"></div>
+
+
+
+          <div className="flex-[1.5] h-32 rounded-lg flex items-center justify-center text-gray-800 gap-5">
+            <Button content="JOIN" onClick={() => router.push('/join')} />
+            <Button content="CREATE" onClick={() => router.push('/create')} />
+          </div>
+        </div>
+
+        <div
+          className="flex-1 mt-2 p-4 h-fill rounded-lg bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+          <p className="text-gray-200 text-center flex-[0.3] flex justify-center items-center font-oxanium mb-4 text-3xl">QUESTIONS SOLVED</p>
+          <div className="flex-1 w-full">
+            <BarChart />
+          </div>
+        </div>
+        <div className="flex flex-2 gap-4 px-6 w-full ">
+          <WinStreak days={4} />
+        </div>
+
+      </div>
+
+
+
+
+
+      <div className="flex flex-col min-h-screen">
+        <div className="min-h-screen bg-[url('/bg.svg')] bg-cover bg-center flex justify-center h-[100vh]">
+          <div className="flex justify-between items-center flex-col p-4 w-[80vw] h-full">
+            <div className="w-full flex-0.5 h-22 mb-4">
+              <Navbar />
+            </div>
+            <div className="flex flex-0.5 h-5"></div>
+
+            <div className="flex flex-0.8 h-32 w-full">
+              <div className="relative flex-1 h-full rounded-lg p-6 flex flex-col justify-center overflow-hidden">
+                {/* Background Gradient Arc */}
+                <div className="absolute -bottom-1/2 -right-1/4 w-full h-full rounded-full " />
+
+                {/* Content */}
+                <div className="relative z-10">
+                  <p className="text-gray-400 text-lg font-sans">Welcome</p>
+                  <h1 className="text-white text-3xl font-bold font-orbitron tracking-wider my-1 uppercase">{user?.email?.split('@')[0] || 'USER'}</h1>
+                  <p className="text-white text-2xl font-sans flex items-center">
+                    <span className="text-yellow-400 mr-2">⭐</span>
+                    2450
+                  </p>
+                </div>
+              </div>
+              <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800"></div>
+              <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800 gap-5">
+                <Button content="JOIN" onClick={() => router.push('/join')} />
+                <Button content="CREATE" onClick={() => router.push('/create')} />
+              </div>
+            </div>
+
+            <div className="flex flex-0.5 w-full h-15"></div>
+            <div className="flex flex-2 gap-4 px-6 w-full ">
+              <div
+                className="flex-1 mt-2 p-4 h-fill rounded-lg bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+                <p className="text-gray-200 text-center flex-[0.3] flex justify-center items-center font-oxanium mb-4 text-3xl">QUESTIONS SOLVED</p>
+                <div className="flex-1 w-full">
+                  <BarChart />
+                </div>
+              </div>
+
+              <WinStreak days={4} />
+            </div>
+
+
+          </div>
+
+
+          <div className="flex flex-1 w-[80vw] gap-4 bg-black/40 backdrop-blur-sm border border-red-500/30 rounded-lg p-2">
+            <PieChart data={matchesData} centerTextTop="MATCHES" centerTextBottom={`${totalMatches} Matches`} />
+            <PieChart data={timeSpentData} centerTextTop="TIME SPENT" centerTextBottom="8 Hours" />
+          </div>
+
+
+          <div className="flex flex-1 w-full">
+            <ContributionsGrid data={contributionsData} />
+          </div>
+
+
+          <div className="w-full mt-10">
+            <Rewards badges={userBadges} />
+          </div>
+
+
+        </div>
+
+
+
+      </div>
+    </>
+  );
+}
+
+function StatCard({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="bg-gray-800 rounded-lg w-2xl h-[40vw] flex flex-col items-center justify-center shadow-lg">
+
+    </div>
+  );
+}

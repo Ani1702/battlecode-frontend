@@ -17,7 +17,7 @@ export default function BarChart() {
             if (ctx) {
                 const gradient = ctx.createLinearGradient(0, 0, 0, 400);
                 gradient.addColorStop(0, 'rgba(255, 255, 153, 0.2)');    // Light yellow at top
-                gradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)');        // Black at bottom
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');        // Black at bottom
                 chartInstance.current = new Chart(ctx, {
                     type: 'bar',
                     data: {
