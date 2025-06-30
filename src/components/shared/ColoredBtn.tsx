@@ -15,7 +15,7 @@ export default function ColoredBtn({
 }: ColoredBtnProps) {
   return (
     <button
-      className={`px-4 py-2 rounded-lg font-oxanium ${
+      className={` rounded-lg text-2xl font-oxanium p-4 ${
         selected
           ? "bg-amber-600 text-white"
           : "bg-amber-900 text-amber-300 hover:bg-amber-800"

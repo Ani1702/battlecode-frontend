@@ -10,12 +10,12 @@ export const metadata: Metadata = {
   description: "One v One Gamified Programming Platform",
 };
 
-// const oxanium = Oxanium({
-//   variable: "--font-oxanium",
-//   subsets: ["latin"],
-//   weight: ["400", "700"],
-//   display: "swap",
-// });
+const oxanium = Oxanium({
+  variable: "--font-oxanium",
+  // subsets: ["latin"],
+  // weight: ["400", "700"],
+  // display: "swap",
+});
 
 const orbitron = Orbitron({
   variable: "--font-orbitron",
@@ -29,7 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${orbitron.variable} antialiased`}>
+      <body className={`${oxanium.variable} antialiased`}>
         <AuthProvider>
           <Protected>
             <SocketProvider>{children}</SocketProvider>

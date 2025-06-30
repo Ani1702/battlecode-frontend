@@ -120,7 +120,7 @@ export default function CreateRoom() {
         CREATE ROOM
       </div>
 
-      <div className="flex-[0.8] flex flex-row gap-4">
+      <div className="flex-[0.8] flex flex-row gap-4 p-4">
         {/* Left side - Topics */}
         <div className="flex-1 flex-col flex items-end justify-center">
           <div className="flex-[0.1] flex flex-row h-5 w-full">
