@@ -1,3 +1,4 @@
+// Updated CreateRoom.tsx
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -7,17 +8,40 @@ import TimeSlider from "@/components/shared/TimeSlider";
 import QuestionCountSlider from "@/components/shared/QuestionCountSlider";
 import ColoredBtn from "@/components/shared/ColoredBtn";
 
+const TOPICS = [
+  "Array",
+  "String",
+  "Backtracking",
+  "Dynamic Programming",
+  "Graph",
+  "Tree",
+  "Hash Table",
+  "Sorting",
+  "Greedy",
+  "Binary Search",
+];
+
 export default function CreateRoom() {
   const [settings, setSettings] = useState({
     timeLimit: 30,
     questionCount: 3,
     difficulty: "medium",
+    topics: [] as string[],
   });
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const { socket, isConnected, isLoading } = useSocket();
   const { user } = useAuth();
+
+  const toggleTopic = (topic: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      topics: prev.topics.includes(topic)
+        ? prev.topics.filter((t) => t !== topic)
+        : [...prev.topics, topic],
+    }));
+  };
 
   const handleCreate = () => {
     if (!user) {
@@ -49,6 +73,7 @@ export default function CreateRoom() {
         timeLimit: settings.timeLimit,
         noOfQuestions: settings.questionCount,
         difficulty: settings.difficulty.toUpperCase(),
+        topics: settings.topics,
       },
       (response: { matchId: string; playerId: string } | { error: string }) => {
         clearTimeout(timeout);
@@ -65,7 +90,7 @@ export default function CreateRoom() {
         } else if ("matchId" in response) {
           console.log(response);
           console.log("Match created:", response.matchId);
-          router.push(`/play/${response.matchId}`);
+          router.push(`/play/${response.matchId}/waiting`);
         }
       }
     );
@@ -105,19 +130,15 @@ export default function CreateRoom() {
             <span className="flex-[0.7] w-full h-fit"> </span>
           </div>
           <div className="flex-[0.9] w-9/10">
-            <div className="rounded-lg border-4 border-amber-600 h-9/10 p-4 flex gap-4 items-start">
-              <ColoredBtn
-                content="Array"
-                onClick={() => console.log("Array selected")}
-              />
-              <ColoredBtn
-                content="String"
-                onClick={() => console.log("String selected")}
-              />
-              <ColoredBtn
-                content="Backtracking"
-                onClick={() => console.log("Backtracking selected")}
-              />
+            <div className="rounded-lg border-4 border-amber-600 h-9/10 p-4 flex gap-4 flex-wrap items-start">
+              {TOPICS.map((topic) => (
+                <ColoredBtn
+                  key={topic}
+                  content={topic}
+                  onClick={() => toggleTopic(topic)}
+                  selected={settings.topics.includes(topic)}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -156,6 +177,7 @@ export default function CreateRoom() {
                   onClick={() =>
                     setSettings({ ...settings, difficulty: "easy" })
                   }
+                  selected={settings.difficulty === "easy"}
                 />
               </div>
               <div className="flex-1">
@@ -164,6 +186,7 @@ export default function CreateRoom() {
                   onClick={() =>
                     setSettings({ ...settings, difficulty: "medium" })
                   }
+                  selected={settings.difficulty === "medium"}
                 />
               </div>
               <div className="flex-1">
@@ -172,6 +195,7 @@ export default function CreateRoom() {
                   onClick={() =>
                     setSettings({ ...settings, difficulty: "hard" })
                   }
+                  selected={settings.difficulty === "hard"}
                 />
               </div>
             </div>
