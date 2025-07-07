@@ -5,11 +5,21 @@ import { useParams, useRouter, usePathname } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import ColoredBtn from "@/components/shared/ColoredBtn";
+import { PlayerCard } from "@/components/shared/HexagonalCard";
+
+interface Player {
+  id: string;
+  name: string;
+  avatar_url?: string;
+  rating?: number;
+}
 
 interface MatchData {
   id: string;
   playerAId: string;
   playerBId?: string;
+  playerA?: Player;
+  playerB?: Player;
   status: string;
   settings: {
     timeLimit: number;
@@ -29,7 +39,7 @@ export default function WaitingRoom() {
   const [isStarting, setIsStarting] = useState(false);
   const router = useRouter();
   const { socket } = useSocket();
-  const { user } = useAuth();
+  const { user, avatarUrl } = useAuth();
 
   // Multiple ways to extract gameId for better compatibility
   const getGameId = () => {
@@ -195,7 +205,7 @@ export default function WaitingRoom() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"></div>
           <p>Loading match data...</p>
           <p className="text-sm text-gray-400 mt-2">Game ID: {gameId}</p>
         </div>
@@ -229,89 +239,182 @@ export default function WaitingRoom() {
     );
   }
 
+  const playerA = match.playerAId ? {
+    id: match.playerAId,
+    name: match.playerAId === user?.id ? (user?.email?.split('@')[0] || 'Player 1') : (match.playerA?.name || 'Player 1'),
+    avatar: (match.playerAId === user?.id ? avatarUrl : match.playerA?.avatar_url) ?? undefined,
+    rating: match.playerAId === user?.id ? 2450 : (match.playerA?.rating || 1500),
+    isReady: match.status === 'READY' || !!match.playerBId
+  } : null;
+
+  const playerB = match.playerBId ? {
+    id: match.playerBId,
+    name: match.playerBId === user?.id ? (user?.email?.split('@')[0] || 'Player 2') : (match.playerB?.name || 'Player 2'),
+    avatar: (match.playerBId === user?.id ? avatarUrl : match.playerB?.avatar_url) ?? undefined,
+    rating: match.playerBId === user?.id ? 2450 : (match.playerB?.rating || 1500),
+    isReady: match.status === 'READY'
+  } : null;
+
   return (
-    <div className="flex flex-col h-full p-8">
-      <h1 className="text-4xl font-oxanium text-center mb-8">
-        {match.status === "WAITING" ? "Waiting for Players" : "Match Ready"}
-      </h1>
-
-      <div className="flex-1 grid grid-cols-2 gap-8">
-        {/* Player A Card */}
-        <div className="bg-gray-800 rounded-lg p-6 flex flex-col items-center">
-          <h2 className="text-2xl font-oxanium mb-4">
-            {match.playerAId === user?.id ? "You" : "Opponent"}
-          </h2>
-          <div className="w-24 h-24 bg-amber-500 rounded-full mb-4"></div>
-          <p className="text-xl">Player A</p>
-        </div>
-
-        {/* Player B Card */}
-        <div className="bg-gray-800 rounded-lg p-6 flex flex-col items-center">
-          {match.playerBId ? (
-            <>
-              <h2 className="text-2xl font-oxanium mb-4">
-                {match.playerBId === user?.id ? "You" : "Opponent"}
-              </h2>
-              <div className="w-24 h-24 bg-amber-500 rounded-full mb-4"></div>
-              <p className="text-xl">Player B</p>
-            </>
-          ) : (
-            <>
-              <div className="w-24 h-24 bg-gray-600 rounded-full mb-4 flex items-center justify-center">
-                <span className="text-2xl">?</span>
+    <div className = "flex flex-row h-full p-8 bg-[url('/bg-waiting.svg')] bg-cover bg-center">
+      <div className="flex-1 flex justify-center items-center">
+      <div className="p-8 rounded-xl bg-black/40 border-2 border-red-500/80 shadow-2xl shadow-red-500/40 w-full font-oxanium text-white h-4/5 justify-center items-start flex">
+          <div className="flex flex-col space-y-8">
+            <div>
+              <h3 className="text-lg mb-4 tracking-wider">TOPICS SELECTED:</h3>
+              <div className="flex flex-wrap gap-4">
+                {match.settings.topics.map((topic) => (
+                  <button key={topic} className="bg-gradient-to-b from-[#D43E3E] to-[#9D2D2D] border border-[#FF5555] rounded-lg px-8 py-2 text-center shadow-md hover:from-[#E04E4E] hover:to-[#A83838]">
+                    <span className="font-semibold text-base tracking-widest">{topic.toUpperCase()}</span>
+                  </button>
+                ))}
               </div>
-              <p className="text-xl text-gray-400">Waiting for opponent...</p>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Match Settings */}
-      <div className="mt-8 p-6 bg-gray-800 rounded-lg">
-        <h2 className="text-2xl font-oxanium mb-4">Match Settings</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p>Time Limit: {match.settings.timeLimit} seconds</p>
-            <p>Questions: {match.settings.noOfQuestions}</p>
-            <p>Difficulty: {match.settings.difficulty}</p>
-          </div>
-          <div>
-            <p>Topics:</p>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {match.settings.topics.map((topic) => (
-                <span
-                  key={topic}
-                  className="bg-amber-600 px-2 py-1 rounded text-sm"
-                >
-                  {topic}
-                </span>
-              ))}
+            </div>
+            
+            <div className="space-y-4 text-lg tracking-wider">
+                <p>TIME: <span className="font-bold">{match.settings.timeLimit} MINS</span></p>
+                <p>NUMBER OF QUESTIONS: <span className="font-bold">{match.settings.noOfQuestions}</span></p>
+                <p>DIFFICULTY LEVEL: <span className="font-bold">{match.settings.difficulty.toUpperCase()}</span></p>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Debug Info (remove in production) */}
-      <div className="mt-4 p-4 bg-gray-900 rounded-lg text-sm">
-        <p>Debug: Game ID: {gameId}</p>
-        <p>Debug: User ID: {user?.id}</p>
-        <p>Debug: Match Status: {match.status}</p>
-        <p>Debug: Socket Connected: {socket ? "Yes" : "No"}</p>
-        <p>Debug: Pathname: {pathname}</p>
+      <div className="flex-1 flex-col flex justify-center items-center ">
+        <div className="flex-1 text-oxanium flex flex-col items-center justify-center text-2xl font-bold">
+          <div className = "flex-1 flex items-end justify-end">YOUR ROOM CODE IS</div>
+          <div className="flex-1 text-4xl items-center justify-center">
+            <span className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+              {gameId}
+            </span>
+          </div>
+        </div>
+        <div className="flex-2  flex flex-row items-center justify-center gap-4 p-4">
+          <div className="flex-1">
+            {playerA && (
+              <PlayerCard 
+                playerName={playerA.name}
+                avatar={playerA.avatar}
+                rating={playerA.rating}
+                isReady={playerA.isReady}
+                size="xl"
+              />
+            )}
+          </div>
+          
+          <div className="flex-1">
+            {playerB ? (
+              <PlayerCard 
+                playerName={playerB.name}
+                avatar={playerB.avatar}
+                rating={playerB.rating}
+                isReady={playerB.isReady}
+                size="xl"
+              />
+            ) : (
+              <PlayerCard 
+                playerName="Waiting..."
+                rating="xxxx"
+                size="xl"
+              />
+            )}
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+            {match.playerAId === user?.id && match.playerBId && match.status === 'READY' && (
+                <ColoredBtn
+                    content={isStarting ? "Starting..." : "Start Game"}
+                    onClick={handleStartGame}
+                />
+            )}
+        </div>
       </div>
 
-      {/* Start Button */}
-      {match.playerAId === user?.id &&
-        match.playerBId &&
-        match.status === "READY" && (
-          <div className="mt-8 flex justify-center">
-            <ColoredBtn
-              content={isStarting ? "Starting..." : "Start Game"}
-              onClick={handleStartGame}
-              //   disabled={isStarting}
-            />
-          </div>
-        )}
     </div>
+
+
+
+    // <div className="flex flex-col h-full p-8 bg-[url('/bg-waiting.svg')] bg-cover bg-center">
+    //   <h1 className="text-4xl font-oxanium text-center mb-8">
+    //     {match.status === "WAITING" ? "Waiting for Players" : "Match Ready"}
+    //   </h1>
+
+    //   <div className="flex-1 grid grid-cols-2 gap-8">
+    //     {/* Player A Card */}
+    //     <div className="bg-gray-800 rounded-lg p-6 flex flex-col items-center">
+    //       <h2 className="text-2xl font-oxanium mb-4">
+    //         {match.playerAId === user?.id ? "You" : "Opponent"}
+    //       </h2>
+    //       <div className="w-24 h-24 bg-amber-500 rounded-full mb-4"></div>
+    //       <p className="text-xl">Player A</p>
+    //     </div>
+
+    //     {/* Player B Card */}
+    //     <div className="bg-gray-800 rounded-lg p-6 flex flex-col items-center">
+    //       {match.playerBId ? (
+    //         <>
+    //           <h2 className="text-2xl font-oxanium mb-4">
+    //             {match.playerBId === user?.id ? "You" : "Opponent"}
+    //           </h2>
+    //           <div className="w-24 h-24 bg-amber-500 rounded-full mb-4"></div>
+    //           <p className="text-xl">Player B</p>
+    //         </>
+    //       ) : (
+    //         <>
+    //           <div className="w-24 h-24 bg-gray-600 rounded-full mb-4 flex items-center justify-center">
+    //             <span className="text-2xl">?</span>
+    //           </div>
+    //           <p className="text-xl text-gray-400">Waiting for opponent...</p>
+    //         </>
+    //       )}
+    //     </div>
+    //   </div>
+
+    //   {/* Match Settings */}
+    //   <div className="mt-8 p-6 bg-gray-800 rounded-lg">
+    //     <h2 className="text-2xl font-oxanium mb-4">Match Settings</h2>
+    //     <div className="grid grid-cols-2 gap-4">
+    //       <div>
+    //         <p>Time Limit: {match.settings.timeLimit} seconds</p>
+    //         <p>Questions: {match.settings.noOfQuestions}</p>
+    //         <p>Difficulty: {match.settings.difficulty}</p>
+    //       </div>
+    //       <div>
+    //         <p>Topics:</p>
+    //         <div className="flex flex-wrap gap-2 mt-2">
+    //           {match.settings.topics.map((topic) => (
+    //             <span
+    //               key={topic}
+    //               className="bg-amber-600 px-2 py-1 rounded text-sm"
+    //             >
+    //               {topic}
+    //             </span>
+    //           ))}
+    //         </div>
+    //       </div>
+    //     </div>
+    //   </div>
+
+    //   {/* Debug Info (remove in production) */}
+    //   <div className="mt-4 p-4 bg-gray-900 rounded-lg text-sm">
+    //     <p>Debug: Game ID: {gameId}</p>
+    //     <p>Debug: User ID: {user?.id}</p>
+    //     <p>Debug: Match Status: {match.status}</p>
+    //     <p>Debug: Socket Connected: {socket ? "Yes" : "No"}</p>
+    //     <p>Debug: Pathname: {pathname}</p>
+    //   </div>
+
+    //   {/* Start Button */}
+    //   {match.playerAId === user?.id &&
+    //     match.playerBId &&
+    //     match.status === "READY" && (
+    //       <div className="mt-8 flex justify-center">
+    //         <ColoredBtn
+    //           content={isStarting ? "Starting..." : "Start Game"}
+    //           onClick={handleStartGame}
+    //           //   disabled={isStarting}
+    //         />
+    //       </div>
+    //     )}
+    // </div>
   );
 }

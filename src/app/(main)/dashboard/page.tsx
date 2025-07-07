@@ -1,12 +1,12 @@
 "use client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import Navbar from "@/components/shared/Navbar";
 import BarChart from "@/components/shared/BarChart";
 import Button from "@/components/shared/button";
 import PieChart from "@/components/shared/Piechart";
 import ContributionsGrid from "@/components/shared/ContributionsGrid";
 import Rewards from "@/components/shared/Rewards";
+import Navbar from "@/components/shared/Navbar";
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
@@ -35,16 +35,34 @@ export default function Dashboard() {
     { id: 2, name: 'FIRST WIN', imageUrl: 'b-2.svg' },
     { id: 3, name: '5 DAY STREAK', imageUrl: 'b-3.svg' },
     { id: 4, name: '10 DAY STREAK', imageUrl: 'b-4.svg' },
+    { id: 5, name: 'FIRST MATCH 2', imageUrl: 'b-1.svg' },
+    { id: 6, name: 'FIRST WIN 2', imageUrl: 'b-2.svg' },
+    { id: 7, name: '5 DAY STREAK 2', imageUrl: 'b-3.svg' },
+    { id: 8, name: '10 DAY STREAK 2', imageUrl: 'b-4.svg' },
   ];
 
-  return (
+  const handleBadgeClick = (badge: any) => {
+    console.log('Badge clicked:', badge.name);
+    alert(`You clicked on ${badge.name}!`);
+  };
 
-    <div className = "flex flex-col min-h-screen background">
-      <div className="min-h-screen flex justify-center h-[100vh]">
+  const handleJoinClick = () => {
+    console.log('Join button clicked');
+    router.push('/join');
+  };
+
+  const handleCreateClick = () => {
+    console.log('Create button clicked');
+    router.push('/create');
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen background relative">
+      <div className = "w-full h-20">
+        <Navbar/>
+      </div>
+      <div className="min-h-screen flex justify-center h-[100vh] relative z-10">
         <div className="flex justify-between items-center flex-col p-4 w-[80vw] h-full">
-          <div className="w-full flex-0.5 h-22 mb-4">
-            <Navbar />
-          </div>
           <div className="flex flex-0.5 h-5"></div>
 
           <div className="flex flex-0.8 h-32 w-full">
@@ -63,19 +81,19 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800"></div>
-            <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800 gap-5">
-              <Button content="JOIN" onClick={() => router.push('/join')}/>
-              <Button content="CREATE" onClick={() => router.push('/create')}/>
+            <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800 gap-5 relative z-20">
+              <Button content="JOIN" onClick={handleJoinClick}/>
+              <Button content="CREATE" onClick={handleCreateClick}/>
             </div>
           </div>
 
           <div className="flex flex-0.5 w-full h-15"></div>          
-          <div className="flex flex-2 gap-4 px-6 w-full ">
+          <div className="flex flex-2 gap-4 px-6 w-full relative z-10">
             <div 
               className="flex-1 mt-2 p-4 h-fill rounded-lg bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
               <p className="text-gray-200 text-center flex-[0.3] flex justify-center items-center font-oxanium mb-4 text-3xl">QUESTIONS SOLVED</p>
               <div className="flex-1 w-full">
-                <BarChart />
+                <BarChart  data = {[2, 9, 13]}/>
               </div>
             </div>
 
@@ -104,25 +122,25 @@ export default function Dashboard() {
       
 
 
-      <div className="min-h-screen  flex text-white justify-center h-[100vh]">
+      <div className="min-h-screen flex text-white justify-center h-[100vh] relative z-10">
         <div className="flex justify-between items-center flex-col w-[80vw] h-full">
 
           <div className="flex flex-0.5 w-full h-5"></div>
 
-          <div className="flex flex-1 w-[80vw] gap-4 bg-black/40 backdrop-blur-sm border border-red-500/30 rounded-lg p-2">
+          <div className="flex flex-1 w-[75vw] gap-4 bg-black/40 backdrop-blur-sm border border-red-500/30 rounded-lg p-2">
             <PieChart data={matchesData} centerTextTop="MATCHES" centerTextBottom={`${totalMatches} Matches`} />
             <PieChart data={timeSpentData} centerTextTop="TIME SPENT" centerTextBottom="8 Hours" />
           </div>
 
           <div className="flex flex-0.5 w-full h-5"></div>
 
-          <div className="flex flex-1 w-full">
+          <div className="flex flex-1 w-[77vw]">
             <ContributionsGrid data={contributionsData} />
           </div>
           <div className="flex flex-0.5 w-full h-15"></div> 
          
-          <div className="w-full mt-10">
-            <Rewards badges={userBadges} />
+          <div className="w-[77vw] mt-10 relative z-20">
+            <Rewards badges={userBadges} onBadgeClick={handleBadgeClick} />
           </div>
 
         </div>

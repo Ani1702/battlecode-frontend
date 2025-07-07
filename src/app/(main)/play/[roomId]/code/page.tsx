@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
+import Button from "@/components/shared/button";
 
 export default function CodeRoom() {
   const { gameId } = useParams();
@@ -25,35 +26,45 @@ export default function CodeRoom() {
   }, [socket, gameId]);
 
   return (
-    <div className="flex flex-col h-full p-4">
-      <h1 className="text-3xl font-oxanium mb-4">Coding Challenge</h1>
-      <div className="flex-1 grid grid-cols-2 gap-4">
-        <div className="bg-gray-800 rounded-lg p-4">
-          <h2 className="text-xl font-oxanium mb-2">Problem Statement</h2>
-          {/* Problem statement will go here */}
+    <div className="flex flex-col h-full">
+      <div className="flex-[0.2] items-center flex justify-center text-bold text-xl">PLAYER V/S PLAYER</div>
+      <div className = "flex-[0.4] flex flex-col p-4 rounded-lg">
+        <div className="flex-3  rounded-lg border border-t-amber-500 border-b-amber-600 border-l-amber-500 border-r-amber-500 flex">
+          <div className="flex-1 flex justify-center items-center">Current Points: 100</div>
+          <div className="flex-1 flex  justify-center items-center">Bonus Points: 20</div>
+          <div className="flex-1 flex justify-center items-center">5:00</div>
+
         </div>
-        <div className="bg-gray-800 rounded-lg p-4 flex flex-col">
-          <div className="flex justify-between mb-2">
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="bg-gray-700 text-white p-1 rounded"
-            >
-              <option value="javascript">JavaScript</option>
-              <option value="python">Python</option>
-              <option value="java">Java</option>
-              <option value="c++">C++</option>
-            </select>
-            <div className="text-xl">Time Left: {timeLeft}s</div>
+        <div className="flex h-3 w-full rounded-lg bg-black">
+          <div className="bg-red-500 rounded-lg w-1/2"></div>
+        </div>
+        
+      </div>
+      <div className = "flex-4 flex p-4 gap-4 bg-black/40 backdrop-blur-sm ">
+        <div className = "flex-1 flex border rounded-lg border-amber-600 bg-black/40 backdrop-blur-sm p-4">
+          <span className="text-lg">QUESTION</span>
+        </div>
+        <div className = "flex-1  flex flex-col gap-4">
+          <div className = "flex-1 border border-amber-600 rounded-lg p-4 flex flex-col">
+            <span className="text-lg mb-2">CODE</span>
+            <textarea 
+              className="flex-1 bg-transparent text-white resize-none outline-none font-mono"
+              placeholder="Write your code here..."
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
           </div>
-          <textarea
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="flex-1 bg-gray-900 text-white p-2 rounded font-mono"
-            placeholder="Write your code here..."
-          />
+          <div className = "flex-1 border border-amber-600 rounded-lg">
+            <span className="text-lg pl-4 pt-4">TEST RESULT</span>
+          </div>
+          <div className = "flex-[0.1]  gap-2 p-2 flex justify-end">
+            <Button content="Resign" />
+            <Button content="Skip" />
+            <Button content="Submit" />
+          </div>
         </div>
       </div>
+      
     </div>
   );
 }

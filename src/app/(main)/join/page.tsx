@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import Button from "@/components/shared/button";
+import ColoredBtn from "@/components/shared/ColoredBtn";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
@@ -93,25 +94,30 @@ export default function Join() {
         } else if (response.success) {
           console.log("Joined match:", response.matchId);
           // Redirect to the game page with match details
-          router.push(`/play/${response.matchId}`);
+          router.push(`/play/${response.matchId}/waiting`);
         }
       }
     );
   };
 
   return (
-    <div className="bg-black flex flex-col h-full">
-      <div className="flex-1 flex items-end justify-center text-white text-4xl font-oxanium">
-        ENTER CODE
+    <div className="bg-black flex flex-col h-full relative">
+      <div className="absolute top-4 left-4 z-10">
+        <Button content="< Back" onClick={() => router.back()} />
       </div>
-      <div className="flex-1 flex justify-center items-center gap-2">
+      <div className="flex-1 flex items-end justify-center text-6xl font-oxanium">
+        <span className="bg-gradient-to-r from-yellow-200 to-orange-600 bg-clip-text text-transparent text-bold">
+          ENTER CODE
+        </span>
+      </div>
+      <div className="flex-1 flex justify-center items-center gap-10">
         {code.map((char, index) => (
           <input
             key={index}
             ref={(el) => {
               inputRefs.current[index] = el;
             }}
-            className="rounded-md h-16 w-16 bg-gray-700 text-white text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded-md h-25 w-20 bg-gray-700/40 text-white text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
             maxLength={1}
             value={char}
             onChange={(e) => handleInputChange(index, e)}
@@ -125,10 +131,9 @@ export default function Join() {
         ))}
       </div>
       <div className="flex-1 flex flex-col justify-start items-center gap-4">
-        <Button
+        <ColoredBtn
           content={isJoining ? "Joining..." : "Join Game"}
           onClick={handleJoinGame}
-          //   disabled={isJoining || !isConnected}
         />
         {error && <div className="text-red-500 text-center">{error}</div>}
       </div>

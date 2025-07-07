@@ -1,6 +1,17 @@
 "use client";
 import { useEffect, useRef } from 'react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, ScriptableContext, ChartTypeRegistry, ChartOptions } from 'chart.js';
+
+declare module 'chart.js' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface PluginOptionsByType<TType extends keyof ChartTypeRegistry> {
+    customColors?: string[];
+    centerText?: {
+      top?: string;
+      bottom?: string;
+    };
+  }
+}
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -30,41 +41,109 @@ const centerTextPlugin = {
   },
 };
 
-// Custom plugin for applying a glow to each segment
-const segmentGlowPlugin = {
-  id: 'segmentGlow',
+
+
+const outerGlowPlugin = {
+  id: 'outerGlow',
   beforeDatasetsDraw: (chart: ChartJS) => {
     const { ctx } = chart;
     const meta = chart.getDatasetMeta(0);
-    const dataset = chart.data.datasets[0];
+    const colors = (chart.config.options?.plugins as any)?.customColors;
+    if (!colors) return;
 
     ctx.save();
     meta.data.forEach((arc, index) => {
       const { x, y, startAngle, endAngle, outerRadius } = arc.getProps([
-        'x',
-        'y',
-        'startAngle',
-        'endAngle',
-        'outerRadius',
+        'x', 'y', 'startAngle', 'endAngle', 'outerRadius'
       ]);
-      const color = Array.isArray(dataset.borderColor) ? dataset.borderColor[index] : dataset.borderColor;
+      const color = colors[index];
 
       if (typeof color === 'string') {
         ctx.shadowColor = color;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 15; // Final subtle glow
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
 
-        // Draw the arc path to apply the shadow to
+        // Draw a transparent line whose shadow creates the glow
         ctx.beginPath();
-        ctx.arc(x, y, outerRadius + 2, startAngle, endAngle);
-        ctx.strokeStyle = 'transparent'; // We only want the shadow, not a visible line
-        ctx.lineWidth = 5;
+        ctx.arc(x, y, outerRadius, startAngle, endAngle);
+        ctx.lineWidth = 4; // Final subtle glow source
+        ctx.strokeStyle = 'transparent';
         ctx.stroke();
       }
     });
     ctx.restore();
   },
+};
+
+// Plugin to create a 3D bevel effect with a light source from the top
+const threeDBevelPlugin = {
+  id: 'threeDBevel',
+  beforeDatasetsDraw: (chart: ChartJS) => {
+    const { ctx } = chart;
+    const meta = chart.getDatasetMeta(0);
+    const colors = (chart.config.options?.plugins as any)?.customColors;
+    if (!colors) return;
+
+    const borderWidth = chart.data.datasets[0].borderWidth as number;
+
+    meta.data.forEach((arc, index) => {
+      const { x, y, innerRadius, outerRadius, startAngle, endAngle } = arc.getProps([
+        'x', 'y', 'innerRadius', 'outerRadius', 'startAngle', 'endAngle'
+      ]);
+      const color = colors[index];
+      const bevelWidth = 2;
+
+      // Define the drawing area, inset by the full border width
+      const fillOuterRadius = outerRadius - borderWidth;
+      const fillInnerRadius = innerRadius + borderWidth;
+
+      // 1. Draw the dark fill
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, fillOuterRadius, startAngle, endAngle);
+      ctx.arc(x, y, fillInnerRadius, endAngle, startAngle, true);
+      ctx.closePath();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fill();
+      ctx.restore();
+
+      // 2. Draw the bevels
+      ctx.lineWidth = bevelWidth;
+
+      // --- Draw the full shadow lines first ---
+      ctx.strokeStyle = '#000';
+      // Outer shadow
+      ctx.beginPath();
+      ctx.arc(x, y, fillOuterRadius - bevelWidth / 2, startAngle, endAngle);
+      ctx.stroke();
+      // Inner shadow
+      ctx.beginPath();
+      ctx.arc(x, y, fillInnerRadius + bevelWidth / 2, startAngle, endAngle);
+      ctx.stroke();
+
+      // --- Draw the highlights on top, clipped to the top half ---
+      ctx.save(); // Save context before clipping
+
+      // Create clipping region (top half of the chart)
+      ctx.beginPath();
+      ctx.rect(x - outerRadius, y - outerRadius, outerRadius * 2, outerRadius);
+      ctx.clip();
+
+      // Draw full highlight arcs; they will only be visible in the top half
+      ctx.strokeStyle = color;
+      // Outer highlight
+      ctx.beginPath();
+      ctx.arc(x, y, fillOuterRadius - bevelWidth / 2, startAngle, endAngle);
+      ctx.stroke();
+      // Inner highlight
+      ctx.beginPath();
+      ctx.arc(x, y, fillInnerRadius + bevelWidth / 2, startAngle, endAngle);
+      ctx.stroke();
+
+      ctx.restore(); // Removes clip
+    });
+  }
 };
 
 interface PieChartProps {
@@ -95,13 +174,37 @@ export default function PieChart({
   const chartRef = useRef<HTMLCanvasElement>(null);
   const chartInstance = useRef<ChartJS | null>(null);
 
-  useEffect(() => {
+    useEffect(() => {
     if (chartRef.current) {
       const ctx = chartRef.current.getContext('2d');
       if (ctx) {
         if (chartInstance.current) {
           chartInstance.current.destroy();
         }
+
+        const chartOptions: ChartOptions<'doughnut'> = {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '80%',
+          plugins: {
+            customColors: data.colors,
+            legend: {
+              display: false,
+            },
+            tooltip: {
+              enabled: false,
+            },
+            centerText: {
+              top: centerTextTop,
+              bottom: centerTextBottom,
+            },
+          },
+          animation: {
+            animateRotate: true,
+            animateScale: false,
+            duration: 1200,
+          },
+        };
 
         chartInstance.current = new ChartJS(ctx, {
           type: 'doughnut',
@@ -110,37 +213,15 @@ export default function PieChart({
             datasets: [
               {
                 data: data.values,
-                backgroundColor: data.colors.map(color => `${color}33`), // Semi-transparent version of border color
-                borderColor: data.colors,
-                borderWidth: 2,
-                spacing: 10,
-                borderRadius: 8,
+                backgroundColor: 'transparent',
+                borderColor: '#000',
+                borderWidth: 4,
+                spacing: 5,
               },
             ],
           },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '80%',
-            plugins: {
-              legend: {
-                display: false, // Disable default legend
-              },
-              tooltip: {
-                enabled: false, // Disable tooltips as per design
-              },
-              centerText: {
-                top: centerTextTop,
-                bottom: centerTextBottom,
-              } as any,
-            },
-            animation: {
-              animateRotate: true,
-              animateScale: true,
-              duration: 1200,
-            } as any,
-          } as any,
-          plugins: [segmentGlowPlugin, centerTextPlugin],
+          options: chartOptions,
+          plugins: [outerGlowPlugin, centerTextPlugin, threeDBevelPlugin],
         });
       }
     }
@@ -164,10 +245,10 @@ export default function PieChart({
           return (
             <div key={label} className="flex items-center gap-3">
               <div
-                className="w-3 h-3 rounded-full border-2"
+                className="w-3 h-3 rounded-full"
                 style={{
-                  borderColor: color,
-                  boxShadow: `0 0 8px ${color}`,
+                  backgroundColor: color,
+                  boxShadow: `0 0 12px ${color}`,
                 }}
               />
               <span className="text-base">{`${label} (${value})`}</span>

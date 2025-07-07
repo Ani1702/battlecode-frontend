@@ -37,7 +37,7 @@ const Hero = () => {
             <div className="h-full w-full bg-[url(/RightLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
             <div className="h-full w-full bg-[url(/RightLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
           </div>
-          <div className="absolute bottomRight right-10 bottom-[-320] h-full w-[6rem] flex items-flex-end justify-center">
+          <div className="absolute bottomRight right-10 top-0 h-full w-[6rem] flex items-flex-end justify-center">
             <div className="h-full w-full bg-[url(/bottomRight.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
             <div className="h-full w-full bg-[url(/bottomRight.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
           </div>
@@ -72,7 +72,7 @@ const Hero = () => {
           </button>
         </div>
 
-        <div className="w-[458px] quote flex relative bottom-[-8px] z-10 left-1/2 transform -translate-x-1/2 justify-center">
+        <div className="w-[27rem] quote flex relative bottom-8 z-10 left-1/2 transform -translate-x-1/2 justify-center">
           <p className="z-1 text-center uppercase tracking-[4px] absolute bottom-[5rem] text-[0.85rem]">
             This is more than just programming—it's precision under pressure.
             Enter the match with intent. Exit with impact.
