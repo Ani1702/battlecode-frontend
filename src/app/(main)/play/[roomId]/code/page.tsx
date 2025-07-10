@@ -35,8 +35,11 @@ export default function CodeRoom() {
           <div className="flex-1 flex justify-center items-center">5:00</div>
 
         </div>
-        <div className="flex h-3 w-full rounded-lg bg-black">
-          <div className="bg-red-500 rounded-lg w-1/2"></div>
+        <div className="flex h-3 w-full rounded-lg bg-black  border-red-500 border-2">
+          <div className="bg-yellow-400 rounded-lg w-1/2 border">
+          </div>
+          <div className="bg-red-400 rounded-lg h-1 w-1/2 absolute blur-md">
+          </div>
         </div>
         
       </div>

@@ -116,7 +116,7 @@ export default function CreateRoom() {
   }
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full relative bg-[url('/bg-create.svg')] bg-cover bg-center">
       <div className="absolute top-4 left-4 z-10">
         <Button content="< Back" onClick={() => router.back()} />
       </div>

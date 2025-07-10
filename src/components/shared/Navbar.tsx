@@ -13,7 +13,7 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 border-radius rounded-full">
-      <div className="border rounded-full border-gray-300 bg-gradient-to-r from-black to-transparent flex items-center w-[70vw] h-12 py-3 px-6">
+      <div className="border rounded-full border-gray-600 bg-gradient-to-r from-black to-transparent flex items-center w-[70vw] h-12 py-3 px-6">
         <div className="flex justify-between w-[60vw] px-4 transform translate-x-20">
           <Link href="/dashboard">
             <img

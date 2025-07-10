@@ -90,7 +90,7 @@ export default function Dashboard() {
           <div className="flex flex-0.5 w-full h-15"></div>          
           <div className="flex flex-2 gap-4 px-6 w-full relative z-10">
             <div 
-              className="flex-1 mt-2 p-4 h-fill rounded-lg bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+              className="flex-1  h-fill rounded-2xl bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
               <p className="text-gray-200 text-center flex-[0.3] flex justify-center items-center font-oxanium mb-4 text-3xl">QUESTIONS SOLVED</p>
               <div className="flex-1 w-full">
                 <BarChart  data = {[2, 9, 13]}/>
@@ -127,7 +127,7 @@ export default function Dashboard() {
 
           <div className="flex flex-0.5 w-full h-5"></div>
 
-          <div className="flex flex-1 w-[75vw] gap-4 bg-black/40 backdrop-blur-sm border border-red-500/30 rounded-lg p-2">
+          <div className="flex flex-1 w-[75vw] gap-4 bg-black/40 backdrop-blur-sm border border-red-500/30 rounded-2xl p-2">
             <PieChart data={matchesData} centerTextTop="MATCHES" centerTextBottom={`${totalMatches} Matches`} />
             <PieChart data={timeSpentData} centerTextTop="TIME SPENT" centerTextBottom="8 Hours" />
           </div>

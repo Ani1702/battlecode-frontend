@@ -182,8 +182,14 @@ export default function PieChart({
           chartInstance.current.destroy();
         }
 
+        // Set canvas dimensions explicitly
+        chartRef.current.width = 192; // 48 * 4 (for high DPI)
+        chartRef.current.height = 192;
+        chartRef.current.style.width = '192px';
+        chartRef.current.style.height = '192px';
+
         const chartOptions: ChartOptions<'doughnut'> = {
-          responsive: true,
+          responsive: false,
           maintainAspectRatio: false,
           cutout: '80%',
           plugins: {
@@ -203,6 +209,11 @@ export default function PieChart({
             animateRotate: true,
             animateScale: false,
             duration: 1200,
+          },
+          elements: {
+            arc: {
+              borderWidth: 0,
+            },
           },
         };
 
