@@ -1,9 +1,12 @@
-import { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SocketProvider } from "@/contexts/SocketContext";
-import { Oxanium, Orbitron } from "next/font/google";
 import Protected from "@/components/shared/Protected";
+import type { Metadata } from "next";
+import { Orbitron, Oxanium } from "next/font/google";
+import "./globals.css";
+
+
 
 export const metadata: Metadata = {
   title: "BattleCode IEEE-CS VIT",

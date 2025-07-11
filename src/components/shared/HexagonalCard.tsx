@@ -66,59 +66,22 @@ export default function HexagonalCard({
   let finalOnClick = onClick;
   let finalClassName = `${className} font-oxanium`;
 
-  if (cardType === "player") {
+  if (cardType === 'player') {
     content = (
       <div className="flex flex-col h-full w-full items-center justify-center">
         <div className="flex-grow flex flex-col items-center justify-center p-4">
-          <div
-            className={`${
-              size === "2xl"
-                ? "w-40 h-40"
-                : size === "xl"
-                ? "w-32 h-32"
-                : size === "lg"
-                ? "w-24 h-24"
-                : "w-16 h-16"
-            } rounded-full bg-gray-600 border-2 border-red-500/80 mb-2 flex items-center justify-center transition-all`}
-          >
+          <div className={`${size === '2xl' ? 'w-40 h-40' : size === 'xl' ? 'w-32 h-32' : size === 'lg' ? 'w-24 h-24' : 'w-16 h-16'} rounded-full bg-gray-600 border-2 border-red-500/80 mb-2 flex items-center justify-center transition-all`}>
             {avatar ? (
-              <img
-                src={avatar}
-                alt={playerName}
-                className="w-full h-full rounded-full object-cover"
-              />
+              <img src={avatar} alt={playerName} className="w-full h-full rounded-full object-cover" />
             ) : (
               <div className="w-full h-full rounded-full bg-gray-200" />
             )}
           </div>
-          <h3
-            className={`${
-              size === "2xl"
-                ? "text-2xl"
-                : size === "xl"
-                ? "text-xl"
-                : size === "lg"
-                ? "text-lg"
-                : "text-base"
-            } font-bold text-white mb-1 w-full truncate text-center transition-all`}
-            title={playerName}
-          >
-            {playerName}
-          </h3>
+          <h3 className={`${size === '2xl' ? 'text-2xl' : size === 'xl' ? 'text-xl' : size === 'lg' ? 'text-lg' : 'text-base'} font-bold text-white mb-1 w-full truncate text-center transition-all`} title={playerName}>{playerName}</h3>
         </div>
         {rating !== undefined && (
           <div className="h-1/4 w-full flex items-center justify-center">
-            <p
-              className={`${
-                size === "2xl"
-                  ? "text-lg"
-                  : size === "xl"
-                  ? "text-base"
-                  : size === "lg"
-                  ? "text-sm"
-                  : "text-xs"
-              } text-white font-bold flex items-center transition-all`}
-            >
+            <p className={`${size === '2xl' ? 'text-lg' : size === 'xl' ? 'text-base' : size === 'lg' ? 'text-sm' : 'text-xs'} text-white font-bold flex items-center transition-all`}>
               <span className="mr-1 text-yellow-300">⭐</span>
               {rating}
             </p>
@@ -126,7 +89,7 @@ export default function HexagonalCard({
         )}
       </div>
     );
-  } else if (cardType === "stat") {
+  } else if (cardType === 'stat') {
     variant = "secondary";
     size = "sm";
     content = (
@@ -136,18 +99,18 @@ export default function HexagonalCard({
         <p className="text-2xl font-bold text-white">{value}</p>
       </>
     );
-  } else if (cardType === "action") {
+  } else if (cardType === 'action') {
     variant = "accent";
     size = "md";
     finalOnClick = disabled ? undefined : onClick;
-    finalClassName = `${finalClassName} ${
-      disabled ? "opacity-50 cursor-not-allowed" : ""
-    }`;
+    finalClassName = `${finalClassName} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`;
     content = (
       <>
         {icon && <div className="text-4xl mb-2">{icon}</div>}
         <h3 className="text-lg font-bold text-white mb-1">{title}</h3>
-        {description && <p className="text-sm text-gray-200">{description}</p>}
+        {description && (
+          <p className="text-sm text-gray-200">{description}</p>
+        )}
       </>
     );
   }
@@ -168,7 +131,9 @@ export default function HexagonalCard({
       onClick={finalOnClick}
     >
       {/* Inner content container */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center text-center"
+      >
         {content}
       </div>
     </div>
@@ -182,7 +147,7 @@ export function PlayerCard({
   rating,
   isReady = false,
   onClick,
-  size = "md",
+  size = 'md',
 }: {
   playerName: string;
   avatar?: string;
@@ -216,13 +181,7 @@ export function StatCard({
   onClick?: () => void;
 }) {
   return (
-    <HexagonalCard
-      cardType="stat"
-      title={title}
-      value={value}
-      icon={icon}
-      onClick={onClick}
-    />
+    <HexagonalCard cardType="stat" title={title} value={value} icon={icon} onClick={onClick} />
   );
 }
 

@@ -4,11 +4,21 @@ import { useParams, useRouter, usePathname } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import ColoredBtn from "@/components/shared/ColoredBtn";
+import { PlayerCard } from "@/components/shared/HexagonalCard";
+
+interface Player {
+  id: string;
+  name: string;
+  avatar_url?: string;
+  rating?: number;
+}
 
 interface MatchData {
   id: string;
   playerAId: string;
   playerBId?: string;
+  playerA?: Player;
+  playerB?: Player;
   status: string;
   settings: {
     timeLimit: number;
@@ -35,7 +45,7 @@ export default function WaitingRoom() {
   const params = useParams();
   const router = useRouter();
   const { socket } = useSocket();
-  const { user } = useAuth();
+  const { user, avatarUrl } = useAuth();
 
   const [match, setMatch] = useState<MatchData | null>(null);
   const [error, setError] = useState("");
@@ -271,143 +281,147 @@ export default function WaitingRoom() {
     );
   }
 
+  // Create player data for UI
+  const playerA = match.playerAId
+    ? {
+        id: match.playerAId,
+        name:
+          match.playerAId === user?.id
+            ? user?.email?.split("@")[0] || "Player 1"
+            : match.playerA?.name || "Player 1",
+        avatar:
+          (match.playerAId === user?.id
+            ? avatarUrl
+            : match.playerA?.avatar_url) ?? undefined,
+        rating:
+          match.playerAId === user?.id ? 2450 : match.playerA?.rating || 1500,
+        isReady: match.status === "READY" || !!match.playerBId,
+      }
+    : null;
+
+  const playerB = match.playerBId
+    ? {
+        id: match.playerBId,
+        name:
+          match.playerBId === user?.id
+            ? user?.email?.split("@")[0] || "Player 2"
+            : match.playerB?.name || "Player 2",
+        avatar:
+          (match.playerBId === user?.id
+            ? avatarUrl
+            : match.playerB?.avatar_url) ?? undefined,
+        rating:
+          match.playerBId === user?.id ? 2450 : match.playerB?.rating || 1500,
+        isReady: match.status === "READY",
+      }
+    : null;
+
   return (
-    <div className="flex flex-col h-full p-8">
-      <h1 className="text-4xl font-oxanium text-center mb-8">
-        {match.status === "WAITING" ? "Waiting for Opponent" : "Match Ready"}
-      </h1>
-
-      <div className="flex-1 grid grid-cols-2 gap-8 mb-8">
-        {/* Player A */}
-        <div
-          className={`bg-gray-800 rounded-lg p-6 flex flex-col items-center ${
-            isPlayerA ? "ring-2 ring-amber-500" : ""
-          }`}
-        >
-          <h2 className="text-2xl font-oxanium mb-4">
-            {isPlayerA ? "You" : "Player A"}
-          </h2>
-          <div className="w-24 h-24 bg-amber-500 rounded-full mb-4 flex items-center justify-center">
-            <span className="text-2xl font-bold text-white">A</span>
-          </div>
-          <p className="text-xl">{isPlayerA ? "Creator" : "Opponent"}</p>
-          <p className="text-sm text-gray-400 mt-2">
-            ID: {match.playerAId.slice(0, 8)}...
-          </p>
-        </div>
-
-        {/* Player B */}
-        <div
-          className={`bg-gray-800 rounded-lg p-6 flex flex-col items-center ${
-            isPlayerB ? "ring-2 ring-amber-500" : ""
-          }`}
-        >
-          {match.playerBId ? (
-            <>
-              <h2 className="text-2xl font-oxanium mb-4">
-                {isPlayerB ? "You" : "Player B"}
-              </h2>
-              <div className="w-24 h-24 bg-amber-500 rounded-full mb-4 flex items-center justify-center">
-                <span className="text-2xl font-bold text-white">B</span>
+    <div className="flex flex-row h-full p-8 bg-[url('/bg-waiting.svg')] bg-cover bg-center">
+      <div className="flex-1 flex justify-center items-center">
+        <div className="p-8 rounded-xl bg-black/40 border-2 border-red-500/80 shadow-2xl shadow-red-500/40 w-full font-oxanium text-white h-4/5 justify-center items-start flex">
+          <div className="flex flex-col space-y-8">
+            <div>
+              <h3 className="text-lg mb-4 tracking-wider">TOPICS SELECTED:</h3>
+              <div className="flex flex-wrap gap-4">
+                {match.settings.topics.map((topic) => (
+                  <button
+                    key={topic}
+                    className="bg-gradient-to-b from-[#D43E3E] to-[#9D2D2D] border border-[#FF5555] rounded-lg px-8 py-2 text-center shadow-md hover:from-[#E04E4E] hover:to-[#A83838]"
+                  >
+                    <span className="font-semibold text-base tracking-widest">
+                      {topic.toUpperCase()}
+                    </span>
+                  </button>
+                ))}
               </div>
-              <p className="text-xl">{isPlayerB ? "Joiner" : "Opponent"}</p>
-              <p className="text-sm text-gray-400 mt-2">
-                ID: {match.playerBId.slice(0, 8)}...
-              </p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-2xl font-oxanium mb-4">Player B</h2>
-              <div className="w-24 h-24 bg-gray-600 rounded-full mb-4 flex items-center justify-center">
-                <span className="text-2xl">?</span>
-              </div>
-              <p className="text-xl text-gray-400">Waiting for opponent...</p>
-              <div className="mt-4 flex space-x-2">
-                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse delay-75"></div>
-                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse delay-150"></div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
 
-      {/* Match Settings */}
-      <div className="bg-gray-800 rounded-lg p-6 mb-8">
-        <h2 className="text-2xl font-oxanium mb-4">Match Settings</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <p>
-              <span className="font-bold">Time Limit:</span>{" "}
-              {match.settings.timeLimit} minutes
-            </p>
-            <p>
-              <span className="font-bold">Questions:</span>{" "}
-              {match.settings.noOfQuestions}
-            </p>
-            <p>
-              <span className="font-bold">Difficulty:</span>{" "}
-              <span
-                className={`px-2 py-1 rounded text-sm ${
-                  match.settings.difficulty === "EASY"
-                    ? "bg-green-600"
-                    : match.settings.difficulty === "MEDIUM"
-                    ? "bg-yellow-600"
-                    : "bg-red-600"
-                }`}
-              >
-                {match.settings.difficulty}
-              </span>
-            </p>
-          </div>
-          <div>
-            <p className="font-bold mb-2">Topics:</p>
-            <div className="flex flex-wrap gap-2">
-              {match.settings.topics.map((topic, index) => (
-                <span
-                  key={`${topic}-${index}`}
-                  className="bg-amber-600 px-3 py-1 rounded-full text-sm"
-                >
-                  {topic}
+            <div className="space-y-4 text-lg tracking-wider">
+              <p>
+                TIME:{" "}
+                <span className="font-bold">
+                  {match.settings.timeLimit} MINS
                 </span>
-              ))}
+              </p>
+              <p>
+                NUMBER OF QUESTIONS:{" "}
+                <span className="font-bold">
+                  {match.settings.noOfQuestions}
+                </span>
+              </p>
+              <p>
+                DIFFICULTY LEVEL:{" "}
+                <span className="font-bold">
+                  {match.settings.difficulty.toUpperCase()}
+                </span>
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Match Info */}
-      <div className="bg-gray-800 rounded-lg p-4 mb-8">
-        <div className="flex justify-between items-center text-sm text-gray-400">
-          <span>Match ID: {match.id}</span>
-          <span>Status: {match.status}</span>
-          {match.createdAt && (
-            <span>Created: {new Date(match.createdAt).toLocaleString()}</span>
+      <div className="flex-1 flex-col flex justify-center items-center">
+        <div className="flex-1 text-oxanium flex flex-col items-center justify-center text-2xl font-bold">
+          <div className="flex-1 flex items-end justify-end">
+            YOUR ROOM CODE IS
+          </div>
+          <div className="flex-1 text-4xl items-center justify-center">
+            <span className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+              {matchId}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex-2 flex flex-row items-center justify-center gap-4 p-4">
+          <div className="flex-1">
+            {playerA && (
+              <PlayerCard
+                playerName={playerA.name}
+                avatar={playerA.avatar}
+                rating={playerA.rating}
+                isReady={playerA.isReady}
+                size="xl"
+              />
+            )}
+          </div>
+
+          <div className="flex-1">
+            {playerB ? (
+              <PlayerCard
+                playerName={playerB.name}
+                avatar={playerB.avatar}
+                rating={playerB.rating}
+                isReady={playerB.isReady}
+                size="xl"
+              />
+            ) : (
+              <PlayerCard playerName="Waiting..." rating="xxxx" size="xl" />
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center">
+          {canStart && (
+            <ColoredBtn
+              content={isStarting ? "Starting..." : "Start Game"}
+              onClick={handleStartGame}
+            />
+          )}
+
+          {match.status === "WAITING" && !isPlayerA && (
+            <div className="text-center">
+              <p className="text-gray-400 mb-2">
+                Waiting for the creator to start the match
+              </p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex justify-center space-x-4">
-        {canStart && (
-          <ColoredBtn
-            content={isStarting ? "Starting..." : "Start Match"}
-            onClick={handleStartGame}
-          />
-        )}
-
-        {match.status === "WAITING" && !isPlayerA && (
-          <div className="text-center">
-            <p className="text-gray-400 mb-2">
-              Waiting for the creator to start the match
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* Debug info */}
       {process.env.NODE_ENV === "development" && (
-        <div className="mt-8 p-4 bg-gray-900 rounded-lg text-xs">
+        <div className="absolute bottom-4 left-4 p-4 bg-gray-900/80 rounded-lg text-xs">
           <p>
             <strong>🔧 Debug Info:</strong>
           </p>

@@ -1,0 +1,10 @@
+Bar chart for difficulty of questions
+{
+    questions : [easy(int), medium(int), hard(int)]
+}
+
+daily streak
+{
+    continuous_days : <int>
+}
+

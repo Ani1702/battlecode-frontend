@@ -15,11 +15,11 @@ export default function ColoredBtn({
 }: ColoredBtnProps) {
   return (
     <button
-      className={` rounded-lg text-2xl font-oxanium p-4 ${
+      className={`rounded-lg text-2xl font-oxanium p-4 ${
         selected
-          ? "bg-amber-600 text-white"
-          : "bg-amber-900 text-amber-300 hover:bg-amber-800"
-      } transition-colors`}
+          ? "bg-orange-800 text-white"
+          : "bg-orange-600 text-white "
+      } transition-all duration-300 hover:bg-orange-800/80`}
       onClick={onClick}
     >
       {content}

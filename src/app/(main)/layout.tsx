@@ -14,8 +14,8 @@ export default function MainLayout({ children }: { children: ReactNode }) {
   return (
     <div className={`min-h-screen flex ${oxanium.variable}`}>
       <div className="flex-1">
-        <Navbar />
-        <main className="h-full font-oxanium">{children}</main>
+        
+        <main className="h-full font-oxanium relative z-0">{children}</main>
       </div>
     </div>
   );

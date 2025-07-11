@@ -1,7 +1,11 @@
 import { useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 
-export default function BarChart() {
+interface BarChartProps {
+  data?: number[];
+}
+
+export default function BarChart({ data = [12, 19, 3] }: BarChartProps) {
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstance = useRef<Chart | null>(null);
 
@@ -17,14 +21,14 @@ export default function BarChart() {
             if (ctx) {
                 const gradient = ctx.createLinearGradient(0, 0, 0, 400);
                 gradient.addColorStop(0, 'rgba(255, 255, 153, 0.2)');    // Light yellow at top
-                gradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)');        // Black at bottom
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');        // Black at bottom
                 chartInstance.current = new Chart(ctx, {
                     type: 'bar',
                     data: {
                         labels: ['easy', 'medium', 'hard'],
                         datasets: [{
-                            label: '# of Votes',
-                            data: [12, 19, 3],
+                            label: '# of Questions',
+                            data: data,
                             backgroundColor: gradient,
                             borderColor: 'rgba(255, 255, 152, 0.7)', // Darker yellow for border
                             borderWidth: {
@@ -74,7 +78,7 @@ export default function BarChart() {
                 chartInstance.current.destroy();
             }
         };
-    }, []); // Empty dependency array means this runs once after mount
+    }, [data]); // Re-render when data changes
 
     return (
         <div className="w-full h-full flex items-center justify-center">

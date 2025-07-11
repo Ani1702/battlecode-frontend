@@ -1,11 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 @import "tailwindcss";
 
-/* * {
-  box-sizing: 0;
-  padding: 0;
-  margin: 0;
-} */
 :root {
+  --font-orbitron: 'Orbitron', sans-serif;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -26,7 +23,15 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-oxanium), sans-serif;
+  font-family: var(--font-orbitron), sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html, body {
+  /* Restore default scroll and background behavior */
 }
 
 .stickyMask {
@@ -88,6 +93,16 @@ body {
   transform: scale(0.95);
 }
 
+.background{
+  z-index: -10;
+  background-image: url("/bg.svg");
+  background-size: cover;
+  position: sticky;
+  top: 0;
+  background-attachment: scroll;
+
+}
+
 /* For Webkit browsers (Chrome, Safari) - Time slider */
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
@@ -115,6 +130,7 @@ input[type="range"]::-webkit-slider-thumb:active {
 input[type="range"].question-count-slider::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
+  -moz-appearance: none;
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -217,4 +233,19 @@ input[type="range"].question-count-slider::-moz-range-thumb:active {
 
 .gradient-border-button:hover::before {
   filter: drop-shadow(0 0 8px #f4b56f);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-in-out forwards;
 }

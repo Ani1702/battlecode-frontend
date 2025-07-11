@@ -6,6 +6,7 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import TimeSlider from "@/components/shared/TimeSlider";
 import QuestionCountSlider from "@/components/shared/QuestionCountSlider";
+import Button from "@/components/shared/button";
 import ColoredBtn from "@/components/shared/ColoredBtn";
 
 const TOPICS = [
@@ -115,7 +116,10 @@ export default function CreateRoom() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative bg-[url('/bg-create.svg')] bg-cover bg-center">
+      <div className="absolute top-4 left-4 z-10">
+        <Button content="< Back" onClick={() => router.back()} />
+      </div>
       <div className="flex-[0.2] font-oxanium text-4xl flex justify-center items-end">
         CREATE ROOM
       </div>
