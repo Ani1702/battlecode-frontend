@@ -12,9 +12,7 @@ export const metadata: Metadata = {
 
 const oxanium = Oxanium({
   variable: "--font-oxanium",
-  // subsets: ["latin"],
-  // weight: ["400", "700"],
-  // display: "swap",
+  subsets: ["latin"],
 });
 
 const orbitron = Orbitron({
@@ -29,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${oxanium.variable} antialiased`}>
+      <body className={`${oxanium.variable}  ${orbitron.variable} antialiased`}>
         <AuthProvider>
           <Protected>
             <SocketProvider>{children}</SocketProvider>

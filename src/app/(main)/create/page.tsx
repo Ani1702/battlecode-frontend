@@ -90,7 +90,7 @@ export default function CreateRoom() {
         } else if ("matchId" in response) {
           console.log(response);
           console.log("Match created:", response.matchId);
-          router.push(`/play/${response.matchId}/waiting`);
+          router.push(`/play/${response.matchId}`);
         }
       }
     );
