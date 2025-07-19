@@ -31,6 +31,7 @@ export default function CreateRoom() {
   });
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
+  const [sliderMode, setSliderMode] = useState<"time" | "questions">("time");
   const router = useRouter();
   const { socket, isConnected, isLoading } = useSocket();
   const { user } = useAuth();
@@ -71,10 +72,10 @@ export default function CreateRoom() {
     socket.emit(
       "createMatch",
       {
-        timeLimit: settings.timeLimit,
-        noOfQuestions: settings.questionCount,
-        difficulty: settings.difficulty.toUpperCase(),
-        topics: settings.topics,
+        timeLimit: settings.timeLimit || 30,
+        noOfQuestions: settings.questionCount || 3,
+        difficulty: (settings.difficulty || "medium").toUpperCase(),
+        topics: settings.topics.length > 0 ? settings.topics : ["Array", "String"],
       },
       (response: { matchId: string; playerId: string } | { error: string }) => {
         clearTimeout(timeout);
@@ -100,7 +101,7 @@ export default function CreateRoom() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p>Connecting to server...</p>
+        <p className="font-oxanium">Connecting to server...</p>
       </div>
     );
   }
@@ -108,7 +109,7 @@ export default function CreateRoom() {
   if (!socket || !isConnected) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-red-500">
+        <p className="text-red-500 font-oxanium">
           Connection failed. Please refresh the page.
         </p>
       </div>
@@ -128,13 +129,13 @@ export default function CreateRoom() {
         {/* Left side - Topics */}
         <div className="flex-1 flex-col flex items-end justify-center">
           <div className="flex-[0.1] flex flex-row h-5 w-full">
-            <p className="flex-[0.3] flex justify-center items-center w-full mt-2 h-fit">
+            <p className="flex-[0.3] flex justify-center items-center w-full mt-2 h-fit font-oxanium">
               TOPICS:
             </p>
             <span className="flex-[0.7] w-full h-fit"> </span>
           </div>
-          <div className="flex-[0.9] w-9/10">
-            <div className="rounded-lg border-4 border-amber-600 h-9/10 p-4 flex gap-4 flex-wrap items-start">
+          <div className="flex-[0.9] w-9/10 flex items-start justify-center">
+            <div className="rounded-lg border-4 border-orange-700 h-9/10 p-4 flex gap-4 flex-wrap items-start">
               {TOPICS.map((topic) => (
                 <ColoredBtn
                   key={topic}
@@ -150,26 +151,65 @@ export default function CreateRoom() {
         {/* Right side - Settings */}
         <div className="flex-1 flex flex-col h-full">
           <div className="flex-1"></div>
+          
+          {/* Toggle Bar and Slider Section */}
           <div className="flex-1 p-4">
-            <p className="font-oxanium text-white text-lg mb-4">COUNTDOWN</p>
-            <TimeSlider
-              value={settings.timeLimit}
-              onChange={(value) =>
-                setSettings({ ...settings, timeLimit: value })
-              }
-            />
+            {/* Toggle Bar */}
+            <div className="flex bg-transparent rounded-lg mb-4 overflow-hidden">
+              <button
+                onClick={() => setSliderMode("time")}
+                className={`flex-1 py-3 px-4 font-oxanium text-lg transition-colors rounded-l-lg ${
+                  sliderMode === "time"
+                    ? "text-white"
+                    : "bg-gray-800 bg-opacity-40 text-gray-400 hover:text-white"
+                }`}
+                style={sliderMode === "time" ? {
+                  background: 'linear-gradient(90deg, rgba(244,98,60,0.6) 0%, rgba(245,0,0,0.6) 100%)'
+                } : {}}
+              >
+                TIME
+              </button>
+              <button
+                onClick={() => setSliderMode("questions")}
+                className={`flex-1 py-3 px-4 font-oxanium text-lg transition-colors rounded-r-lg ${
+                  sliderMode === "questions"
+                    ? "text-white"
+                    : "bg-gray-800 bg-opacity-40 text-gray-400 hover:text-white"
+                }`}
+                style={sliderMode === "questions" ? {
+                  background: 'linear-gradient(90deg, rgba(244,98,60,0.6) 0%, rgba(245,0,0,0.6) 100%)'
+                } : {}}
+              >
+                QUESTIONS
+              </button>
+            </div>
+
+            {/* Conditional Slider */}
+            {sliderMode === "time" ? (
+              <>
+                <p className="font-oxanium text-white text-lg mb-4">COUNTDOWN</p>
+                <TimeSlider
+                  value={settings.timeLimit}
+                  onChange={(value) =>
+                    setSettings({ ...settings, timeLimit: value })
+                  }
+                />
+              </>
+            ) : (
+              <>
+                <p className="font-oxanium text-white text-lg mb-4">
+                  NUMBER OF QUESTIONS
+                </p>
+                <QuestionCountSlider
+                  value={settings.questionCount}
+                  onChange={(value) =>
+                    setSettings({ ...settings, questionCount: value })
+                  }
+                />
+              </>
+            )}
           </div>
-          <div className="flex-1 p-4">
-            <p className="font-oxanium text-white text-lg mb-4">
-              NUMBER OF QUESTIONS
-            </p>
-            <QuestionCountSlider
-              value={settings.questionCount}
-              onChange={(value) =>
-                setSettings({ ...settings, questionCount: value })
-              }
-            />
-          </div>
+
           <div className="flex-1 p-4">
             <p className="font-oxanium text-white text-lg mb-4">
               SELECT DIFFICULTY
@@ -214,7 +254,7 @@ export default function CreateRoom() {
             </button>
           </div>
           {error && (
-            <div className="text-red-500 text-center mb-4">{error}</div>
+            <div className="text-red-500 text-center mb-4 font-oxanium">{error}</div>
           )}
           <div className="flex-1"></div>
         </div>

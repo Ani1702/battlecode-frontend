@@ -288,8 +288,8 @@ export default function CodeRoom() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
-          <p className="text-lg mb-2">Loading match...</p>
-          <p className="text-sm text-gray-400">
+          <p className="text-lg mb-2 font-oxanium">Loading match...</p>
+          <p className="text-sm text-gray-400 font-oxanium">
             Match ID: {matchId || "Not available"}
           </p>
         </div>
@@ -303,16 +303,16 @@ export default function CodeRoom() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center max-w-md">
           <div className="text-red-500 mb-4">
-            <h2 className="text-xl font-bold mb-2">❌ Error</h2>
-            <p className="mb-4">{error}</p>
+            <h2 className="text-xl font-bold mb-2 font-oxanium">❌ Error</h2>
+            <p className="mb-4 font-oxanium">{error}</p>
           </div>
 
           <div className="bg-gray-800 p-4 rounded-lg mb-4 text-left text-sm">
-            <p className="font-bold mb-2">Debug Information:</p>
-            <p>Match ID: {matchId || "Not available"}</p>
-            <p>User ID: {user?.id || "Not logged in"}</p>
-            <p>Socket Connected: {socket ? "Yes" : "No"}</p>
-            <p>Match Status: {matchStatus}</p>
+            <p className="font-bold mb-2 font-oxanium">Debug Information:</p>
+            <p className="font-oxanium">Match ID: {matchId || "Not available"}</p>
+            <p className="font-oxanium">User ID: {user?.id || "Not logged in"}</p>
+            <p className="font-oxanium">Socket Connected: {socket ? "Yes" : "No"}</p>
+            <p className="font-oxanium">Match Status: {matchStatus}</p>
           </div>
 
           <div className="space-x-4">
@@ -330,12 +330,12 @@ export default function CodeRoom() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
-          <p className="text-lg mb-2">Waiting for question...</p>
-          <p className="text-sm text-gray-400 mb-4">
+          <p className="text-lg mb-2 font-oxanium">Waiting for question...</p>
+          <p className="text-sm text-gray-400 mb-4 font-oxanium">
             Match Status: {matchStatus}
           </p>
           {matchStatus === "READY" && (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 font-oxanium">
               Waiting for the match to start...
             </p>
           )}
@@ -356,18 +356,18 @@ export default function CodeRoom() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-[0.2] items-center flex justify-center text-bold text-xl">
+      <div className="flex-[0.2] items-center flex justify-center text-bold text-xl font-oxanium">
         PLAYER V/S PLAYER
       </div>
       <div className="flex-[0.4] flex flex-col p-4 rounded-lg">
         <div className="flex-3 rounded-lg border border-t-amber-500 border-b-amber-600 border-l-amber-500 border-r-amber-500 flex">
-          <div className="flex-1 flex justify-center items-center">
+          <div className="flex-1 flex justify-center items-center font-oxanium">
             Current Points: 100
           </div>
-          <div className="flex-1 flex justify-center items-center">
+          <div className="flex-1 flex justify-center items-center font-oxanium">
             Bonus Points: 20
           </div>
-          <div className="flex-1 flex justify-center items-center">
+          <div className="flex-1 flex justify-center items-center font-oxanium">
             {formatTime(timeLeft)}
           </div>
         </div>
@@ -379,15 +379,15 @@ export default function CodeRoom() {
       <div className="flex-4 flex p-4 gap-4 bg-black/40 backdrop-blur-sm">
         {/* Question Panel */}
         <div className="flex-1 flex border rounded-lg border-amber-600 bg-black/40 backdrop-blur-sm p-4 flex-col">
-          <span className="text-lg mb-4">{currentQuestion.title}</span>
-          <p className="mb-4">{currentQuestion.description}</p>
+          <span className="text-lg mb-4 font-oxanium">{currentQuestion.title}</span>
+          <p className="mb-4 font-oxanium">{currentQuestion.description}</p>
 
           {currentQuestion.constraints?.length > 0 && (
             <div className="mb-4">
-              <h3 className="font-bold mb-1">Constraints:</h3>
+              <h3 className="font-bold mb-1 font-oxanium">Constraints:</h3>
               <ul className="list-disc pl-5">
                 {currentQuestion.constraints.map((constraint, i) => (
-                  <li key={i}>{constraint}</li>
+                  <li key={i} className="font-oxanium">{constraint}</li>
                 ))}
               </ul>
             </div>
@@ -395,19 +395,19 @@ export default function CodeRoom() {
 
           {currentQuestion.sampleTestCases?.length > 0 && (
             <div className="mb-4">
-              <h3 className="font-bold mb-1">Sample Test Cases:</h3>
+              <h3 className="font-bold mb-1 font-oxanium">Sample Test Cases:</h3>
               {currentQuestion.sampleTestCases.map((testCase, i) => (
                 <div key={i} className="mb-2 bg-black/30 p-2 rounded">
-                  <p>
+                  <p className="font-oxanium">
                     <span className="font-bold">Input:</span>{" "}
                     {renderTestCaseValue(testCase.input)}
                   </p>
-                  <p>
+                  <p className="font-oxanium">
                     <span className="font-bold">Output:</span>{" "}
                     {renderTestCaseValue(testCase.output)}
                   </p>
                   {testCase.explanation && (
-                    <p>
+                    <p className="font-oxanium">
                       <span className="font-bold">Explanation:</span>{" "}
                       {testCase.explanation}
                     </p>
@@ -419,10 +419,10 @@ export default function CodeRoom() {
 
           {currentQuestion.hints?.length > 0 && (
             <div>
-              <h3 className="font-bold mb-1">Hints:</h3>
+              <h3 className="font-bold mb-1 font-oxanium">Hints:</h3>
               <ul className="list-disc pl-5">
                 {currentQuestion.hints.map((hint, i) => (
-                  <li key={i}>{hint}</li>
+                  <li key={i} className="font-oxanium">{hint}</li>
                 ))}
               </ul>
             </div>
@@ -433,11 +433,11 @@ export default function CodeRoom() {
         <div className="flex-1 flex flex-col gap-4">
           <div className="flex-1 border border-amber-600 rounded-lg p-4 flex flex-col">
             <div className="flex justify-between mb-2">
-              <span className="text-lg">CODE</span>
+              <span className="text-lg font-oxanium">CODE</span>
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                className="bg-black/40 text-white p-1 rounded border border-amber-600"
+                className="bg-black/40 text-white p-1 rounded border border-amber-600 font-oxanium"
               >
                 <option value="javascript">JavaScript</option>
                 <option value="python">Python</option>
@@ -447,14 +447,14 @@ export default function CodeRoom() {
               </select>
             </div>
             <textarea
-              className="flex-1 bg-transparent text-white resize-none outline-none font-mono"
+              className="flex-1 bg-transparent text-white resize-none outline-none font-mono font-oxanium"
               placeholder="Write your code here..."
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
           </div>
           <div className="flex-1 border border-amber-600 rounded-lg p-4">
-            <span className="text-lg">TEST RESULT</span>
+            <span className="text-lg font-oxanium">TEST RESULT</span>
           </div>
           <div className="flex-[0.1] gap-2 p-2 flex justify-end">
             <Button content="Resign" onClick={handleGoBack} />

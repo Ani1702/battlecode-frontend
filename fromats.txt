@@ -8,3 +8,27 @@ daily streak
     continuous_days : <int>
 }
 
+Piecharts
+{
+    wins: <int> (percentage)
+    loss: <int> (percentage)
+    Tie: <int> (percentage)
+}
+{
+    coding: <int> (percentage)
+    Analysing: <int> (percentage)
+    TotalTime: <int> (in hours)
+}
+
+COntributions
+{
+
+}
+
+Rewards
+{
+    badge-1: True
+    badge-2: False
+}
+
+

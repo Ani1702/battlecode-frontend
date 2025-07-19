@@ -319,7 +319,7 @@ export default function WaitingRoom() {
   return (
     <div className="flex flex-row h-full p-8 bg-[url('/bg-waiting.svg')] bg-cover bg-center">
       <div className="flex-1 flex justify-center items-center">
-        <div className="p-8 rounded-xl bg-black/40 border-2 border-red-500/80 shadow-2xl shadow-red-500/40 w-full font-oxanium text-white h-4/5 justify-center items-start flex">
+        <div className="p-20 rounded-xl bg-black/40 border-2 border-red-500/80 shadow-2xl shadow-red-500/40 w-full font-oxanium text-white h-4/5 justify-start items-start flex ">
           <div className="flex flex-col space-y-8">
             <div>
               <h3 className="text-lg mb-4 tracking-wider">TOPICS SELECTED:</h3>

@@ -43,7 +43,7 @@ const Rewards: React.FC<RewardsProps> = ({ badges, onBadgeClick }) => {
   
   return (
     <div className="w-full p-4 relative z-10">
-      <h3 className="text-lg font-oxanium text-gray-300 mb-8 uppercase tracking-wider">Rewards</h3>
+      <h3 className="text-lg font-oxanium text-white mb-8 uppercase tracking-wider font-oxanium drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">Rewards</h3>
       
       <div className="relative flex items-center">
         {/* Badges Container */}

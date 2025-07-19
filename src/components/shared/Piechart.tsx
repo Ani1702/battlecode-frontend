@@ -249,7 +249,7 @@ export default function PieChart({
       <div className="relative w-48 h-48 flex-shrink-0">
         <canvas ref={chartRef} />
       </div>
-      <div className="relative  flex flex-col gap-4 text-sm text-gray-300 font-sans">
+      <div className="relative  flex flex-col gap-4 text-sm text-gray-300 font-oxanium">
         {data.labels.slice(0, ownedCount).map((label, index) => {
           const color = data.colors[index];
           const value = data.values[index];

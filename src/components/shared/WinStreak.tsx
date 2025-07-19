@@ -7,7 +7,7 @@ interface WinStreakProps {
 const WinStreak: React.FC<WinStreakProps> = ({ days }) => {
   return (
     <div className="flex-1 h-full rounded-2xl bg-black/40 backdrop-blur-sm p-6 flex flex-col items-center justify-around border border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
-      <h3 className="text-3xl font-oxanium text-gray-200 tracking-widest">WINNING STREAK</h3>
+      <h3 className="text-3xl font-oxanium text-white tracking-widest drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">WINNING STREAK</h3>
       <div className="text-7xl my-2">
         <img src="./fire.svg" className="h-fit w-fit" alt="fire" />
       </div>

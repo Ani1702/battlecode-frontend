@@ -63,7 +63,7 @@ export default function Dashboard() {
       </div>
       <div className="min-h-screen flex justify-center h-[100vh] relative z-10">
         <div className="flex justify-between items-center flex-col p-4 w-[80vw] h-full">
-          <div className="flex flex-0.5 h-5"></div>
+          <div className="flex flex-0.5"></div>
 
           <div className="flex flex-0.8 h-32 w-full">
             <div className="relative flex-1 h-full rounded-lg p-6 flex flex-col justify-center overflow-hidden">
@@ -72,25 +72,25 @@ export default function Dashboard() {
 
               {/* Content */}
               <div className="relative z-10">
-                <p className="text-gray-400 text-lg font-sans">Welcome</p>
+                <p className="text-gray-400 text-lg font-oxanium">Welcome</p>
                 <h1 className="text-white text-3xl font-bold font-orbitron tracking-wider my-1 uppercase">{user?.email?.split('@')[0] || 'USER'}</h1>
-                <p className="text-white text-2xl font-sans flex items-center">
+                <p className="text-white text-2xl font-oxanium flex items-center">
                   <span className="text-yellow-400 mr-2">⭐</span>
                   2450
                 </p>
               </div>
             </div>
-            <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800"></div>
+            <div className="flex-1 rounded-lg flex items-center justify-center text-gray-800"></div>
             <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800 gap-5 relative z-20">
               <Button content="JOIN" onClick={handleJoinClick}/>
               <Button content="CREATE" onClick={handleCreateClick}/>
             </div>
           </div>
 
-          <div className="flex flex-0.5 w-full h-15"></div>          
-          <div className="flex flex-2 gap-4 px-6 w-full relative z-10">
+          <div className="flex flex-[0.1] w-full"></div>          
+          <div className="flex flex-[1] gap-20 px-6 w-full relative z-10">
             <div 
-              className="flex-1  h-fill rounded-2xl bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+              className="flex-1  h-11/13 rounded-2xl bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
               <p className="text-gray-200 text-center flex-[0.3] flex justify-center items-center font-oxanium mb-4 text-3xl">QUESTIONS SOLVED</p>
               <div className="flex-1 w-full">
                 <BarChart  data = {[2, 9, 13]}/>
@@ -98,7 +98,7 @@ export default function Dashboard() {
             </div>
 
 
-            <div className="flex-1 h-full rounded-2xl bg-black/40 backdrop-blur-sm p-6 flex flex-col items-center justify-around border border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+            <div className="flex-1 h-11/13 rounded-2xl bg-black/40 backdrop-blur-sm p-6 flex flex-col items-center justify-around border border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
               <h3 className="text-3xl font-oxanium text-gray-200 tracking-widest">WINNING STREAK</h3>
               <div className="text-7xl my-2">
                 <img src = "./fire.svg" className = "h-fit w-fit"/>
@@ -108,7 +108,7 @@ export default function Dashboard() {
                 {['m', 't', 'w', 't', 'f', 's', 's'].map((day, index) => (
                   <div
                     key={`${day}-${index}`}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-md ${index < 4 ? 'bg-orange-300 text-red-600' : 'bg-black/50 text-gray-500'}`}>
+                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold font-oxanium text-md ${index < 4 ? 'bg-orange-300 text-red-600' : 'bg-black/50 text-gray-500'}`}>
                     {day}
                   </div>
                 ))}
@@ -123,7 +123,7 @@ export default function Dashboard() {
       <div className="min-h-screen flex text-white justify-center h-[100vh] relative z-10">
         <div className="flex justify-between items-center flex-col w-[80vw] h-full">
 
-          <div className="flex flex-0.5 w-full h-5"></div>
+          <div className="flex flex-0.2 w-full h-5 bg-white"></div>
 
           <div className="flex flex-1 w-[75vw] gap-4 bg-black/40 backdrop-blur-sm border border-red-500/30 rounded-2xl p-2">
             <PieChart data={matchesData} centerTextTop="MATCHES" centerTextBottom={`${totalMatches} Matches`} />
