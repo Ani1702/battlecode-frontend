@@ -5,6 +5,14 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
 
+// --- INTERFACES ---
+interface TestCase {
+  // FIX: Changed from string to any to match the actual data structure (e.g., objects, arrays)
+  input: any;
+  output: any;
+  explanation?: string;
+}
+
 interface Question {
   id: string;
   title: string;
@@ -13,11 +21,8 @@ interface Question {
   constraints: string[];
   hints: string[];
   boilerplate: Record<string, string>;
-  sampleTestCases: Array<{
-    input: string;
-    output: string;
-    explanation?: string;
-  }>;
+  sampleTestCases: TestCase[];
+  hiddenTestCases: TestCase[];
   categories: string[];
   avgTimeComplexity: string;
   avgSpaceComplexity: string;
@@ -39,12 +44,14 @@ interface MatchData {
   startedAt?: string;
 }
 
+// --- COMPONENT ---
 export default function CodeRoom() {
   const { matchId } = useParams();
   const router = useRouter();
   const { socket } = useSocket();
   const { user } = useAuth();
 
+  // Component State
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [timeLeft, setTimeLeft] = useState(0);
@@ -56,17 +63,21 @@ export default function CodeRoom() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // --- NEW STATE FOR SUBMISSION ---
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionResults, setSubmissionResults] = useState<any[] | null>(
+    null
+  );
+
   // Helper function to safely render test case values
   const renderTestCaseValue = (value: any): string => {
-    if (typeof value === "string") {
-      return value;
-    }
-    if (typeof value === "object" && value !== null) {
+    if (typeof value === "string") return value;
+    if (typeof value === "object" && value !== null)
       return JSON.stringify(value);
-    }
     return String(value);
   };
 
+  // Main effect for joining match and setting up listeners
   useEffect(() => {
     if (!socket) {
       console.log("Socket not available yet");
@@ -203,43 +214,85 @@ export default function CodeRoom() {
   // Timer effect
   useEffect(() => {
     if (timeLeft <= 0) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
+    const timer = setInterval(
+      () => setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0)),
+      1000
+    );
     return () => clearInterval(timer);
   }, [timeLeft]);
 
   // Update code when language changes
   useEffect(() => {
-    if (currentQuestion && currentQuestion.boilerplate) {
+    if (currentQuestion?.boilerplate) {
       setCode(currentQuestion.boilerplate[language] || "");
     }
   }, [language, currentQuestion]);
 
-  const handleSubmit = () => {
-    if (!socket || !matchId || !currentQuestion) return;
+  // --- UPDATED SUBMIT HANDLER ---
+  const handleSubmit = async () => {
+    if (!currentQuestion || isSubmitting) return;
 
-    console.log("Submitting answer for question:", currentQuestion.title);
-    socket.emit("submitAnswer", {
-      matchId,
-      answer: code,
-      questionIndex,
-    });
+    setIsSubmitting(true);
+    setSubmissionResults(null); // Clear previous results
+
+    // Combine sample and hidden test cases for submission
+    const allTestCases = [
+      ...(currentQuestion.sampleTestCases || []),
+      ...(currentQuestion.hiddenTestCases || []),
+    ];
+
+    try {
+      // NOTE: Make sure this URL points to your running backend server.
+      // It's best to use an environment variable for this in a real app.
+      const response = await fetch("http://localhost:8000/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language: language,
+          source_code: code,
+          testCases: allTestCases,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Submission failed");
+      }
+
+      const data = await response.json();
+      setSubmissionResults(data.results);
+
+      // Optional: If all test cases passed, emit a socket event to update score
+      const allPassed = data.results.every(
+        (res: any) => res.status.description === "Accepted"
+      );
+      if (allPassed && socket) {
+        console.log("All test cases passed! Emitting score update.");
+        socket.emit("submitAnswer", {
+          matchId,
+          questionIndex,
+          // You can add more data here like time taken, etc.
+        });
+      }
+    } catch (err: any) {
+      console.error("Submission error:", err);
+      // Display a user-friendly error in the results panel
+      setSubmissionResults([
+        { status: { description: "Error" }, stderr: err.message },
+      ]);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleNext = () => {
     if (!socket || !matchId) return;
-
     console.log("Requesting next question");
     socket.emit("nextQuestion", { matchId });
+  };
+
+  const handleGoBack = () => {
+    router.push(`/play/${matchId}`);
   };
 
   const handleRetry = () => {
@@ -278,11 +331,13 @@ export default function CodeRoom() {
     });
   };
 
-  const handleGoBack = () => {
-    router.push(`/play/${matchId}`);
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Loading state
+  // --- RENDER LOGIC ---
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -297,7 +352,6 @@ export default function CodeRoom() {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -324,7 +378,6 @@ export default function CodeRoom() {
     );
   }
 
-  // No current question state
   if (!currentQuestion) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -347,97 +400,57 @@ export default function CodeRoom() {
     );
   }
 
-  // Format time for display
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-gray-900 text-white">
+      {/* Header and Timer */}
       <div className="flex-[0.2] items-center flex justify-center text-bold text-xl">
         PLAYER V/S PLAYER
       </div>
       <div className="flex-[0.4] flex flex-col p-4 rounded-lg">
-        <div className="flex-3 rounded-lg border border-t-amber-500 border-b-amber-600 border-l-amber-500 border-r-amber-500 flex">
-          <div className="flex-1 flex justify-center items-center">
-            Current Points: 100
-          </div>
-          <div className="flex-1 flex justify-center items-center">
-            Bonus Points: 20
-          </div>
-          <div className="flex-1 flex justify-center items-center">
+        <div className="flex-3 rounded-lg border border-amber-500 flex">
+          <div className="flex-1 text-center p-2">Current Points: 100</div>
+          <div className="flex-1 text-center p-2">Bonus Points: 20</div>
+          <div className="flex-1 text-center p-2 font-mono text-lg">
             {formatTime(timeLeft)}
           </div>
         </div>
-        <div className="flex h-3 w-full rounded-lg bg-black border-red-500 border-2">
-          <div className="bg-yellow-400 rounded-lg w-1/2 border"></div>
-          <div className="bg-red-400 rounded-lg h-1 w-1/2 absolute blur-md"></div>
-        </div>
       </div>
-      <div className="flex-4 flex p-4 gap-4 bg-black/40 backdrop-blur-sm">
+
+      {/* Main Content */}
+      <div className="flex-4 flex p-4 gap-4 bg-black/40 backdrop-blur-sm overflow-auto">
         {/* Question Panel */}
-        <div className="flex-1 flex border rounded-lg border-amber-600 bg-black/40 backdrop-blur-sm p-4 flex-col">
-          <span className="text-lg mb-4">{currentQuestion.title}</span>
-          <p className="mb-4">{currentQuestion.description}</p>
+        <div className="flex-1 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col overflow-y-auto">
+          <h2 className="text-xl font-bold mb-4">{currentQuestion.title}</h2>
+          <p className="mb-4 text-gray-300">{currentQuestion.description}</p>
 
-          {currentQuestion.constraints?.length > 0 && (
-            <div className="mb-4">
-              <h3 className="font-bold mb-1">Constraints:</h3>
-              <ul className="list-disc pl-5">
-                {currentQuestion.constraints.map((constraint, i) => (
-                  <li key={i}>{constraint}</li>
-                ))}
-              </ul>
+          <h3 className="font-bold mb-2">Sample Test Cases:</h3>
+          {currentQuestion.sampleTestCases.map((testCase, i) => (
+            <div
+              key={i}
+              className="mb-2 bg-gray-800 p-3 rounded font-mono text-sm"
+            >
+              <p>
+                <span className="font-bold text-gray-400">Input:</span>{" "}
+                {renderTestCaseValue(testCase.input)}
+              </p>
+              <p>
+                <span className="font-bold text-gray-400">Output:</span>{" "}
+                {renderTestCaseValue(testCase.output)}
+              </p>
             </div>
-          )}
-
-          {currentQuestion.sampleTestCases?.length > 0 && (
-            <div className="mb-4">
-              <h3 className="font-bold mb-1">Sample Test Cases:</h3>
-              {currentQuestion.sampleTestCases.map((testCase, i) => (
-                <div key={i} className="mb-2 bg-black/30 p-2 rounded">
-                  <p>
-                    <span className="font-bold">Input:</span>{" "}
-                    {renderTestCaseValue(testCase.input)}
-                  </p>
-                  <p>
-                    <span className="font-bold">Output:</span>{" "}
-                    {renderTestCaseValue(testCase.output)}
-                  </p>
-                  {testCase.explanation && (
-                    <p>
-                      <span className="font-bold">Explanation:</span>{" "}
-                      {testCase.explanation}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {currentQuestion.hints?.length > 0 && (
-            <div>
-              <h3 className="font-bold mb-1">Hints:</h3>
-              <ul className="list-disc pl-5">
-                {currentQuestion.hints.map((hint, i) => (
-                  <li key={i}>{hint}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          ))}
         </div>
 
-        {/* Code Editor Panel */}
+        {/* Code & Results Panel */}
         <div className="flex-1 flex flex-col gap-4">
+          {/* Code Editor */}
           <div className="flex-1 border border-amber-600 rounded-lg p-4 flex flex-col">
-            <div className="flex justify-between mb-2">
-              <span className="text-lg">CODE</span>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-lg font-bold">Code Editor</span>
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                className="bg-black/40 text-white p-1 rounded border border-amber-600"
+                className="bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
               >
                 <option value="javascript">JavaScript</option>
                 <option value="python">Python</option>
@@ -447,19 +460,79 @@ export default function CodeRoom() {
               </select>
             </div>
             <textarea
-              className="flex-1 bg-transparent text-white resize-none outline-none font-mono"
+              className="flex-1 bg-gray-900 text-white resize-none outline-none font-mono p-2 rounded"
               placeholder="Write your code here..."
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
           </div>
-          <div className="flex-1 border border-amber-600 rounded-lg p-4">
-            <span className="text-lg">TEST RESULT</span>
+
+          {/* Test Results */}
+          <div className="flex-1 border border-amber-600 rounded-lg p-4 overflow-y-auto">
+            <span className="text-lg font-bold">Test Results</span>
+            <div className="mt-2">
+              {isSubmitting && (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-500"></div>
+                  <span>Evaluating...</span>
+                </div>
+              )}
+              {submissionResults && (
+                <div className="space-y-2">
+                  {submissionResults.map((result, index) => {
+                    const isAccepted = result.status.description === "Accepted";
+                    return (
+                      <div
+                        key={index}
+                        className={`p-2 rounded ${
+                          isAccepted ? "bg-green-800/50" : "bg-red-800/50"
+                        }`}
+                      >
+                        <p className="font-bold">
+                          Test Case {index + 1}:{" "}
+                          <span
+                            className={
+                              isAccepted ? "text-green-400" : "text-red-400"
+                            }
+                          >
+                            {result.status.description}
+                          </span>
+                        </p>
+                        {!isAccepted && result.stderr && (
+                          <pre className="text-xs text-red-300 mt-1 whitespace-pre-wrap">
+                            {result.stderr}
+                          </pre>
+                        )}
+                        {!isAccepted && result.compile_output && (
+                          <pre className="text-xs text-yellow-300 mt-1 whitespace-pre-wrap">
+                            {result.compile_output}
+                          </pre>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex-[0.1] gap-2 p-2 flex justify-end">
-            <Button content="Resign" onClick={handleGoBack} />
-            <Button content="Skip" onClick={handleNext} />
-            <Button content="Submit" onClick={handleSubmit} />
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 p-2">
+            <Button
+              content="Resign"
+              onClick={handleGoBack}
+              // disabled={isSubmitting}
+            />
+            <Button
+              content="Skip"
+              onClick={handleNext}
+              // disabled={isSubmitting}
+            />
+            <Button
+              content={isSubmitting ? "Submitting..." : "Submit"}
+              onClick={handleSubmit}
+              // disabled={isSubmitting}
+            />
           </div>
         </div>
       </div>

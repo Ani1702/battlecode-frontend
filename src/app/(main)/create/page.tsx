@@ -1,4 +1,3 @@
-// Updated CreateRoom.tsx
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -22,6 +21,15 @@ const TOPICS = [
   "Binary Search",
 ];
 
+// Interface for the new socket response
+interface CreateMatchResponse {
+  success: boolean;
+  matchId?: string;
+  playerId?: string;
+  match?: any;
+  error?: string;
+}
+
 export default function CreateRoom() {
   const [settings, setSettings] = useState({
     timeLimit: 30,
@@ -29,6 +37,7 @@ export default function CreateRoom() {
     difficulty: "medium",
     topics: [] as string[],
   });
+  const [matchType, setMatchType] = useState<"time" | "questions">("time");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -60,41 +69,55 @@ export default function CreateRoom() {
       return;
     }
 
+    // Validate that at least one topic is selected, as per backend requirement
+    if (settings.topics.length === 0) {
+      setError("Please select at least one topic.");
+      return;
+    }
+
     setIsCreating(true);
     setError("");
+
+    // Construct the payload based on the selected match type
+    const payload: {
+      timeLimit?: number;
+      noOfQuestions?: number;
+      difficulty: string;
+      topics: string[];
+    } = {
+      difficulty: settings.difficulty.toUpperCase(),
+      topics: settings.topics,
+    };
+
+    if (matchType === "time") {
+      payload.timeLimit = settings.timeLimit;
+    } else {
+      payload.noOfQuestions = settings.questionCount;
+    }
 
     const timeout = setTimeout(() => {
       setIsCreating(false);
       setError("Server response timed out");
     }, 10000);
 
-    socket.emit(
-      "createMatch",
-      {
-        timeLimit: settings.timeLimit,
-        noOfQuestions: settings.questionCount,
-        difficulty: settings.difficulty.toUpperCase(),
-        topics: settings.topics,
-      },
-      (response: { matchId: string; playerId: string } | { error: string }) => {
-        clearTimeout(timeout);
-        setIsCreating(false);
+    socket.emit("createMatch", payload, (response: CreateMatchResponse) => {
+      clearTimeout(timeout);
+      setIsCreating(false);
 
-        if (!response) {
-          setError("No response from server");
-          return;
-        }
-
-        if ("error" in response) {
-          setError(response.error);
-          console.error("Match creation error:", response.error);
-        } else if ("matchId" in response) {
-          console.log(response);
-          console.log("Match created:", response.matchId);
-          router.push(`/play/${response.matchId}`);
-        }
+      if (!response) {
+        setError("No response from server");
+        return;
       }
-    );
+
+      // Handle the new success/error response format
+      if (!response.success || response.error) {
+        setError(response.error || "An unknown error occurred.");
+        console.error("Match creation error:", response.error);
+      } else if (response.matchId) {
+        console.log("Match created:", response.matchId);
+        router.push(`/play/${response.matchId}`);
+      }
+    });
   };
 
   if (isLoading) {
@@ -150,26 +173,55 @@ export default function CreateRoom() {
         {/* Right side - Settings */}
         <div className="flex-1 flex flex-col h-full">
           <div className="flex-1"></div>
+
+          {/* Match Type Selection */}
           <div className="flex-1 p-4">
-            <p className="font-oxanium text-white text-lg mb-4">COUNTDOWN</p>
-            <TimeSlider
-              value={settings.timeLimit}
-              onChange={(value) =>
-                setSettings({ ...settings, timeLimit: value })
-              }
-            />
+            <p className="font-oxanium text-white text-lg mb-4">MATCH TYPE</p>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <ColoredBtn
+                  content="Timed"
+                  onClick={() => setMatchType("time")}
+                  selected={matchType === "time"}
+                />
+              </div>
+              <div className="flex-1">
+                <ColoredBtn
+                  content="By Questions"
+                  onClick={() => setMatchType("questions")}
+                  selected={matchType === "questions"}
+                />
+              </div>
+            </div>
           </div>
-          <div className="flex-1 p-4">
-            <p className="font-oxanium text-white text-lg mb-4">
-              NUMBER OF QUESTIONS
-            </p>
-            <QuestionCountSlider
-              value={settings.questionCount}
-              onChange={(value) =>
-                setSettings({ ...settings, questionCount: value })
-              }
-            />
-          </div>
+
+          {/* Conditional Sliders */}
+          {matchType === "time" ? (
+            <div className="flex-1 p-4">
+              <p className="font-oxanium text-white text-lg mb-4">
+                COUNTDOWN (MINUTES)
+              </p>
+              <TimeSlider
+                value={settings.timeLimit}
+                onChange={(value) =>
+                  setSettings({ ...settings, timeLimit: value })
+                }
+              />
+            </div>
+          ) : (
+            <div className="flex-1 p-4">
+              <p className="font-oxanium text-white text-lg mb-4">
+                NUMBER OF QUESTIONS
+              </p>
+              <QuestionCountSlider
+                value={settings.questionCount}
+                onChange={(value) =>
+                  setSettings({ ...settings, questionCount: value })
+                }
+              />
+            </div>
+          )}
+
           <div className="flex-1 p-4">
             <p className="font-oxanium text-white text-lg mb-4">
               SELECT DIFFICULTY
@@ -204,6 +256,7 @@ export default function CreateRoom() {
               </div>
             </div>
           </div>
+
           <div className="flex-1 p-4 flex justify-center items-center">
             <button
               onClick={handleCreate}
