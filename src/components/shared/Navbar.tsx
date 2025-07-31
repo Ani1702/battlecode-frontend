@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
@@ -10,6 +10,20 @@ export default function Navbar() {
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
+  useEffect(() =>{
+    const handleClickOutside = (event: MouseEvent) => {
+      const menu = document.querySelector('.absolute');
+      if (menu && !menu.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+    
+  })
 
   return (
     <nav className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 border-radius rounded-full">

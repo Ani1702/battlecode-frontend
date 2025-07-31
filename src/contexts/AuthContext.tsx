@@ -51,6 +51,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, [supabase.auth]);
+
+  // Token refresh logic - refresh every 60 minutes
+  useEffect(() => {
+    let refreshInterval: NodeJS.Timeout;
+
+    if (session?.access_token) {
+      const refreshToken = async () => {
+        try {
+          const { data, error } = await supabase.auth.refreshSession();
+          if (error) {
+            console.error('Token refresh failed:', error);
+            // Handle refresh failure - redirect to dashboard
+            await signOut();
+            router.push('/dashboard');
+          } else {
+            console.log('Token refreshed successfully');
+            setSession(data.session);
+            setUser(data.session?.user ?? null);
+            setAvatarUrl(data.session?.user?.user_metadata?.avatar_url ?? null);
+          }
+        } catch (error) {
+          console.error('Token refresh error:', error);
+          // Handle any unexpected errors - redirect to dashboard
+          await signOut();
+          router.push('/dashboard');
+        }
+      };
+
+      // Refresh token every 60 minutes (3600000 ms)
+      refreshInterval = setInterval(refreshToken, 60 * 60 * 1000);
+    }
+
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [session?.access_token, supabase.auth, router]);
+
   const signInWithGoogle = async () => {
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -62,18 +101,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error("Sign-in error:", error);
+        // Redirect to dashboard on sign-in error
+        router.push("/dashboard");
         throw error;
       }
 
       router.push("/dashboard");
     } catch (error) {
       console.error("Error during Google sign-in:", error);
+      // Redirect to dashboard on any error
+      router.push("/dashboard");
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    router.refresh();
+    try {
+      await supabase.auth.signOut();
+      router.push("/dashboard");
+    } catch (error) {
+      console.error("Sign-out error:", error);
+      // Even if sign-out fails, redirect to dashboard
+      router.push("/dashboard");
+    }
   };
 
   return (

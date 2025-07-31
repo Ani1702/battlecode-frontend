@@ -101,24 +101,66 @@ export default function CreateRoom() {
       setError("Server response timed out");
     }, 10000);
 
-    socket.emit("createMatch", payload, (response: CreateMatchResponse) => {
-      clearTimeout(timeout);
-      setIsCreating(false);
+    if (sliderMode === "time") {
 
-      if (!response) {
-        setError("No response from server");
-        return;
-      }
+      socket.emit(
+        "createMatch",
+        {
+          timeLimit: settings.timeLimit ,
+          difficulty: (settings.difficulty || "medium").toUpperCase(),
+          topics: settings.topics.length > 0 ? settings.topics : ["Array", "String"],
+        },
+        (response: { matchId: string; playerId: string } | { error: string }) => {
+          clearTimeout(timeout);
+          setIsCreating(false);
 
-      // Handle the new success/error response format
-      if (!response.success || response.error) {
-        setError(response.error || "An unknown error occurred.");
-        console.error("Match creation error:", response.error);
-      } else if (response.matchId) {
-        console.log("Match created:", response.matchId);
-        router.push(`/play/${response.matchId}`);
-      }
-    });
+          if (!response) {
+            setError("No response from server");
+            return;
+          }
+
+          if ("error" in response) {
+            setError(response.error);
+            console.error("Match creation error:", response.error);
+          } else if ("matchId" in response) {
+            console.log(response);
+            console.log("Match created:", response.matchId);
+            router.push(`/play/${response.matchId}`);
+          }
+        }
+      );
+    }
+
+
+    else if (sliderMode === "questions") {
+
+      socket.emit(
+        "createMatch",
+        {
+          noOfQuestions: settings.questionCount ,
+          difficulty: (settings.difficulty || "medium").toUpperCase(),
+          topics: settings.topics.length > 0 ? settings.topics : ["Array", "String"],
+        },
+        (response: { matchId: string; playerId: string } | { error: string }) => {
+          clearTimeout(timeout);
+          setIsCreating(false);
+
+          if (!response) {
+            setError("No response from server");
+            return;
+          }
+
+          if ("error" in response) {
+            setError(response.error);
+            console.error("Match creation error:", response.error);
+          } else if ("matchId" in response) {
+            console.log(response);
+            console.log("Match created:", response.matchId);
+            router.push(`/play/${response.matchId}`);
+          }
+        }
+      );
+    }
   };
 
   if (isLoading) {

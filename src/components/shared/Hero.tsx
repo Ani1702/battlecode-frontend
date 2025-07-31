@@ -46,18 +46,18 @@ const Hero = () => {
         <div className="containerContent flex flex-col items-center justify-center h-full">
           <div className="flex items-center justify-center h-[20%]">
             <div className="z-1 absolute flex drop-shadow-[0_px_4px_#000]">
-              <h1 className="text-8xl z-1 tracking-wide font-medium stickyMask text-shadow-heading font-orbitron">
+              <h1 className="text-8xl z-1 tracking-wide font-medium stickyMask text-shadow-heading font-orbitron firey-title">
                 BATTLECODE
               </h1>
-              <h1 className="text-8xl text-blur tracking-wide font-medium blur-sm absolute font-orbitron">
+              <h1 className="text-8xl text-blur tracking-wide font-medium blur-sm absolute font-orbitron firey-title">
                 BATTLECODE
               </h1>
             </div>
             <div className="flex absolute blur-3xl mix-blend-color-dodge">
-              <h1 className="text-8xl z-1 tracking-wider font-medium stickyMask text-shadow-heading font-orbitron">
+              <h1 className="text-8xl z-1 tracking-wider font-medium stickyMask text-shadow-heading font-orbitron firey-title">
                 BATTLECODE
               </h1>
-              <h1 className="text-8xl text-blur tracking-wider font-medium blur-md absolute font-orbitron">
+              <h1 className="text-8xl text-blur tracking-wider font-medium blur-md absolute font-orbitron firey-title">
                 BATTLECODE
               </h1>
             </div>

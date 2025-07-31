@@ -90,7 +90,7 @@ export default function Dashboard() {
           <div className="flex flex-[0.1] w-full"></div>          
           <div className="flex flex-[1] gap-20 px-6 w-full relative z-10">
             <div 
-              className="flex-1  h-11/13 rounded-2xl bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+              className="flex-1  h-11/13 rounded-2xl bg-black/40 backdrop-blur-sm flex flex-col gradient-border-button shadow-[0_0_20px_rgba(220,38,38,0.3)]">
               <p className="text-gray-200 text-center flex-[0.3] flex justify-center items-center font-oxanium mb-4 text-3xl">QUESTIONS SOLVED</p>
               <div className="flex-1 w-full">
                 <BarChart  data = {[2, 9, 13]}/>
@@ -98,7 +98,7 @@ export default function Dashboard() {
             </div>
 
 
-            <div className="flex-1 h-11/13 rounded-2xl bg-black/40 backdrop-blur-sm p-6 flex flex-col items-center justify-around border border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+            <div className="flex-1 h-11/13 rounded-2xl bg-black/40 backdrop-blur-sm p-6 flex flex-col items-center justify-around gradient-border-button">
               <h3 className="text-3xl font-oxanium text-gray-200 tracking-widest">WINNING STREAK</h3>
               <div className="text-7xl my-2">
                 <img src = "./fire.svg" className = "h-fit w-fit"/>
