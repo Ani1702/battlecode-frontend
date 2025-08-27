@@ -7,151 +7,122 @@ import PieChart from "@/components/shared/Piechart";
 import ContributionsGrid from "@/components/shared/ContributionsGrid";
 import Rewards from "@/components/shared/Rewards";
 import Navbar from "@/components/shared/Navbar";
+import { useState } from "react";
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const router = useRouter();
-
-  const timeSpentData = {
-    labels: ['Coding', 'Analysing', 'Practice', 'Other'],
-    values: [45, 25, 15, 15],
-    colors: ['#ff6b00', '#dc2626', '#f59e0b', '#9ca3af'],
-  };
-
-  const matchesData = {
-    labels: ['Won', 'Lost', 'Tie'],
-    values: [12, 6, 2],
-    colors: ['#22c55e', '#ef4444', '#f59e0b'],
-  };
-  const totalMatches = matchesData.values.reduce((a, b) => a + b, 0);
-
-  // Mock data for the contributions grid (7 rows, 32 columns)
-  const contributionsData = new Array(7 * 32).fill(0);
-  contributionsData[75] = 1; // Corresponds to a red block in the grid
-  contributionsData[157] = 1; // Corresponds to another red block
-
-  const userBadges = [
-    { id: 1, name: 'FIRST MATCH', imageUrl: 'b-1.svg' },
-    { id: 2, name: 'FIRST WIN', imageUrl: 'b-2.svg' },
-    { id: 3, name: '5 DAY STREAK', imageUrl: 'b-3.svg' },
-    { id: 4, name: '10 DAY STREAK', imageUrl: 'b-4.svg' },
-    { id: 5, name: 'FIRST MATCH 2', imageUrl: 'b-1.svg' },
-    { id: 6, name: 'FIRST WIN 2', imageUrl: 'b-2.svg' },
-    { id: 7, name: '5 DAY STREAK 2', imageUrl: 'b-3.svg' },
-    { id: 8, name: '10 DAY STREAK 2', imageUrl: 'b-4.svg' },
+  const [islocked, setlocked] = useState([false, true, true, true]);
+  const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"]
+  const leaderboard_titles = ["Rank", "Player", "Score", "Trend"];
+  const leaderboard = [
+    [1, "cypher", 2450, ""],
+    [2, "glitch", 2300, ""],
+    [3, "reaver", 2288, ""],
+    [4, "sentinel", 2150, ""],
+    [5, "omen", 2000, ""],
+    [6, "vex", 1950, ""],
+    [7, "jett", 1800, ""],
+    [8, "raze", 1750, ""],
+    [9, "sage", 1720, ""],
+    [10, "phoenix", 1700, ""],
+    [11, "brimstonesdsdfsdfsfsfsdfdfssdfdf", 1680, ""],
+    [12, "yoru", 1650, ""],
+    [13, "skye", 1620, ""],
+    [14, "breach", 1600, ""],
+    [15, "astra", 1580, ""],
+    [16, "harbor", 1550, ""],
+    [17, "neon", 1530, ""],
+    [18, "fade", 1500, ""],
+    [19, "chamber", 1480, ""],
+    [20, "deadlock", 1450, ""],
+    [21, "gekko", 1430, ""],
+    [22, "iso", 1400, ""],
+    [23, "kay/o", 1380, ""],
+    [24, "killjoy", 1350, ""],
+    [25, "clove", 1330, ""],
+    [26, "sova", 1300, ""],
+    [27, "reyna", 1280, ""],
+    [28, "duelist", 1250, ""]
   ];
 
-  const handleBadgeClick = (badge: any) => {
-    console.log('Badge clicked:', badge.name);
-    alert(`You clicked on ${badge.name}!`);
-  };
-
-  const handleJoinClick = () => {
-    console.log('Join button clicked');
-    router.push('/join');
-  };
-
-  const handleCreateClick = () => {
-    console.log('Create button clicked');
-    router.push('/create');
-  };
-
   return (
-    <div className="flex flex-col min-h-screen background relative">
-      <div className = "w-full h-20">
-        <Navbar/>
-      </div>
-      <div className="min-h-screen flex justify-center h-[100vh] relative z-10">
-        <div className="flex justify-between items-center flex-col p-4 w-[80vw] h-full">
-          <div className="flex flex-0.5 h-5"></div>
-
-          <div className="flex flex-0.8 h-32 w-full">
-            <div className="relative flex-1 h-full rounded-lg p-6 flex flex-col justify-center overflow-hidden">
-              {/* Background Gradient Arc */}
-              <div className="absolute -bottom-1/2 -right-1/4 w-full h-full rounded-full "/>
-
-              {/* Content */}
-              <div className="relative z-10">
-                <p className="text-gray-400 text-lg font-sans">Welcome</p>
-                <h1 className="text-white text-3xl font-bold font-orbitron tracking-wider my-1 uppercase">{user?.email?.split('@')[0] || 'USER'}</h1>
-                <p className="text-white text-2xl font-sans flex items-center">
-                  <span className="text-yellow-400 mr-2">⭐</span>
-                  2450
-                </p>
-              </div>
+    <>
+      <div className="bg-[url('/bg-dashboard.svg')] min-h-screen bg-cover bg-center">
+        <div className="h-screen w-full flex">
+          <div className="flex-[1.5]  h-full w-full flex flex-col">
+            <div className="flex-1 ">
+              <p>{"<> BattleCode Arena"}</p>
             </div>
-            <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800"></div>
-            <div className="flex-1 h-32 rounded-lg flex items-center justify-center text-gray-800 gap-5 relative z-20">
-              <Button content="JOIN" onClick={handleJoinClick}/>
-              <Button content="CREATE" onClick={handleCreateClick}/>
+            <div className="flex-1   text-lg">
+              <p className = "text-5xl pl-8">Competition<span className="text-5xl text-amber-700"> Rounds</span></p>
             </div>
-          </div>
-
-          <div className="flex flex-0.5 w-full h-15"></div>          
-          <div className="flex flex-2 gap-4 px-6 w-full relative z-10">
-            <div 
-              className="flex-1  h-fill rounded-2xl bg-black/40 backdrop-blur-sm flex flex-col border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
-              <p className="text-gray-200 text-center flex-[0.3] flex justify-center items-center font-oxanium mb-4 text-3xl">QUESTIONS SOLVED</p>
-              <div className="flex-1 w-full">
-                <BarChart  data = {[2, 9, 13]}/>
-              </div>
-            </div>
-
-
-            <div className="flex-1 h-full rounded-2xl bg-black/40 backdrop-blur-sm p-6 flex flex-col items-center justify-around border border-red-500/30 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
-              <h3 className="text-3xl font-oxanium text-gray-200 tracking-widest">WINNING STREAK</h3>
-              <div className="text-7xl my-2">
-                <img src = "./fire.svg" className = "h-fit w-fit"/>
-              </div>
-              <p className="text-lg text-gray-300">4 days</p>
-              <div className="flex gap-2.5 mt-2">
-                {['m', 't', 'w', 't', 'f', 's', 's'].map((day, index) => (
-                  <div
-                    key={`${day}-${index}`}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-md ${index < 4 ? 'bg-orange-300 text-red-600' : 'bg-black/50 text-gray-500'}`}>
-                    {day}
+            {[0, 1, 2, 3].map((i) => (
+              <div className={`flex-[1.2] flex justify-center items-center pb-5`} key={i}>
+                <div className="w-[95%] h-[90%] rounded-2xl flex glass-box justify-center items-center pl-5">
+                  <div className={`flex-[0.5] rounded-[50%] w-[70%] h-[70%] ml-5 ${islocked[i]?"":"border-amber-600"} m-1 items-center justify-center flex border-4`}>
+                    <p className = "text-3xl">{i}</p>
                   </div>
-                ))}
+                  <div className="flex-5 flex flex-col ml-5">
+                    <div className="flex-2 text-3xl font-bold">
+                      <p>{titles[i]}</p>
+                    </div>
+                    <div className="flex-1">
+                      <p>{islocked[i] ? "Active" : "Locked"}</p>
+                    </div>
+                  </div>
+                  <div className={`flex-[0.5] flex justify-center items-center`}>
+                    {
+                      islocked[i]?<img src="/lock.svg" />:<div className="w-4 h-4 bg-orange-500 rounded-lg"></div>
+                    }
+                    
+                    
+                  </div>
+                </div>
               </div>
+            ))}
+            <div className="flex-2 justify-center items-center flex">
+
             </div>
           </div>
+          <div className="flex-1  h-full w-full flex justify-center items-end ">
+            <div className="w-[95%] h-[85%] rounded-lg border-2 mb-4 flex flex-col glass-box">
+              <div className="flex-1  justify-center items-center flex">
+                
+                  <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2"/><span></span>
+                  <p className="text-2xl text-orange-500">Live Leaderboard</p>
+              </div>
+              <div className="flex-7 overflow-x-auto px-4 pb-4">
+                <table className="min-w-full text-left text-sm  text-white">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      {leaderboard_titles.map((title, idx) => (
+                        <th key={idx} className="py-2 px-3 font-bold">{title}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboard.map((row, idx) => (
+                      <tr key={idx} className=" border-gray-800 hover:bg-white/5 transition">
+                        {row.map((cell, cidx) => (
+                          <td key={cidx} className="py-2 px-3">{cell}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          </div>
+
         </div>
       </div>
-      
+
+    </>
+
+  )
+
+};
 
 
-      <div className="min-h-screen flex text-white justify-center h-[100vh] relative z-10">
-        <div className="flex justify-between items-center flex-col w-[80vw] h-full">
-
-          <div className="flex flex-0.5 w-full h-5"></div>
-
-          <div className="flex flex-1 w-[75vw] gap-4 bg-black/40 backdrop-blur-sm border border-red-500/30 rounded-2xl p-2">
-            <PieChart data={matchesData} centerTextTop="MATCHES" centerTextBottom={`${totalMatches} Matches`} />
-            <PieChart data={timeSpentData} centerTextTop="TIME SPENT" centerTextBottom="8 Hours" />
-          </div>
-
-          <div className="flex flex-0.5 w-full h-5"></div>
-
-          <div className="flex flex-1 w-[77vw]">
-            <ContributionsGrid data={contributionsData} />
-          </div>
-          <div className="flex flex-0.5 w-full h-15"></div> 
-         
-          <div className="w-[77vw] mt-10 relative z-20">
-            <Rewards badges={userBadges} onBadgeClick={handleBadgeClick} />
-          </div>
-
-        </div>
-      </div>
-    </div>
-
-
-
-  );
-}
-
-function StatCard({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="bg-gray-800 rounded-lg w-2xl h-[40vw] flex flex-col items-center justify-center shadow-lg"></div>
-  );
-}

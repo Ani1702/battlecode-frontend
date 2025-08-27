@@ -1,3 +1,4 @@
+
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 @import "tailwindcss";
 
@@ -26,13 +27,7 @@ body {
   font-family: var(--font-orbitron), sans-serif;
 }
 
-html {
-  scroll-behavior: smooth;
-}
 
-html, body {
-  /* Restore default scroll and background behavior */
-}
 
 .stickyMask {
   background: url("/mask.svg") no-repeat;
@@ -43,6 +38,15 @@ html, body {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: brightness(1.2) contrast(1.1) saturate(1.1);
+}
+
+.glass-box {
+  background: rgba(255, 255, 255, 0.05); /* transparent white */
+  backdrop-filter: blur(5px); /* glass blur */
+  -webkit-backdrop-filter: blur(5px); /* Safari support */
+  border: 1px solid rgba(255, 255, 255, 0.1); /* thin border */
+  color: white;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.2);
 }
 
 /* Custom slider thumb with gradient */

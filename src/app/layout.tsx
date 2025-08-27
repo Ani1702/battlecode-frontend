@@ -32,9 +32,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${oxanium.variable}  ${orbitron.variable} antialiased`}>
         <AuthProvider>
-          <Protected>
+          
             <SocketProvider>{children}</SocketProvider>
-          </Protected>
+          
         </AuthProvider>
       </body>
     </html>
