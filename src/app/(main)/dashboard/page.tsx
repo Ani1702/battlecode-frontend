@@ -1,13 +1,10 @@
-"use client";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "next/navigation";
-import BarChart from "@/components/shared/BarChart";
-import Button from "@/components/shared/button";
-import PieChart from "@/components/shared/Piechart";
+"use client"
 import ContributionsGrid from "@/components/shared/ContributionsGrid";
 import Rewards from "@/components/shared/Rewards";
 import Navbar from "@/components/shared/Navbar";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
@@ -51,32 +48,47 @@ export default function Dashboard() {
       <div className="bg-[url('/bg-dashboard.svg')] min-h-screen bg-cover bg-center">
         <div className="h-screen w-full flex">
           <div className="flex-[1.5]  h-full w-full flex flex-col">
-            <div className="flex-1 ">
+            <div className="flex-1 ml-3 mt-3">
               <p>{"<> BattleCode Arena"}</p>
+
             </div>
-            <div className="flex-1   text-lg">
-              <p className = "text-5xl pl-8">Competition<span className="text-5xl text-amber-700"> Rounds</span></p>
+            <div className="flex-1  font-medium text-lg">
+              <p className="text-5xl pl-8">Competition<span className="text-5xl text-amber-700"> Rounds</span></p>
+
+
             </div>
             {[0, 1, 2, 3].map((i) => (
               <div className={`flex-[1.2] flex justify-center items-center pb-5`} key={i}>
-                <div className="w-[95%] h-[90%] rounded-2xl flex glass-box justify-center items-center pl-5">
-                  <div className={`flex-[0.5] rounded-[50%] w-[70%] h-[70%] ml-5 ${islocked[i]?"":"border-amber-600"} m-1 items-center justify-center flex border-4`}>
-                    <p className = "text-3xl">{i}</p>
+                <div
+                  className={`w-[95%] h-[90%] rounded-2xl flex glass-box justify-center items-center pl-5 transition-transform duration-200 ${!islocked[i] ? 'hover:-translate-y-2 cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-disabled={islocked[i]}
+                  onClick={() => {
+                    if (!islocked[i]) router.push('/lobby');
+                  }}
+                  onKeyDown={e => {
+                    if (!islocked[i] && (e.key === 'Enter' || e.key === ' ')) router.push('/lobby');
+                  }}
+                >
+                  <div className={` rounded-[50%] h-15 w-15 ml-1 ${islocked[i] ? "border-gray-400/50" : "border-amber-600"} m-1 items-center justify-center flex border-4`}>
+                    <p className={`text-3xl oxanium ${islocked[i] ? "text-gray-400/50" : ""}   `}>{i}</p>
+
                   </div>
                   <div className="flex-5 flex flex-col ml-5">
-                    <div className="flex-2 text-3xl font-bold">
+                    <div className={`flex-2 text-3xl font-medium ${islocked[i] ? "text-gray-400/50" : ""}`}>
                       <p>{titles[i]}</p>
                     </div>
-                    <div className="flex-1">
-                      <p>{islocked[i] ? "Active" : "Locked"}</p>
+                    <div className={`flex-1 ${islocked[i] ? "text-gray-400/50" : ""}`}>
+                      <p>{islocked[i] ? "Locked" : "Active"}</p>
                     </div>
                   </div>
                   <div className={`flex-[0.5] flex justify-center items-center`}>
                     {
-                      islocked[i]?<img src="/lock.svg" />:<div className="w-4 h-4 bg-orange-500 rounded-lg"></div>
+                      islocked[i] ? <img src="/lock.svg" /> : <div className="w-4 h-4 bg-orange-500 rounded-lg"></div>
                     }
-                    
-                    
+
+
                   </div>
                 </div>
               </div>
@@ -88,9 +100,9 @@ export default function Dashboard() {
           <div className="flex-1  h-full w-full flex justify-center items-end ">
             <div className="w-[95%] h-[85%] rounded-lg border-2 mb-4 flex flex-col glass-box">
               <div className="flex-1  justify-center items-center flex">
-                
-                  <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2"/><span></span>
-                  <p className="text-2xl text-orange-500">Live Leaderboard</p>
+
+                <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" /><span></span>
+                <p className="text-2xl text-orange-500">Live Leaderboard</p>
               </div>
               <div className="flex-7 overflow-x-auto px-4 pb-4">
                 <table className="min-w-full text-left text-sm  text-white">
@@ -114,15 +126,13 @@ export default function Dashboard() {
               </div>
 
             </div>
+
           </div>
 
         </div>
       </div>
-
     </>
 
   )
 
 };
-
-
