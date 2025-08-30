@@ -104,7 +104,7 @@ export default function Dashboard() {
                 <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" /><span></span>
                 <p className="text-2xl text-orange-500">Live Leaderboard</p>
               </div>
-              <div className="flex-7 overflow-x-auto px-4 pb-4">
+              <div className="flex-7 overflow-y-auto px-4 pb-4">
                 <table className="min-w-full text-left text-sm  text-white">
                   <thead>
                     <tr className="border-b border-gray-700">
@@ -124,6 +124,7 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
+
 
             </div>
 

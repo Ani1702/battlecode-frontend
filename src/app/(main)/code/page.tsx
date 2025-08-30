@@ -4,33 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
-
-interface TestCase {
-  input: {
-    stdin?: string;
-    json?: string;
-  };
-  output: {
-    stdout?: string;
-    json?: any;
-  };
-  explanation?: string;
-}
-
-interface Question {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: string;
-  constraints: string[];
-  hints: string[];
-  boilerplate: Record<string, string>;
-  sampleTestCases: TestCase[];
-  hiddenTestCases: TestCase[];
-  categories: string[];
-  avgTimeComplexity: string;
-  avgSpaceComplexity: string;
-}
+import { Question, QuestionSession, QuestionManager, TestCase, sampleQuestions } from "@/types/question";
 
 interface MatchData {
   id: string;
@@ -67,48 +41,16 @@ export default function CodeRoom() {
   // const { socket } = useSocket();
   // const { user } = useAuth();
 
-  // Mock question for client-only mode
-  const mockQuestion: Question = {
-    id: "practice-1",
-    title: "Sum of Two Numbers",
-    description: "Given two integers, return their sum.",
-    difficulty: "Easy",
-    constraints: ["-1000 ≤ a, b ≤ 1000"],
-    hints: ["Use the + operator.", "Return the result directly."],
-    boilerplate: {
-      javascript: "function sum(a, b) {\n  // your code here\n}",
-      python: "def sum(a, b):\n    # your code here",
-      java: "public int sum(int a, int b) {\n  // your code here\n}",
-      cpp: "int sum(int a, int b) {\n  // your code here\n}",
-      c: "int sum(int a, int b) {\n  // your code here\n}",
-    },
-    sampleTestCases: [
-      {
-        input: { stdin: "2 3" },
-        output: { stdout: "5" },
-        explanation: "2 + 3 = 5",
-      },
-      {
-        input: { stdin: "-1 1" },
-        output: { stdout: "0" },
-        explanation: "-1 + 1 = 0",
-      },
-    ],
-    hiddenTestCases: [
-      {
-        input: { stdin: "1000 -1000" },
-        output: { stdout: "0" },
-      },
-    ],
-    categories: ["Math"],
-    avgTimeComplexity: "O(1)",
-    avgSpaceComplexity: "O(1)",
-  };
+  // Use sample question from the new question types
+  const mockQuestion: Question = sampleQuestions[0];
 
   const [code, setCode] = useState(mockQuestion.boilerplate["javascript"]);
   const [language, setLanguage] = useState("javascript");
-  const [timeLeft, setTimeLeft] = useState(300); // 5 min default
+  const [timeLeft, setTimeLeft] = useState(mockQuestion.timeLimit); // Use question's time limit
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(mockQuestion);
+  const [questionSession, setQuestionSession] = useState<QuestionSession | null>(
+    QuestionManager.createQuestionSession(mockQuestion)
+  );
   const [questionIndex, setQuestionIndex] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(1);
   const [matchStatus, setMatchStatus] = useState("PRACTICE");
@@ -118,32 +60,137 @@ export default function CodeRoom() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
+  const [isTimerRunning, setIsTimerRunning] = useState(true);
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (!isTimerRunning || timeLeft <= 0 || !questionSession || !currentQuestion) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft(prevTime => {
+        if (prevTime <= 1) {
+          setIsTimerRunning(false);
+          // Update session status
+          setQuestionSession(prev => prev ? { ...prev, status: 'timeout' } : null);
+          console.log("Time's up!");
+          alert("Time's up! The question will be auto-submitted.");
+          return 0;
+        }
+        return prevTime - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isTimerRunning, timeLeft, questionSession, currentQuestion]);
+
+  // Function to reset timer for new question
+  const resetTimer = (newTimeLimit?: number) => {
+    const timeLimit = newTimeLimit || currentQuestion?.timeLimit || 1800;
+    setTimeLeft(timeLimit);
+    setIsTimerRunning(true);
+    if (currentQuestion) {
+      setQuestionSession(QuestionManager.createQuestionSession(currentQuestion));
+    }
+  };
+
+  // Function to pause/resume timer
+  const toggleTimer = () => {
+    setIsTimerRunning(prev => !prev);
+  };
+
+  // Function to save session to localStorage
+  const saveSession = () => {
+    if (questionSession && currentQuestion) {
+      const sessionData = {
+        ...questionSession,
+        timeRemaining: timeLeft,
+        currentCode: code,
+        currentLanguage: language
+      };
+      localStorage.setItem(`question_session_${currentQuestion.id}`, JSON.stringify(sessionData));
+    }
+  };
+
+  // Function to load session from localStorage
+  const loadSession = (questionId: string) => {
+    const savedSession = localStorage.getItem(`question_session_${questionId}`);
+    if (savedSession) {
+      const sessionData = JSON.parse(savedSession);
+      setQuestionSession(sessionData);
+      setTimeLeft(sessionData.timeRemaining);
+      setCode(sessionData.currentCode || currentQuestion?.boilerplate[language] || "");
+      setLanguage(sessionData.currentLanguage || "javascript");
+      return true;
+    }
+    return false;
+  };
+
+  // Save session periodically
+  useEffect(() => {
+    const saveInterval = setInterval(saveSession, 30000); // Save every 30 seconds
+    return () => clearInterval(saveInterval);
+  }, [questionSession, timeLeft, code, language]);
+
+  // Get timer display with color coding
+  const getTimerDisplay = (): { time: string; className: string } => {
+    if (!currentQuestion) return {
+      time: QuestionManager.formatTime(timeLeft),
+      className: 'border-amber-600'
+    };
+    
+    const isWarning = QuestionManager.isTimeWarning(timeLeft, currentQuestion.timeLimit);
+    const isCritical = QuestionManager.isTimeCritical(timeLeft, currentQuestion.timeLimit);
+    
+    return {
+      time: QuestionManager.formatTime(timeLeft),
+      className: isCritical ? 'border-red-600 text-red-400' : 
+                 isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
+    };
+  };
+
+  // Helper function to format input/output without brackets
+  const formatTestCaseData = (data: any): string => {
+    if (typeof data === 'string') {
+      return data;
+    }
+    if (Array.isArray(data)) {
+      return data.join(', ');
+    }
+    if (typeof data === 'object' && data !== null) {
+      // For objects like {nums: [2, 7, 11, 15], target: 9}, format as key-value pairs
+      const entries = Object.entries(data);
+      return entries.map(([key, value]) => {
+        if (Array.isArray(value)) {
+          return `${key} = [${value.join(', ')}]`;
+        }
+        return `${key} = ${value}`;
+      }).join('\n');
+    }
+    return String(data);
+  };
 
 
   // const handleSubmit = async () => { ...existing code... };
   // const handleNext = () => { ...existing code... };
   // const handleGoBack = () => { ...existing code... };
   // const handleRetry = () => { ...existing code... };
-  // const formatTime = (seconds: number) => { ...existing code... };
 
-  // Local formatTime for timer
-  function formatTime(seconds: number) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  }
-
-  // Fake handleSubmit for client-only mode
+  // Enhanced handleSubmit for client-only mode with session tracking
   function handleSubmit() {
-    if (!currentQuestion || isSubmitting) return;
+    if (!currentQuestion || isSubmitting || !questionSession) return;
+    
     setIsSubmitting(true);
+    
+    // Update session attempts
+    setQuestionSession(prev => prev ? { ...prev, attempts: prev.attempts + 1 } : null);
+    
     setTimeout(() => {
-      // Always "pass" the first sample, fail the second for demo
-      setSubmissionResults([
+      // Mock results - in real implementation, this would call the judge API
+      const mockResults = [
         {
           token: "mock1",
           status: { id: 3, description: "Accepted" },
-          stdout: "5",
+          stdout: JSON.stringify([0, 1]),
           stderr: null,
           compile_output: null,
           time: "0.01",
@@ -152,65 +199,136 @@ export default function CodeRoom() {
         {
           token: "mock2",
           status: { id: 6, description: "Wrong Answer" },
-          stdout: "1",
+          stdout: JSON.stringify([1, 0]),
           stderr: null,
           compile_output: null,
-          time: "0.01",
+          time: "0.01", 
           memory: "1024",
         },
-      ]);
+      ];
+      
+      setSubmissionResults(mockResults);
+      
+      // Check if all test cases passed
+      const allPassed = mockResults.every(result => result.status.description === "Accepted");
+      
+      if (allPassed) {
+        setQuestionSession(prev => prev ? { 
+          ...prev, 
+          status: 'completed',
+          endTime: new Date(),
+          score: currentQuestion.points
+        } : null);
+        alert("🎉 Congratulations! All test cases passed!");
+      }
+      
       setIsSubmitting(false);
+      saveSession(); // Save progress
     }, 1200);
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-white">
+    <div className="flex flex-col h-screen bg-gray-900 text-white overflow-hidden">
       {/* Header and Timer */}
-      <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-gray-700">
+      {/* <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-gray-700">
         <h1 className="text-lg font-bold text-amber-400">Code Duel (Practice Mode)</h1>
         <div className="flex items-center gap-4">
             <div className="text-center text-sm">Question: {questionIndex + 1} / {totalQuestions}</div>
             <div className="text-center p-2 font-mono text-lg bg-gray-800 rounded">{formatTime(timeLeft)}</div>
         </div>
-      </div>
+      </div> */}
 
       {/* Main Content */}
-      <div className="flex-grow flex p-4 gap-4 bg-black/40 backdrop-blur-sm overflow-hidden">
+      <div className="flex-1 flex p-4 gap-4 bg-black/40 backdrop-blur-sm min-h-0">
         {/* Question Panel */}
-        <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col overflow-y-auto">
-          <h2 className="text-2xl font-bold mb-4">{currentQuestion!.title}</h2>
-          <p className="mb-4 text-gray-300 whitespace-pre-wrap">{currentQuestion!.description}</p>
-          
-          <h3 className="font-bold mb-2 text-amber-400">Constraints:</h3>
-          <ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">
-            {currentQuestion!.constraints.map((constraint, i) => (
-                <li key={i}>{constraint}</li>
-            ))}
-          </ul>
-          
-          <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
-          {currentQuestion!.sampleTestCases.map((testCase, i) => (
-            <div key={i} className="mb-4 bg-gray-800 p-3 rounded font-mono text-sm">
-              <p className="font-bold text-gray-400">Input:</p>
-              <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">{testCase.input.stdin || testCase.input.json}</pre>
-              <p className="mt-2 font-bold text-gray-400">Output:</p>
-              <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">{testCase.output.stdout || JSON.stringify(testCase.output.json)}</pre>
-              {testCase.explanation && <p className="mt-2 text-xs text-gray-400 italic">Explanation: {testCase.explanation}</p>}
+        <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden">
+          <div className="flex justify-between items-start mb-4 flex-shrink-0">
+            <div>
+              <h2 className="text-2xl font-bold">{currentQuestion!.title}</h2>
+              <div className="flex gap-4 text-sm text-gray-400 mt-1">
+                <span className={`px-2 py-1 rounded ${QuestionManager.getDifficultyColor(currentQuestion!.difficulty)}`}>
+                  {currentQuestion!.difficulty}
+                </span>
+                <span>Points: {currentQuestion!.points}</span>
+                <span>Time: {Math.floor(currentQuestion!.timeLimit / 60)}min</span>
+              </div>
             </div>
-          ))}
-
-          <div className="mt-auto pt-4">
-             <Button
-                content={showHints ? "Hide Hints" : "Show Hints 💡"}
-                onClick={() => setShowHints(!showHints)}
-              />
+            <Button
+              content={showHints ? "Hide Hints" : "Show Hints 💡"}
+              onClick={() => setShowHints(!showHints)}
+            />
+          </div>
+          
+          <div className="flex-1 overflow-y-auto min-h-0">
             {showHints && (
-              <div className="mt-2 bg-gray-800 p-3 rounded">
-                  <ul className="list-disc list-inside text-gray-300 space-y-2">
-                      {currentQuestion!.hints.map((hint, i) => <li key={i}>{hint}</li>)}
-                  </ul>
+              <div className="mb-4 bg-gray-800 p-3 rounded">
+                <h3 className="font-bold mb-2 text-amber-400">Hints:</h3>
+                <ul className="list-disc list-inside text-gray-300 space-y-2">
+                  {currentQuestion!.hints.map((hint, i) => <li key={i}>{hint}</li>)}
+                </ul>
               </div>
             )}
+            
+            <p className="mb-4 text-gray-300 whitespace-pre-wrap">{currentQuestion!.description}</p>
+
+            {/* <div className="mb-4">
+              <h3 className="font-bold mb-2 text-amber-400">Problem Stats:</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="bg-gray-800 p-2 rounded">
+                  <span className="text-gray-400">Solved:</span> {currentQuestion!.metadata.solved.toLocaleString()}
+                </div>
+                <div className="bg-gray-800 p-2 rounded">
+                  <span className="text-gray-400">Attempted:</span> {currentQuestion!.metadata.attempted.toLocaleString()}
+                </div>
+                <div className="bg-gray-800 p-2 rounded">
+                  <span className="text-gray-400">Success Rate:</span> {QuestionManager.calculateSuccessRate(currentQuestion!.metadata.solved, currentQuestion!.metadata.attempted)}%
+                </div>
+                <div className="bg-gray-800 p-2 rounded">
+                  <span className="text-gray-400">Complexity:</span> {currentQuestion!.avgTimeComplexity}
+                </div>
+              </div>
+            </div> */}
+
+            {/* <div className="mb-4">
+              <h3 className="font-bold mb-2 text-amber-400">Session Info:</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="bg-gray-800 p-2 rounded">
+                  <span className="text-gray-400">Status:</span> <span className={`capitalize ${
+                    questionSession?.status === 'active' ? 'text-green-400' :
+                    questionSession?.status === 'completed' ? 'text-blue-400' :
+                    questionSession?.status === 'timeout' ? 'text-red-400' :
+                    'text-yellow-400'
+                  }`}>{questionSession?.status || 'Unknown'}</span>
+                </div>
+                <div className="bg-gray-800 p-2 rounded">
+                  <span className="text-gray-400">Attempts:</span> {questionSession?.attempts || 0}
+                </div>
+                <div className="bg-gray-800 p-2 rounded">
+                  <span className="text-gray-400">Elapsed:</span> {questionSession ? QuestionManager.formatTime(QuestionManager.calculateTimeElapsed(questionSession)) : '0:00'}
+                </div>
+                <div className="bg-gray-800 p-2 rounded">
+                  <span className="text-gray-400">Rating:</span> ⭐ {currentQuestion!.metadata.averageRating.toFixed(1)}
+                </div>
+              </div>
+            </div> */}
+
+            <h3 className="font-bold mb-2 text-amber-400">Constraints:</h3>
+            <ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">
+              {currentQuestion!.constraints.map((constraint, i) => (
+                <li key={i}>{constraint}</li>
+              ))}
+            </ul>
+
+            <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
+            {currentQuestion!.sampleTestCases.map((testCase, i) => (
+              <div key={i} className="mb-4 bg-gray-800 p-3 rounded font-mono text-sm">
+                <p className="font-bold text-gray-400">Input:</p>
+                <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(testCase.input.stdin || testCase.input.json)}</pre>
+                <p className="mt-2 font-bold text-gray-400">Output:</p>
+                <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(testCase.output.stdout || testCase.output.json)}</pre>
+                {testCase.explanation && <p className="mt-2 text-xs text-gray-400 italic">Explanation: {testCase.explanation}</p>}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -218,22 +336,35 @@ export default function CodeRoom() {
         <div className="w-1/2 flex flex-col gap-4">
           {/* Code Editor */}
           <div className="flex-1 border border-amber-600 rounded-lg p-4 flex flex-col min-h-0">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-lg font-bold">Code Editor</span>
-              <select
-                value={language}
-                onChange={(e) => {
-                  setLanguage(e.target.value);
-                  setCode(mockQuestion.boilerplate[e.target.value] || "");
-                }}
-                className="bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="javascript">JavaScript</option>
-                <option value="python">Python</option>
-                <option value="java">Java</option>
-                <option value="cpp">C++</option>
-                <option value="c">C</option>
-              </select>
+            <div className="flex justify-between items-center mb-2 gap-50">
+              <div className="flex-1 flex ">
+
+                <select
+                  value={language}
+                  onChange={(e) => {
+                    setLanguage(e.target.value);
+                    setCode(mockQuestion.boilerplate[e.target.value] || "");
+                  }}
+                  className="bg-gray-800 flex-1 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1"
+                >
+                  <option value="python">Python</option>
+                  <option value="java">Java</option>
+                  <option value="cpp">C++</option>
+                </select>
+                <div className={`bg-gray-800 flex-[0.7] text-white p-2 rounded border focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1 text-center font-mono ${
+                  getTimerDisplay().className
+                }`}>
+                  {getTimerDisplay().time}
+                </div>
+              </div>
+              <div className="flex-1 flex">
+                <button className="flex-1 justify-end h-fit bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-10">
+                  Run Code
+                </button>
+                <button className="flex-1 justify-end h-fit items-end bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1">
+                  Submit
+                </button>
+              </div>
             </div>
             <textarea
               className="flex-1 bg-gray-900 text-white resize-none outline-none font-mono p-2 rounded w-full h-full"
@@ -288,7 +419,7 @@ export default function CodeRoom() {
             <div className="flex justify-end gap-4 p-2 flex-shrink-0 mt-2">
               {/* <Button content="Resign" onClick={handleGoBack} /> */}
               {/* <Button content="Skip" onClick={handleNext} /> */}
-              <Button content={isSubmitting ? "Submitting..." : "Submit"} onClick={handleSubmit}  />
+              <Button content={isSubmitting ? "Submitting..." : "Submit"} onClick={handleSubmit} />
             </div>
           </div>
         </div>

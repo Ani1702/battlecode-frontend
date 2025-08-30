@@ -33,23 +33,34 @@ export default function Lobby() {
     return (
         <>
             <div className="flex  bg-[url('/lobby-bg')]  bg-cover min-h-screen flex-col ">
-                <div className="flex-[3]">
+                <div className="flex-[6] ml-5 mt-5">
                     <p> {"<> Battle Arena"}</p>
                 </div>
                 <div className="flex-[7] flex">
-                    <div className="flex-[5]">
+                    <div className="flex-[1]"></div>
+                    <div className="flex-[6] flex justify-center items-center gap-4 flex-col">
+                            <p className = "text-4xl flex-[0.6] justify-end items-end flex">Searching For Opponent</p>
+                            <p className = "text-gray-200 flex-1 ">You are in queue. Your Match will begin soon.
+                                <div className="flex-1 flex justify-center items-center gap-2 px-16">
+                                    <p className="bg-orange-500 rounded-full h-4 w-4 mt-4"></p>
+                                    <p className="bg-orange-500 rounded-full h-4 w-4 mt-4"></p>
+                                    <p className="bg-orange-500 rounded-full h-4 w-4 mt-4"></p>
+                                </div>
+                                <div className = "flex-1  h-full">
 
+                                </div>
+                            </p>
+                            
                     </div>
                     <div className="flex-[3] flex flex-col">
 
-                        <div className="max-h-[80vh] h-[80vh] rounded-lg border-2 mb-4 mr-8 flex flex-col glass-box overflow-y-auto">
-                            <div className="flex-1  justify-center items-center flex">
-
+                        <div className="max-h-[80vh] h-[80vh] rounded-lg border-2 mb-4 mr-8 flex flex-col glass-box">
+                            <div className="sticky top-0 bg-inherit rounded-t-lg z-10 justify-center items-center flex py-4">
                                 <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" /><span></span>
                                 <p className="text-2xl text-orange-500">Live Leaderboard</p>
                             </div>
-                            <div className="flex-[7] overflow-x-auto px-4 pb-4 max-w-full">
-                                <table className="min-w-max text-left text-sm text-white">
+                            <div className="flex-1 overflow-y-auto px-4 pb-4">
+                                <table className="w-full text-left text-sm text-white">
                                     <thead>
                                         <tr className="border-b border-gray-700">
                                             {leaderboard_titles.map((title, idx) => (
@@ -61,7 +72,9 @@ export default function Lobby() {
                                         {leaderboard.map((row, idx) => (
                                             <tr key={idx} className=" border-gray-800 hover:bg-white/5 transition">
                                                 {row.map((cell, cidx) => (
-                                                    <td key={cidx} className="py-2 px-3">{cell}</td>
+                                                    <td key={cidx} className={`py-2 px-3 ${cidx === 1 ? 'max-w-[120px] truncate' : ''}`}>
+                                                        {cell}
+                                                    </td>
                                                 ))}
                                             </tr>
                                         ))}
@@ -70,28 +83,6 @@ export default function Lobby() {
                             </div>
 
                         </div>
-
-
-                        {/* <div className="overflow-x-auto px-4 pb-4 flex-[7] h-[60%] w-[95%] border-amber-600">
-                <table className="min-w-full text-left text-sm  text-white">
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      {leaderboard_titles.map((title, idx) => (
-                        <th key={idx} className="py-2 px-3 font-bold">{title}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaderboard.map((row, idx) => (
-                      <tr key={idx} className=" border-gray-800 hover:bg-white/5 transition">
-                        {row.map((cell, cidx) => (
-                          <td key={cidx} className="py-2 px-3">{cell}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table> 
-              </div>*/}
 
                     </div>
                 </div>
