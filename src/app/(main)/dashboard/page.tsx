@@ -52,12 +52,12 @@ export default function Dashboard() {
       <div className="bg-[url('/bg-dashboard.svg')] min-h-screen bg-cover bg-center">
         <div className="h-screen w-full flex">
           <div className="flex-[1.5]  h-full w-full flex flex-col">
-            <div className="flex-1 ml-3 mt-3">
+            <div className="flex-1 ml-3 mt-3 orbitron">
               <p>{"<> BattleCode Arena"}</p>
 
             </div>
-            <div className="flex-1  font-medium text-lg">
-              <p className="text-5xl pl-8">Competition<span className="text-5xl text-amber-700"> Rounds</span></p>
+            <div className="flex-1  font-medium text-lg orbitron">
+              <p className="text-5xl pl-8 orbitron">Competition<span className="text-5xl text-amber-700 oxanium orbitron"> Rounds</span></p>
 
 
             </div>
@@ -80,7 +80,7 @@ export default function Dashboard() {
 
                   </div>
                   <div className="flex-5 flex flex-col ml-5">
-                    <div className={`flex-2 text-3xl font-medium ${islocked[i] ? "text-gray-400/50" : ""}`}>
+                    <div className={`flex-2 text-3xl  font-medium ${islocked[i] ? "text-gray-400/50" : ""}`}>
                       <p>{titles[i]}</p>
                     </div>
                     <div className={`flex-1 ${islocked[i] ? "text-gray-400/50" : ""}`}>
