@@ -5,6 +5,7 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
 import { Question, QuestionSession, QuestionManager, TestCase, sampleQuestions } from "@/types/question";
+import Editor, { useMonaco } from '@monaco-editor/react';
 
 interface MatchData {
   id: string;
@@ -61,6 +62,105 @@ export default function CodeRoom() {
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
   const [isTimerRunning, setIsTimerRunning] = useState(true);
+  
+  // Resizable splitter state
+  const [codeEditorHeight, setCodeEditorHeight] = useState(60); // percentage
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Monaco editor configuration
+  const editorOptions = {
+    minimap: { enabled: false },
+    fontSize: 14,
+    lineNumbers: 'on' as const,
+    roundedSelection: false,
+    scrollBeyondLastLine: false,
+    automaticLayout: true,
+    tabSize: 2,
+    wordWrap: 'on' as const,
+    bracketPairColorization: { enabled: true },
+    autoIndent: 'full' as const,
+    formatOnPaste: true,
+    formatOnType: true,
+  };
+
+  // Get language mapping for Monaco
+  const getMonacoLanguage = (lang: string) => {
+    const languageMap: { [key: string]: string } = {
+      'python': 'python',
+      'java': 'java',
+      'cpp': 'cpp',
+      
+    };
+    return languageMap[lang] || 'python';
+  };
+
+  // Custom Monaco theme configuration
+  const monaco = useMonaco();
+  
+  useEffect(() => {
+    if (monaco) {
+      monaco.editor.defineTheme('custom-dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [],
+        colors: {
+          'editor.background': '#0f0f0f', // Very dark background - you can change this color
+          'editor.foreground': '#ffffff',
+          'editor.lineHighlightBackground': '#1a1a1a',
+          'editor.selectionBackground': '#264f78',
+          'editor.inactiveSelectionBackground': '#3a3d41',
+          'editorCursor.foreground': '#f59e0b', // Amber cursor
+          'editorLineNumber.foreground': '#858585',
+          'editorLineNumber.activeForeground': '#f59e0b', // Amber active line number
+        },
+      });
+    }
+  }, [monaco]);
+
+  // Resizable splitter handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    const container = document.querySelector('.code-results-container') as HTMLElement;
+    if (!container) return;
+    
+    const rect = container.getBoundingClientRect();
+    const containerHeight = rect.height;
+    const mouseY = e.clientY - rect.top;
+    const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
+    
+    setCodeEditorHeight(newHeightPercentage);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isDragging]);
 
   // Timer countdown effect
   useEffect(() => {
@@ -228,7 +328,7 @@ export default function CodeRoom() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white overflow-hidden">
+    <div className="flex flex-col h-screen  text-white overflow-hidden bg-amber-800">
       {/* Header and Timer */}
       {/* <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-gray-700">
         <h1 className="text-lg font-bold text-amber-400">Code Duel (Practice Mode)</h1>
@@ -241,7 +341,7 @@ export default function CodeRoom() {
       {/* Main Content */}
       <div className="flex-1 flex p-4 gap-4 bg-black/40 backdrop-blur-sm min-h-0">
         {/* Question Panel */}
-        <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden">
+        <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
           <div className="flex justify-between items-start mb-4 flex-shrink-0">
             <div>
               <h2 className="text-2xl font-bold">{currentQuestion!.title}</h2>
@@ -254,12 +354,12 @@ export default function CodeRoom() {
               </div>
             </div>
             <Button
-              content={showHints ? "Hide Hints" : "Show Hints 💡"}
+              content={showHints ? "Hide" : "Hint💡"}
               onClick={() => setShowHints(!showHints)}
             />
           </div>
           
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex-1 overflow-y-auto min-h-0 glass-box">
             {showHints && (
               <div className="mb-4 bg-gray-800 p-3 rounded">
                 <h3 className="font-bold mb-2 text-amber-400">Hints:</h3>
@@ -333,9 +433,12 @@ export default function CodeRoom() {
         </div>
 
         {/* Code & Results Panel */}
-        <div className="w-1/2 flex flex-col gap-4">
+        <div className="w-1/2 flex flex-col code-results-container" style={{ height: '100%' }}>
           {/* Code Editor */}
-          <div className="flex-1 border border-amber-600 rounded-lg p-4 flex flex-col min-h-0">
+          <div 
+            className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
+            style={{ height: `${codeEditorHeight}%`, minHeight: '200px' }}
+          >
             <div className="flex justify-between items-center mb-2 gap-50">
               <div className="flex-1 flex ">
 
@@ -358,25 +461,53 @@ export default function CodeRoom() {
                 </div>
               </div>
               <div className="flex-1 flex">
-                <button className="flex-1 justify-end h-fit bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-10">
-                  Run Code
+                <button className="flex-1 flex justify-end h-fit bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-10">
+                  <span className = "flex-1">Run</span> 
+                  <img src = "/run.svg" className = "flex-1 h-6 w-6"/>
                 </button>
-                <button className="flex-1 justify-end h-fit items-end bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1">
-                  Submit
+                <button 
+                  className="flex-1 justify-end h-fit items-end w-40 bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1"
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Submitting..." : `Submit`}
                 </button>
               </div>
             </div>
-            <textarea
-              className="flex-1 bg-gray-900 text-white resize-none outline-none font-mono p-2 rounded w-full h-full"
-              placeholder="Write your code here..."
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              spellCheck="false"
-            />
+            
+            {/* Monaco Editor */}
+            <div className="flex-1 rounded overflow-hidden border border-gray-700">
+              <Editor
+                height="100%"
+                language={getMonacoLanguage(language)}
+                value={code}
+                onChange={(value) => setCode(value || "")}
+                theme="custom-dark"
+                options={editorOptions}
+                loading={
+                  <div className="flex items-center justify-center h-full bg-gray-900">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+                  </div>
+                }
+              />
+            </div>
+          </div>
+
+          {/* Resizable Divider */}
+          <div
+            className={`h-2 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors duration-200 flex items-center justify-center ${
+              isDragging ? 'bg-amber-600/60' : ''
+            }`}
+            onMouseDown={handleMouseDown}
+          >
+            <div className="w-8 h-1 bg-amber-600 rounded-full"></div>
           </div>
 
           {/* Test Results & Actions */}
-          <div className="flex-1 border border-amber-600 rounded-lg p-4 flex flex-col min-h-0">
+          <div 
+            className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
+            style={{ height: `${100 - codeEditorHeight}%`, minHeight: '150px' }}
+          >
             <span className="text-lg font-bold flex-shrink-0">Test Results</span>
             <div className="mt-2 flex-grow overflow-y-auto">
               {/* No real judge, so just show a message or fake result */}
@@ -414,12 +545,6 @@ export default function CodeRoom() {
                   })}
                 </div>
               )}
-            </div>
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-4 p-2 flex-shrink-0 mt-2">
-              {/* <Button content="Resign" onClick={handleGoBack} /> */}
-              {/* <Button content="Skip" onClick={handleNext} /> */}
-              <Button content={isSubmitting ? "Submitting..." : "Submit"} onClick={handleSubmit} />
             </div>
           </div>
         </div>

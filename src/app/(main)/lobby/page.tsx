@@ -32,34 +32,31 @@ export default function Lobby() {
     ];
     return (
         <>
-            <div className="flex  bg-[url('/lobby-bg')]  bg-cover min-h-screen flex-col ">
-                <div className="flex-[6] ml-5 mt-5">
+            <div className="flex bg-[url('/lobby-bg')] bg-cover h-screen flex-col overflow-hidden">
+                <div className="flex-shrink-0 ml-5 mt-5 py-4">
                     <p> {"<> Battle Arena"}</p>
                 </div>
-                <div className="flex-[7] flex">
+                <div className="flex-1 flex min-h-0">
                     <div className="flex-[1]"></div>
-                    <div className="flex-[6] flex justify-center items-center gap-4 flex-col">
-                            <p className = "text-4xl flex-[0.6] justify-end items-end flex">Searching For Opponent</p>
-                            <p className = "text-gray-200 flex-1 ">You are in queue. Your Match will begin soon.
-                                <div className="flex-1 flex justify-center items-center gap-2 px-16">
-                                    <p className="bg-orange-500 rounded-full h-4 w-4 mt-4"></p>
-                                    <p className="bg-orange-500 rounded-full h-4 w-4 mt-4"></p>
-                                    <p className="bg-orange-500 rounded-full h-4 w-4 mt-4"></p>
+                    <div className="flex-[6] flex justify-center items-center gap-4 flex-col min-h-0">
+                            <div className="text-4xl text-center">Searching For Opponent</div>
+                            <div className="text-gray-200 text-center">
+                                You are in queue. Your Match will begin soon.
+                                <div className="flex justify-center items-center gap-2 mt-4">
+                                    <div className="bg-orange-500 rounded-full h-4 w-4 animate-pulse"></div>
+                                    <div className="bg-orange-500 rounded-full h-4 w-4 animate-pulse" style={{animationDelay: '0.5s'}}></div>
+                                    <div className="bg-orange-500 rounded-full h-4 w-4 animate-pulse" style={{animationDelay: '1s'}}></div>
                                 </div>
-                                <div className = "flex-1  h-full">
-
-                                </div>
-                            </p>
-                            
+                            </div>
                     </div>
-                    <div className="flex-[3] flex flex-col">
+                    <div className="flex-[3] flex flex-col min-h-0">
 
-                        <div className="max-h-[80vh] h-[80vh] rounded-lg border-2 mb-4 mr-8 flex flex-col glass-box">
-                            <div className="sticky top-0 bg-inherit rounded-t-lg z-10 justify-center items-center flex py-4">
+                        <div className="flex-1 max-h-full rounded-lg border-2 mb-4 mr-8 flex flex-col glass-box overflow-hidden">
+                            <div className="flex-shrink-0 bg-inherit rounded-t-lg z-10 justify-center items-center flex py-4">
                                 <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" /><span></span>
                                 <p className="text-2xl text-orange-500">Live Leaderboard</p>
                             </div>
-                            <div className="flex-1 overflow-y-auto px-4 pb-4">
+                            <div className="flex-1 overflow-y-auto px-4 pb-4 min-h-0">
                                 <table className="w-full text-left text-sm text-white">
                                     <thead>
                                         <tr className="border-b border-gray-700">

@@ -1,21 +1,46 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffect, useState } from "react";
 
 const Hero = () => {
   const router = useRouter();
   const { signInWithGoogle, user, isLoading } = useAuth();
+  const [isExiting, setIsExiting] = useState(false);
 
   const handleAuthClick = async () => {
     if (user) {
-      router.push("/dashboard");
+      setIsExiting(true);
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1000); // Wait for animation to complete
     } else {
       await signInWithGoogle();
     }
   };
+  const handleKeyPress = (event:any) => {
+    if (event.key === 'Enter') {
+      setIsExiting(true);
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1000); // Wait for animation to complete
+    }
+  };
+
+  useEffect(() => {
+    // Add event listener for keydown
+    window.addEventListener('keydown', handleKeyPress);
+
+    // Cleanup event listener on component unmount
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, []);
 
   return (
-    <div className="bg-[url(/Landingpage.svg)] bg-cover h-screen">
+    <div className={`bg-[url(/Landingpage.svg)] bg-cover h-screen transform transition-transform duration-1000 ease-out ${
+      isExiting ? '-translate-y-full' : 'translate-y-0'
+    }`}>
       <div className="h-full z-1 bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
         <div className="hud">
           <div className="absolute topHUD left-0 top-2 h-[6rem] w-full flex items-center justify-center">

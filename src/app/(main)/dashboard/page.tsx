@@ -2,7 +2,7 @@
 import ContributionsGrid from "@/components/shared/ContributionsGrid";
 import Rewards from "@/components/shared/Rewards";
 import Navbar from "@/components/shared/Navbar";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +12,10 @@ export default function Dashboard() {
   const [islocked, setlocked] = useState([false, true, true, true]);
   const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"]
   const leaderboard_titles = ["Rank", "Player", "Score", "Trend"];
+
+ 
+  
+
   const leaderboard = [
     [1, "cypher", 2450, ""],
     [2, "glitch", 2300, ""],
