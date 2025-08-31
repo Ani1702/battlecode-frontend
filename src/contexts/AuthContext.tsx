@@ -65,6 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
 
+      
+
       router.push("/dashboard");
     } catch (error) {
       console.error("Error during Google sign-in:", error);

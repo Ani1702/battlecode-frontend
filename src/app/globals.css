@@ -32,7 +32,7 @@ body {
 .oxanium {
   font-family: "Oxanium", sans-serif;
   font-optical-sizing: auto;
-  font-weight: 200;
+  /* font-weight: 400; */
   font-style: normal;
 }
 .orbitron {

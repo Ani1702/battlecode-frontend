@@ -91,13 +91,13 @@ const Hero = () => {
 
           </div>
 
-          {/* <button
+          <button
             onClick={handleAuthClick}
             disabled={isLoading}
             className="relative gradient-border-button text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md mt-8"
           >
             {isLoading ? "LOADING..." : user ? "DASHBOARD" : "REGISTER"}
-          </button> */}
+          </button>
         </div>
 
         <div className="w-[27rem] quote flex relative bottom-8 z-10 left-1/2 transform -translate-x-1/2 justify-center">

@@ -14,8 +14,8 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
             <div className="h-[60vh] w-[60vw] glass-box flex rounded-2xl justify-center items-center">
                 <div className="flex-[2.3]  h-full w-full flex flex-col ml-10 mb-10 mr-10 mt-10 justify-center items-center">
                     <div className="w-[90%] h-[80%] flex flex-col">
-                        <p className="flex-1 mt-5  text-xl">Read and accept the rules to continue</p>
-                        <div className="flex-[5] font-bold">
+                        <p className="flex-1 mt-5  oxanium text-xl font-bold ">Read and accept the rules to continue</p>
+                        <div className="flex-[5] oxanium">
                             {rules.map((rule, i) => (
                                 <div key={i} className="flex items-start mb-2">
                                     <span className="mr-2 flex-shrink-0">{i + 1}.</span>
@@ -26,11 +26,11 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
                         <p className="flex-1">
                             <input
                                 type="checkbox"
-                                className="border-amber-500"
+                                className="border-amber-500 "
                                 checked={isChecked}
                                 onChange={(e) => setIsChecked(e.target.checked)}
                             />
-                            <span> I have read and agree to all the rules</span>
+                            <span className="oxanium"> I have read and agree to all the rules</span>
                         </p>
                     </div>
                 </div>
@@ -41,7 +41,7 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
                     </div>
                     <div className="flex-[5] flex  items-end">
                         <button
-                            className={`px-6 py-2 rounded-lg border-1 border-amber-200 font-bold shadow-lg backdrop-blur-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                            className={`px-6 py-2 rounded-lg border-1 oxanium border-amber-200 font-bold shadow-lg backdrop-blur-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                                 isChecked
                                     ? 'bg-gradient-to-r text-white hover:scale-105 hover:from-yellow-400 hover:to-amber-500 hover:shadow-amber-200/40 cursor-pointer'
                                     : 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'

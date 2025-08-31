@@ -69,11 +69,11 @@ export default function Dashboard() {
                   tabIndex={0}
                   aria-disabled={islocked[i]}
                   onClick={() => {
-                    if (!islocked[i]) router.push('/lobby');
+                    if (!islocked[i]) router.push(`r${i}/rules`);
                   }}
-                  onKeyDown={e => {
-                    if (!islocked[i] && (e.key === 'Enter' || e.key === ' ')) router.push('/lobby');
-                  }}
+                  // onKeyDown={e => {
+                  //   if (!islocked[i] && (e.key === 'Enter' || e.key === ' ')) router.push(`r${i}/rules`);
+                  // }}
                 >
                   <div className={` rounded-[50%] h-15 w-15 ml-1 ${islocked[i] ? "border-gray-400/50" : "border-amber-600"} m-1 items-center justify-center flex border-4`}>
                     <p className={`text-3xl oxanium ${islocked[i] ? "text-gray-400/50" : ""}   `}>{i}</p>

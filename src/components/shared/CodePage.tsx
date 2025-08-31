@@ -326,7 +326,7 @@ export default function CodePage({ round }: CodePageProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen  text-white overflow-hidden bg-amber-800">
+    <div className="flex flex-col h-screen  text-white overflow-hidden bg-amber-800 oxanium">
       {/* Header and Timer */}
       {/* <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-gray-700">
         <h1 className="text-lg font-bold text-amber-400">Code Duel (Practice Mode)</h1>
