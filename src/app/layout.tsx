@@ -30,7 +30,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${oxanium.variable}  ${orbitron.variable} antialiased`}>
+      <body className={`oxanium antialiased`}>
         <AuthProvider>
           
             <SocketProvider>{children}</SocketProvider>

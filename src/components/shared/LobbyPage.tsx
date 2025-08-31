@@ -37,8 +37,8 @@ export default function LobbyPage({ round }: LobbyPageProps) {
     return (
         <>
             <div className="flex bg-[url('/lobby-bg')] bg-cover h-screen flex-col overflow-hidden">
-                <div className="flex-shrink-0 ml-5 mt-5 py-4">
-                    <p> {"<> Battle Arena - Round " + round}</p>
+                <div className="flex-shrink-0 ml-5 mt-2 py-4">
+                    <p> {"<> Battle Arena"}</p>
                 </div>
                 <div className="flex-1 flex min-h-0">
                     <div className="flex-[1]"></div>

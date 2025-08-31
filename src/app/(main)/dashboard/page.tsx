@@ -5,6 +5,8 @@ import Navbar from "@/components/shared/Navbar";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import SignOut from "@/components/auth/SignOut"
+// s
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
@@ -52,8 +54,13 @@ export default function Dashboard() {
       <div className="bg-[url('/bg-dashboard.svg')] min-h-screen bg-cover bg-center">
         <div className="h-screen w-full flex">
           <div className="flex-[1.5]  h-full w-full flex flex-col">
-            <div className="flex-1 ml-3 mt-3 orbitron">
-              <p>{"<> BattleCode Arena"}</p>
+            <div className="flex-1 ml-3 mt-3 orbitron flex justify-between">
+              <p className = "flex-1">{"<> BattleCode Arena"}</p>
+              <div className= " flex-1 ">
+              <SignOut />
+
+              </div>
+              
 
             </div>
             <div className="flex-1  font-medium text-lg orbitron">
@@ -62,9 +69,9 @@ export default function Dashboard() {
 
             </div>
             {[0, 1, 2, 3].map((i) => (
-              <div className={`flex-[1.2] flex justify-center items-center pb-5`} key={i}>
+              <div className={`flex-[1.2] flex justify-center items-center pb-5  `} key={i}>
                 <div
-                  className={`w-[95%] h-[90%] rounded-2xl flex glass-box justify-center items-center pl-5 transition-transform duration-200 ${!islocked[i] ? 'hover:-translate-y-2 cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                  className={`w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${islocked[i] ? "!border-gray-400/50 !border-2" : "!border-orange-500 !border-2"} items-center pl-5 transition-transform duration-200 ${!islocked[i] ? ' hover:-translate-y-2 cursor-pointer ' : 'cursor-not-allowed opacity-60'}`}
                   role="button"
                   tabIndex={0}
                   aria-disabled={islocked[i]}
@@ -89,7 +96,7 @@ export default function Dashboard() {
                   </div>
                   <div className={`flex-[0.5] flex justify-center items-center`}>
                     {
-                      islocked[i] ? <img src="/lock.svg" /> : <div className="w-4 h-4 bg-orange-500 rounded-lg"></div>
+                      islocked[i] ? <img src="/lock.svg" /> : <div className="w-4 h-4 bg-orange-500 rounded-lg animate-pulse"></div>
                     }
 
 
