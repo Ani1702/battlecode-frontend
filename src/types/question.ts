@@ -154,7 +154,8 @@ export const sampleQuestions: Question[] = [
       javascript: "function twoSum(nums, target) {\n    // Your code here\n}",
       python: "def two_sum(nums, target):\n    # Your code here\n    pass",
       java: "public int[] twoSum(int[] nums, int target) {\n    // Your code here\n}",
-      cpp: "vector<int> twoSum(vector<int>& nums, int target) {\n    // Your code here\n}"
+      cpp: "vector<int> twoSum(vector<int>& nums, int target) {\n    // Your code here\n}",
+      c: "#include <stdio.h>\n#include <stdlib.h>"
     },
     sampleTestCases: [
       {

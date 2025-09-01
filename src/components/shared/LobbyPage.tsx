@@ -1,3 +1,6 @@
+"use client"
+import CustomScrollbar from "./CustomScrollbar";
+
 interface LobbyPageProps {
   round: string;
 }
@@ -37,7 +40,7 @@ export default function LobbyPage({ round }: LobbyPageProps) {
     return (
         <>
             <div className="flex bg-[url('/lobby-bg')] bg-cover h-screen flex-col overflow-hidden">
-                <div className="flex-shrink-0 ml-5 mt-2 py-4">
+                <div className="flex-shrink-0 ml-5 mt-1 py-4">
                     <p> {"<> Battle Arena"}</p>
                 </div>
                 <div className="flex-1 flex min-h-0">
@@ -60,7 +63,7 @@ export default function LobbyPage({ round }: LobbyPageProps) {
                                 <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" /><span></span>
                                 <p className="text-2xl text-orange-500">Live Leaderboard</p>
                             </div>
-                            <div className="flex-1 overflow-y-auto px-4 pb-4 min-h-0">
+                            <CustomScrollbar className="flex-1 overflow-y-auto px-4 pb-4 min-h-0">
                                 <table className="w-full text-left text-sm text-white">
                                     <thead>
                                         <tr className="border-b border-gray-700">
@@ -81,7 +84,7 @@ export default function LobbyPage({ round }: LobbyPageProps) {
                                         ))}
                                     </tbody>
                                 </table>
-                            </div>
+                            </CustomScrollbar>
 
                         </div>
 

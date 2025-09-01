@@ -36,14 +36,14 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
                 </div>
                 <div className="flex-1 flex flex-col h-full p-17 w-full justify-end">
                     <div className="flex-1 w-full h-full flex flex-col justify-end">
-                        <p className="flex-1 h-full w-full flex justify-end text-3xl font-bold">Round&nbsp;  <span className="text-orange-600">{roundString}</span></p>
+                        <p className="flex-1 h-full w-full flex justify-end text-3xl font-bold shadow-orange-500/40">Round&nbsp;  <span className="text-orange-600">{roundString}</span></p>
                         <p className="flex-1 h-full w-full flex justify-end">Rules</p>
                     </div>
                     <div className="flex-[5] flex  items-end">
                         <button
-                            className={`px-6 py-2 rounded-lg border-1 oxanium border-amber-200 font-bold shadow-lg backdrop-blur-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                            className={`px-6 py-2 rounded-lg border-1 oxanium border-orange-500 font-bold shadow-lg backdrop-blur-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                                 isChecked
-                                    ? 'bg-gradient-to-r text-white hover:scale-105 hover:from-yellow-400 hover:to-amber-500 hover:shadow-amber-200/40 cursor-pointer'
+                                    ? 'bg-gradient-to-r text-white hover:scale-105 hover:from-orange-500 hover:to-amber-600 hover:shadow-amber-200/40 cursor-pointer'
                                     : 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                             }`}
                             disabled={!isChecked}

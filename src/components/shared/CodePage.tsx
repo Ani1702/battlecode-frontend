@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
 import { Question, QuestionSession, QuestionManager, TestCase, sampleQuestions } from "@/types/question";
 import Editor, { useMonaco } from '@monaco-editor/react';
+import CustomScrollbar from "./CustomScrollbar";
 
 interface MatchData {
   id: string;
@@ -93,7 +94,7 @@ export default function CodePage({ round }: CodePageProps) {
       'python': 'python',
       'java': 'java',
       'cpp': 'cpp',
-      
+      'c': 'c',
     };
     return languageMap[lang] || 'python';
   };
@@ -106,18 +107,29 @@ export default function CodePage({ round }: CodePageProps) {
       monaco.editor.defineTheme('custom-dark', {
         base: 'vs-dark',
         inherit: true,
-        rules: [],
+        rules: [
+          { token: 'comment', foreground: '#6A9955' },
+          { token: 'keyword', foreground: '#569CD6' },
+          { token: 'string', foreground: '#CE9178' },
+          { token: 'number', foreground: '#B5CEA8' },
+        ],
         colors: {
-          'editor.background': '#0f0f0f', // Very dark background - you can change this color
+          'editor.background': '#0a0a0a', // Very dark background
           'editor.foreground': '#ffffff',
           'editor.lineHighlightBackground': '#1a1a1a',
           'editor.selectionBackground': '#264f78',
           'editor.inactiveSelectionBackground': '#3a3d41',
-          'editorCursor.foreground': '#f59e0b', // Amber cursor
+          'editorCursor.foreground': '#f97316', // Orange cursor to match your theme
           'editorLineNumber.foreground': '#858585',
-          'editorLineNumber.activeForeground': '#f59e0b', // Amber active line number
+          'editorLineNumber.activeForeground': '#f97316', // Orange active line number
+          'editor.selectionHighlightBackground': '#ADD6FF26',
+          'editor.wordHighlightBackground': '#575757B8',
+          'editorBracketMatch.background': '#0064001a',
+          'editorBracketMatch.border': '#888888',
         },
       });
+      // Set the theme immediately after defining it
+      monaco.editor.setTheme('custom-dark');
     }
   }, [monaco]);
 
@@ -326,7 +338,7 @@ export default function CodePage({ round }: CodePageProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen  text-white overflow-hidden bg-amber-800 oxanium">
+    <div className="flex flex-col h-screen  text-white overflow-hidden bg-[url('/bg-code.svg')]  bg-fixed bg-cover  bg-center oxanium">
       {/* Header and Timer */}
       {/* <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-gray-700">
         <h1 className="text-lg font-bold text-amber-400">Code Duel (Practice Mode)</h1>
@@ -337,16 +349,16 @@ export default function CodePage({ round }: CodePageProps) {
       </div> */}
 
       {/* Main Content */}
-      <div className="flex-1 flex p-4 gap-4 bg-black/40 backdrop-blur-sm min-h-0">
+      <div className="flex-1 flex p-4 gap-4 bg-black/40  min-h-0">
         {/* Question Panel */}
-        <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
+        <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
           <div className="flex justify-between items-start mb-4 flex-shrink-0">
             <div>
               <h2 className="text-2xl font-bold">{currentQuestion!.title}</h2>
               <div className="flex gap-4 text-sm text-gray-400 mt-1">
-                <span className={`px-2 py-1 rounded ${QuestionManager.getDifficultyColor(currentQuestion!.difficulty)}`}>
+                {/* <span className={`px-2 py-1 rounded ${QuestionManager.getDifficultyColor(currentQuestion!.difficulty)}`}>
                   {currentQuestion!.difficulty}
-                </span>
+                </span> */}
                 <span>Points: {currentQuestion!.points}</span>
                 <span>Time: {Math.floor(currentQuestion!.timeLimit / 60)}min</span>
                 <span>Round: {round}</span>
@@ -358,7 +370,7 @@ export default function CodePage({ round }: CodePageProps) {
             />
           </div>
           
-          <div className="flex-1 overflow-y-auto min-h-0 glass-box">
+          <div className="flex-1 overflow-y-auto min-h-0 ">
             {showHints && (
               <div className="mb-4 bg-gray-800 p-3 rounded">
                 <h3 className="font-bold mb-2 text-amber-400">Hints:</h3>
@@ -388,10 +400,10 @@ export default function CodePage({ round }: CodePageProps) {
               </div>
             ))}
           </div>
-        </div>
+        </CustomScrollbar>
 
         {/* Code & Results Panel */}
-        <div className="w-1/2 flex flex-col code-results-container" style={{ height: '100%' }}>
+        <div className="w-1/2 flex flex-col code-results-container border-amber-500" style={{ height: '100%' }}>
           {/* Code Editor */}
           <div 
             className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
@@ -411,6 +423,7 @@ export default function CodePage({ round }: CodePageProps) {
                   <option value="python">Python</option>
                   <option value="java">Java</option>
                   <option value="cpp">C++</option>
+                  <option value="c">C</option>
                 </select>
                 <div className={`bg-gray-800 flex-[0.7] text-white p-2 rounded border focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1 text-center font-mono ${
                   getTimerDisplay().className
@@ -453,7 +466,7 @@ export default function CodePage({ round }: CodePageProps) {
 
           {/* Resizable Divider */}
           <div
-            className={`h-2 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors duration-200 flex items-center justify-center ${
+            className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors duration-200 flex items-center justify-center ${
               isDragging ? 'bg-amber-600/60' : ''
             }`}
             onMouseDown={handleMouseDown}

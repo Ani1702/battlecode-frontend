@@ -2,6 +2,7 @@
 import ContributionsGrid from "@/components/shared/ContributionsGrid";
 import Rewards from "@/components/shared/Rewards";
 import Navbar from "@/components/shared/Navbar";
+import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
@@ -184,14 +185,11 @@ export default function Dashboard() {
       <div className="bg-[url('/bg-dashboard.svg')] min-h-screen bg-cover bg-center">
         <div className="h-screen w-full flex">
           <div className="flex-[1.5]  h-full w-full flex flex-col">
-            <div className="flex-1 ml-3 mt-3 orbitron flex justify-between">
-              <p className = "flex-1">{"<> BattleCode Arena"}</p>
-              <div className= " flex-1 ">
-              <SignOut />
-
+            <div className="flex-1 ml-3 mt-3 orbitron flex justify-start items-start">
+              <p className="flex-1">{"<> BattleCode Arena"}</p>
+              <div className="flex-1 flex justify-end mr-8">
+                <SignOut />
               </div>
-              
-
             </div>
             <div className="flex-1  font-medium text-lg orbitron">
               <p className="text-5xl pl-8 orbitron">Competition<span className="text-5xl text-amber-700 oxanium orbitron"> Rounds</span></p>
@@ -308,9 +306,15 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+          
           <div className="flex-1  h-full w-full flex justify-center items-end ">
-            <div className="w-[95%] h-[85%] rounded-lg border-2 mb-4 flex flex-col glass-box">
-                            <div className="flex-1  justify-center items-center flex">
+            
+            
+            <div className="w-[95%] h-[85%] rounded-lg border-2 mb-4 flex flex-col glass-box">  
+              
+              <div className="flex-1  justify-center items-center flex">
+                
+
                 <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" /><span></span>
                 <p className="text-2xl text-orange-500">Live Leaderboard</p>
                 {!isConnected && !hasConnectedOnce && (
@@ -323,7 +327,7 @@ export default function Dashboard() {
                   <span className="ml-2 text-sm text-green-400">●</span>
                 )}
               </div>
-              <div className="flex-7 overflow-y-auto px-4 pb-4">
+              <CustomScrollbar className="flex-7 overflow-y-auto px-4 pb-4">
                 <table className="min-w-full text-left text-sm  text-white">
                   <thead>
                     <tr className="border-b border-gray-700">
@@ -372,7 +376,7 @@ export default function Dashboard() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </CustomScrollbar>
 
 
             </div>
