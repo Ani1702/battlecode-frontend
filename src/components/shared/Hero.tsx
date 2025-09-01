@@ -19,7 +19,7 @@ const Hero = () => {
     }
   };
   const handleKeyPress = (event:any) => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && user) {
       setIsExiting(true);
       setTimeout(() => {
         router.push('/dashboard');
@@ -41,7 +41,7 @@ const Hero = () => {
     <div className={`bg-[url(/Landingpage.svg)] bg-cover h-screen transform transition-transform duration-1000 ease-out ${
       isExiting ? '-translate-y-full' : 'translate-y-0'
     }`}>
-      <div className="h-full z-1 bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
+      <div className="h-full z-1 orbitron bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
         <div className="hud">
           <div className="absolute topHUD left-0 top-2 h-[6rem] w-full flex items-center justify-center">
             <div className="h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 tracking-wider">
@@ -96,7 +96,7 @@ const Hero = () => {
             disabled={isLoading}
             className="relative gradient-border-button text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md mt-8"
           >
-            {isLoading ? "LOADING..." : user ? "DASHBOARD" : "REGISTER"}
+            {isLoading ? "LOADING..." : user ? "DASHBOARD" : "SIGN IN WITH GOOGLE"}
           </button>
         </div>
 
