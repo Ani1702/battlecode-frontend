@@ -31,34 +31,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const getSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      setSession(session);
-      setUser(session?.user ?? null);
-      setAvatarUrl(session?.user?.user_metadata?.avatar_url ?? null);
-      
-      // Check username status if user is logged in
-      if (session?.access_token) {
-        try {
-          const response = await fetch("http://localhost:8000/api/user/verify", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          });
+        setSession(session);
+        setUser(session?.user ?? null);
+        setAvatarUrl(session?.user?.user_metadata?.avatar_url ?? null);
+        
+        // Check username status if user is logged in
+        if (session?.access_token) {
+          try {
+            const response = await fetch("http://localhost:8000/api/user/verify", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            });
 
-          if (response.ok) {
-            const data = await response.json();
-            setHasUsername(data.hasUsername);
+            if (response.ok) {
+              const data = await response.json();
+              setHasUsername(data.hasUsername);
+            } else {
+              console.error("Initial verification failed - signing out existing session:", await response.text());
+              
+              // Force complete sign out for existing sessions that fail verification
+              setSession(null);
+              setUser(null);
+              setHasUsername(null);
+              setAvatarUrl(null);
+              
+              // Sign out from Supabase completely
+              await supabase.auth.signOut();
+              
+              // Clear any potential cached auth data
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('supabase.auth.token');
+                localStorage.removeItem('sb-auth-token');
+              }
+            }
+          } catch (error) {
+            console.error("Error checking username status - signing out existing session:", error);
+            
+            // Force complete sign out for existing sessions that fail verification
+            setSession(null);
+            setUser(null);
+            setHasUsername(null);
+            setAvatarUrl(null);
+            
+            // Sign out from Supabase completely
+            await supabase.auth.signOut();
+            
+            // Clear any potential cached auth data
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('supabase.auth.token');
+              localStorage.removeItem('sb-auth-token');
+              // Also clear any other potential Supabase keys
+              Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('sb-') || key.startsWith('supabase')) {
+                  localStorage.removeItem(key);
+                }
+              });
+            }
           }
-        } catch (error) {
-          console.error("Error checking username status:", error);
         }
+      } catch (error) {
+        console.error("Error getting session:", error);
+        setSession(null);
+        setUser(null);
+        setHasUsername(null);
+      } finally {
+        setIsLoading(false); // Always clear loading state
       }
-      
-      setIsLoading(false);
     };
 
     getSession();
@@ -71,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAvatarUrl(session?.user?.user_metadata?.avatar_url ?? null);
 
       if (event === "SIGNED_IN" && session) {
+        setIsLoading(true); // Set loading when starting verification
         try {
           const response = await fetch("http://localhost:8000/api/user/verify", {
             method: "POST",
@@ -82,19 +128,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (response.ok) {
             const data = await response.json();
             setHasUsername(data.hasUsername);
-            router.push("/dashboard");
+            setIsLoading(false); // Clear loading on success
+            router.push("/dashboard"); // ONLY navigate on success
           } else {
             console.error("Backend verification failed:", await response.text());
+            setIsLoading(false); // Clear loading on backend error
+            
+            // Force complete sign out when backend verification fails
+            setSession(null);
+            setUser(null);
+            setHasUsername(null);
+            setAvatarUrl(null);
+            
+            // Sign out from Supabase completely - DO NOT navigate to dashboard
             await supabase.auth.signOut();
-            router.push("/"); // Redirect to home on failure
+            
+            // Clear any potential cached auth data
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('supabase.auth.token');
+              localStorage.removeItem('sb-auth-token');
+              // Also clear any other potential Supabase keys
+              Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('sb-') || key.startsWith('supabase')) {
+                  localStorage.removeItem(key);
+                }
+              });
+              // Force reload to ensure clean state - GO TO HOME, NOT DASHBOARD
+              window.location.href = '/';
+            } else {
+              router.push("/"); // GO TO HOME, NOT DASHBOARD
+            }
+            // Early return to prevent any further execution
+            return;
           }
         } catch (error) {
           console.error("Error verifying with backend:", error);
+          setIsLoading(false); // Clear loading on network error
+          
+          // Force complete sign out when verification fails due to network error
+          setSession(null);
+          setUser(null);
+          setHasUsername(null);
+          setAvatarUrl(null);
+          
+          // Sign out from Supabase completely - DO NOT navigate to dashboard
           await supabase.auth.signOut();
-          router.push("/"); // Redirect to home on failure
+          
+          // Clear any potential cached auth data
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('supabase.auth.token');
+            localStorage.removeItem('sb-auth-token');
+            // Also clear any other potential Supabase keys
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith('sb-') || key.startsWith('supabase')) {
+                localStorage.removeItem(key);
+              }
+            });
+            // Force reload to ensure clean state - GO TO HOME, NOT DASHBOARD
+            window.location.href = '/';
+          } else {
+            router.push("/"); // GO TO HOME, NOT DASHBOARD
+          }
+          // Early return to prevent any further execution
+          return;
         }
       } else if (event === "SIGNED_OUT") {
         setHasUsername(null);
+        setIsLoading(false); // Clear loading on sign out
       }
     });
 
@@ -106,6 +206,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         provider: "google",
         options: {
           redirectTo: `${location.origin}/api/auth/callback`,
+          queryParams: {
+            prompt: 'select_account', // Force Google account selection
+          },
         },
       });
 
@@ -136,15 +239,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       
+      // Clear all local state immediately
+      setSession(null);
+      setUser(null);
+      setHasUsername(null);
+      setAvatarUrl(null);
+      
       // Sign out from Supabase
       await supabase.auth.signOut();
-      setHasUsername(null);
       
-      // Clear any cached authentication data
+      // Clear any cached authentication data aggressively
       if (typeof window !== 'undefined') {
-        // Clear local storage items that might cache auth state
-        localStorage.removeItem('supabase.auth.token');
-        localStorage.removeItem('sb-auth-token');
+        // Clear all Supabase-related localStorage items
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-') || key.startsWith('supabase') || key.includes('auth')) {
+            localStorage.removeItem(key);
+          }
+        });
+        
+        // Also clear our custom battlecode cache
+        localStorage.removeItem('battlecode_leaderboard');
+        localStorage.removeItem('battlecode_rounds');
+        localStorage.removeItem('battlecode_locks');
         
         // Force reload to clear any remaining state
         window.location.href = '/';
@@ -153,9 +269,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('Error signing out:', error);
-      // Fallback: still clear local state and redirect
+      // Fallback: still clear local state and redirect aggressively
+      setSession(null);
+      setUser(null);
       setHasUsername(null);
+      setAvatarUrl(null);
+      
       if (typeof window !== 'undefined') {
+        // Clear everything possible
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-') || key.startsWith('supabase') || key.includes('auth') || key.startsWith('battlecode')) {
+            localStorage.removeItem(key);
+          }
+        });
         window.location.href = '/';
       } else {
         router.push('/');

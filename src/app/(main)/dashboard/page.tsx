@@ -34,7 +34,7 @@ interface CurrentRoundData {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const { socket, isConnected } = useSocket();
   const router = useRouter();
   
@@ -47,8 +47,16 @@ export default function Dashboard() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [hasConnectedOnce, setHasConnectedOnce] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  
+  // Security: Redirect if not authenticated (FIRST useEffect)
+  useEffect(() => {
+    if (!isLoading && (!user || !session)) {
+      console.warn("Unauthorized access to dashboard - redirecting to home");
+      router.push('/');
+    }
+  }, [user, session, isLoading, router]);
 
-  // Load data from localStorage after hydration
+  // Load data from localStorage after hydration (SECOND useEffect)
   useEffect(() => {
     setIsClient(true);
     
@@ -67,11 +75,8 @@ export default function Dashboard() {
       setIsLocked(JSON.parse(savedLocks));
     }
   }, []);
-  
-  const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"];
-  const leaderboard_titles = ["Rank", "Player", "Score", "Trend"];
 
-  // Socket event handlers
+  // Socket event handlers (THIRD useEffect)
   useEffect(() => {
     console.log("🔧 Dashboard useEffect triggered", { 
       hasSocket: !!socket, 
@@ -140,7 +145,11 @@ export default function Dashboard() {
       socket.off("server:leaderboard", handleLeaderboard);
       socket.off("server:currentRound", handleCurrentRound);
     };
-  }, [socket, isConnected]);
+  }, [socket, isConnected, isClient]);
+  
+  // Constants (after all hooks)
+  const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"];
+  const leaderboard_titles = ["Rank", "Player", "Score", "Trend"];
 
   // Fallback leaderboard data (in case socket hasn't loaded yet)
   const fallbackLeaderboard = [
@@ -155,6 +164,20 @@ export default function Dashboard() {
     [9, "sage", 1720, ""],
     [10, "phoenix", 1700, ""],
   ];
+  
+  // Don't render dashboard if still loading or not authenticated
+  if (isLoading || !user || !session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-orange-500 rounded-full animate-pulse mx-auto mb-4"></div>
+          <p className="text-gray-400">
+            {isLoading ? "Verifying authentication..." : "Redirecting..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
