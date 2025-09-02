@@ -46,14 +46,21 @@ const Hero = () => {
           <div className="absolute topHUD left-0 top-2 h-[6rem] w-full flex items-center justify-center">
             <div className="h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 tracking-wider">
               IEEE COMPUTER SOCIETY
+              
             </div>
             <div className="h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
               IEEE COMPUTER SOCIETY
+              
             </div>
             <div className="h-full w-full bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
               IEEE COMPUTER SOCIETY
+              
+              
             </div>
+            
           </div>
+          
+          
           <div className="absolute leftHUD left-10 top-0 h-full w-[6rem] flex items-center justify-center">
             <div className="h-full w-full bg-[url(/LeftLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
             <div className="h-full w-full bg-[url(/LeftLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>

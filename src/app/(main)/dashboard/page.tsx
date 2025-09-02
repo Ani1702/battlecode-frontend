@@ -3,11 +3,17 @@ import ContributionsGrid from "@/components/shared/ContributionsGrid";
 import Rewards from "@/components/shared/Rewards";
 import Navbar from "@/components/shared/Navbar";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
+import { showErrorToast, showSuccessToast } from "@/components/shared/CustomToast";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
 import { useRouter } from "next/navigation";
 import SignOut from "@/components/auth/SignOut"
+import toast from "react-hot-toast";
+import { useRef } from 'react';
+
+
+
 
 // Define types for socket data
 interface LeaderboardEntry {
@@ -38,34 +44,55 @@ export default function Dashboard() {
   const { user, session, isLoading } = useAuth();
   const { socket, isConnected } = useSocket();
   const router = useRouter();
-  
+
   // State initialization without localStorage during SSR
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundData | null>(null);
   const [islocked, setIsLocked] = useState([true, true, true, true]);
-  
+
   // Loading and connection states
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [hasConnectedOnce, setHasConnectedOnce] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  
+  const [hasShownLoginToast, setHasShownLoginToast] = useState(false);
+
+  const prevUserRef = useRef(user);
+
   // Security: Redirect if not authenticated (FIRST useEffect)
-  useEffect(() => {
-    if (!isLoading && (!user || !session)) {
-      console.warn("Unauthorized access to dashboard - redirecting to home");
-      router.push('/');
+useEffect(() => {
+    const prevUser = prevUserRef.current;
+  if (!isLoading && (!user || !session)) {
+    console.warn("Unauthorized access to dashboard - redirecting to home");
+    if (prevUser){
+      showErrorToast("Authentication failed. Please log in again.");
     }
-  }, [user, session, isLoading, router]);
+    
+    
+    
+   
+    
+    // Add a small delay before redirect to ensure user sees the toast
+    const redirectTimer = setTimeout(() => {
+      router.push('/');
+    }, 2000);
+
+    return () => clearTimeout(redirectTimer);
+    prevUserRef.current = user;
+  }
+}, [user, session, isLoading, router]);
+
+  
+ 
 
   // Load data from localStorage after hydration (SECOND useEffect)
   useEffect(() => {
     setIsClient(true);
-    
+
     // Load persisted data from localStorage
     const savedLeaderboard = localStorage.getItem('battlecode_leaderboard');
     const savedRounds = localStorage.getItem('battlecode_rounds');
     const savedLocks = localStorage.getItem('battlecode_locks');
-    
+
     if (savedLeaderboard) {
       setLeaderboard(JSON.parse(savedLeaderboard));
     }
@@ -77,20 +104,38 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Socket event handlers (THIRD useEffect)
+  // Show login toast when user is authenticated and connected (THIRD useEffect)
+
   useEffect(() => {
-    console.log("🔧 Dashboard useEffect triggered", { 
-      hasSocket: !!socket, 
-      isConnected, 
-      socketId: socket?.id 
-    });
+  const prevUser = prevUserRef.current;
+  if (!prevUser && user && !isLoading && !hasShownLoginToast) {
+    console.log("🎉 User successfully authenticated, showing login toast");
+    showSuccessToast("Successfully logged in");
+    setHasShownLoginToast(true);
     
+  }
+  if (prevUser && !user && !isLoading) {
+    console.log("🔄 User signed out, resetting toast flag");
+    showSuccessToast("Signed Out");
+    setHasShownLoginToast(false);
+  }
+}, [user, isLoading, hasShownLoginToast]);
+
+
+  // Socket event handlers (FOURTH useEffect)
+  useEffect(() => {
+    console.log("🔧 Dashboard useEffect triggered", {
+      hasSocket: !!socket,
+      isConnected,
+      socketId: socket?.id
+    });
+
     // Mark as connected once we have a socket connection
     if (isConnected && socket) {
       setHasConnectedOnce(true);
       setIsInitialLoad(false);
     }
-    
+
     if (!socket || !isConnected) {
       console.log("❌ Socket not ready", { hasSocket: !!socket, isConnected });
       return;
@@ -112,7 +157,7 @@ export default function Dashboard() {
     const handleCurrentRound = (data: CurrentRoundData) => {
       console.log("🎮 Received current round update:", data);
       setCurrentRoundData(data);
-      
+
       // Update locked status based on round data
       const newLockedStatus = [true, true, true, true];
       data.rounds.forEach((round) => {
@@ -122,7 +167,7 @@ export default function Dashboard() {
       });
       console.log("🔒 Updated lock status:", newLockedStatus);
       setIsLocked(newLockedStatus);
-      
+
       // Persist to localStorage
       if (isClient) {
         localStorage.setItem('battlecode_rounds', JSON.stringify(data));
@@ -137,6 +182,10 @@ export default function Dashboard() {
     // Request initial data when socket connects
     console.log("📡 Requesting initial data from socket...");
     socket.emit("client:join");
+    
+
+
+
     socket.emit("client:getLeaderboard");
     socket.emit("client:getCurrentRound");
 
@@ -147,7 +196,7 @@ export default function Dashboard() {
       socket.off("server:currentRound", handleCurrentRound);
     };
   }, [socket, isConnected, isClient]);
-  
+
   // Constants (after all hooks)
   const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"];
   const leaderboard_titles = ["Rank", "Player", "Score", "Trend"];
@@ -165,15 +214,18 @@ export default function Dashboard() {
     [9, "sage", 1720, ""],
     [10, "phoenix", 1700, ""],
   ];
-  
+
   // Don't render dashboard if still loading or not authenticated
   if (isLoading || !user || !session) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 bg-orange-500 rounded-full animate-pulse mx-auto mb-4"></div>
+          
           <p className="text-gray-400">
-            {isLoading ? "Verifying authentication..." : "Redirecting..."}
+        
+              <img src="/logo.png" alt="Loading..." className = "h-10 w-fit animate-pulse"/>
+            
+  
           </p>
         </div>
       </div>
@@ -201,17 +253,15 @@ export default function Dashboard() {
               const roundStatus = currentRoundData?.rounds.find(r => r.roundNumber === i);
               const isActive = roundStatus?.isActive || false;
               const locked = islocked[i];
-              
+
               return (
                 <div className={`flex-[1.2] flex justify-center items-center pb-5  `} key={i}>
                   <div
-                    className={`w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${
-                      locked 
-                        ? "!border-gray-400/50 !border-2" 
-                        : "!border-amber-600 !border-2"
-                    } items-center pl-5 transition-transform duration-200 ${
-                      !locked ? ' hover:-translate-y-2 cursor-pointer ' : 'cursor-not-allowed opacity-60'
-                    }`}
+                    className={`w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${locked
+                      ? "!border-gray-400/50 !border-2"
+                      : "!border-amber-600 !border-2"
+                      } items-center pl-5 transition-transform duration-200 ${!locked ? ' hover:-translate-y-2 cursor-pointer ' : 'cursor-not-allowed opacity-60'
+                      }`}
                     role="button"
                     tabIndex={0}
                     aria-disabled={locked}
@@ -219,37 +269,33 @@ export default function Dashboard() {
                       if (!locked) router.push(`r${i}/rules`);
                     }}
                   >
-                    <div className={`rounded-[50%] h-15 w-15 ml-1 ${
-                      locked 
-                        ? "border-gray-400/50" 
-                        : "border-amber-600"
-                    } m-1 items-center justify-center flex border-4`}>
-                      <p className={`text-3xl oxanium ${
-                        locked 
-                          ? "text-gray-400/50" 
-                          : ""
-                      }`}>{i}</p>
+                    <div className={`rounded-[50%] h-15 w-15 ml-1 ${locked
+                      ? "border-gray-400/50"
+                      : "border-amber-600"
+                      } m-1 items-center justify-center flex border-4`}>
+                      <p className={`text-3xl oxanium ${locked
+                        ? "text-gray-400/50"
+                        : ""
+                        }`}>{i}</p>
                     </div>
                     <div className="flex-5 flex flex-col ml-5">
-                      <div className={`flex-2 text-3xl font-medium ${
-                        locked 
-                          ? "text-gray-400/50" 
-                          : ""
-                      }`}>
+                      <div className={`flex-2 text-3xl font-medium ${locked
+                        ? "text-gray-400/50"
+                        : ""
+                        }`}>
                         <p>{titles[i]}</p>
                       </div>
-                      <div className={`flex-1 ${
-                        locked 
-                          ? "text-gray-400/50" 
-                          : ""
-                      }`}>
+                      <div className={`flex-1 ${locked
+                        ? "text-gray-400/50"
+                        : ""
+                        }`}>
                         <p>
-                          {locked 
-                            ? "Locked" 
-                            : isActive 
-                              ? "Active" 
-                              : roundStatus?.status === "LOBBY" 
-                                ? "Starting Soon" 
+                          {locked
+                            ? "Locked"
+                            : isActive
+                              ? "Active"
+                              : roundStatus?.status === "LOBBY"
+                                ? "Starting Soon"
                                 : "Available"}
                         </p>
                       </div>
@@ -275,23 +321,22 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div className="space-x-2">
-                  <span className={`px-2 py-1 rounded text-xs ${
-                    isConnected 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : hasConnectedOnce 
-                        ? 'bg-yellow-500/20 text-yellow-400' 
-                        : 'bg-red-500/20 text-red-400'
-                  }`}>
+                  <span className={`px-2 py-1 rounded text-xs ${isConnected
+                    ? 'bg-green-500/20 text-green-400'
+                    : hasConnectedOnce
+                      ? 'bg-yellow-500/20 text-yellow-400'
+                      : 'bg-red-500/20 text-red-400'
+                    }`}>
                     Socket: {
-                      isConnected 
-                        ? 'Connected' 
-                        : hasConnectedOnce 
-                          ? 'Reconnecting...' 
+                      isConnected
+                        ? 'Connected'
+                        : hasConnectedOnce
+                          ? 'Reconnecting...'
                           : 'Connecting...'
                     }
                   </span>
                   {socket && isConnected && (
-                    <button 
+                    <button
                       onClick={() => {
                         console.log("Manual refresh requested");
                         socket.emit("client:getLeaderboard");
@@ -306,14 +351,14 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          
+
           <div className="flex-1  h-full w-full flex justify-center items-end ">
-            
-            
-            <div className="w-[95%] h-[85%] rounded-lg border-2 mb-4 flex flex-col glass-box">  
-              
+
+
+            <div className="w-[95%] h-[85%] rounded-lg border-2 mb-4 flex flex-col glass-box">
+
               <div className="flex-1  justify-center items-center flex">
-                
+
 
                 <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" /><span></span>
                 <p className="text-2xl text-orange-500">Live Leaderboard</p>

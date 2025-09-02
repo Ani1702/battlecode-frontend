@@ -5,6 +5,7 @@ import Protected from "@/components/shared/Protected";
 import type { Metadata } from "next";
 import { Orbitron, Oxanium } from "next/font/google";
 import "./globals.css";
+import { Toaster } from 'react-hot-toast';
 
 
 
@@ -33,7 +34,7 @@ export default function RootLayout({
       <body className={`oxanium antialiased`}>
         <AuthProvider>
           
-            <SocketProvider>{children}</SocketProvider>
+            <SocketProvider>{children}<Toaster /></SocketProvider>
           
         </AuthProvider>
       </body>

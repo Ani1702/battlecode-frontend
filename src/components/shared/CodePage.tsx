@@ -7,6 +7,7 @@ import Button from "@/components/shared/button";
 import { Question, QuestionSession, QuestionManager, TestCase, sampleQuestions } from "@/types/question";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import CustomScrollbar from "./CustomScrollbar";
+import { showSuccessToast, showErrorToast, showInfoToast } from "./CustomToast";
 
 interface MatchData {
   id: string;
@@ -289,6 +290,9 @@ export default function CodePage({ round }: CodePageProps) {
   function handleSubmit() {
     if (!currentQuestion || isSubmitting || !questionSession) return;
     
+    // Show submission toast
+    showInfoToast('Submitting your solution...');
+    
     setIsSubmitting(true);
     
     // Update session attempts
@@ -329,7 +333,9 @@ export default function CodePage({ round }: CodePageProps) {
           endTime: new Date(),
           score: currentQuestion.points
         } : null);
-        alert("🎉 Congratulations! All test cases passed!");
+        showSuccessToast("🎉 Congratulations! All test cases passed!");
+      } else {
+        showErrorToast("Some test cases failed. Keep trying!");
       }
       
       setIsSubmitting(false);
