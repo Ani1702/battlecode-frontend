@@ -59,23 +59,30 @@ export default function Dashboard() {
   const prevUserRef = useRef(user);
 
   // Security: Redirect if not authenticated (FIRST useEffect)
-  useEffect(() => {
+useEffect(() => {
     const prevUser = prevUserRef.current;
-    if (!isLoading && (!user || !session)) {
-      console.warn("Unauthorized access to dashboard - redirecting to home");
-      if (prevUser) {
-        showErrorToast("Authentication failed. Please log in again.");
-      }
-
-      // Add a small delay before redirect to ensure user sees the toast
-      const redirectTimer = setTimeout(() => {
-        router.push('/');
-      }, 2000);
-
-      return () => clearTimeout(redirectTimer);
+  if (!isLoading && (!user || !session)) {
+    console.warn("Unauthorized access to dashboard - redirecting to home");
+    if (prevUser){
+      showErrorToast("Authentication failed. Please log in again.");
     }
+    
+    
+    
+   
+    
+    // Add a small delay before redirect to ensure user sees the toast
+    const redirectTimer = setTimeout(() => {
+      router.push('/');
+    }, 2000);
+
+    return () => clearTimeout(redirectTimer);
     prevUserRef.current = user;
-  }, [user, session, isLoading, router]);
+  }
+}, [user, session, isLoading, router]);
+
+  
+ 
 
   // Load data from localStorage after hydration (SECOND useEffect)
   useEffect(() => {
@@ -100,19 +107,19 @@ export default function Dashboard() {
   // Show login toast when user is authenticated and connected (THIRD useEffect)
 
   useEffect(() => {
-    const prevUser = prevUserRef.current;
-    if (!prevUser && user && !isLoading && !hasShownLoginToast) {
-      console.log("🎉 User successfully authenticated, showing login toast");
-      showSuccessToast("Successfully logged in");
-      setHasShownLoginToast(true);
-
-    }
-    if (prevUser && !user && !isLoading) {
-      console.log("🔄 User signed out, resetting toast flag");
-      showSuccessToast("Signed Out");
-      setHasShownLoginToast(false);
-    }
-  }, [user, isLoading, hasShownLoginToast]);
+  const prevUser = prevUserRef.current;
+  if (!prevUser && user && !isLoading && !hasShownLoginToast) {
+    console.log("🎉 User successfully authenticated, showing login toast");
+    showSuccessToast("Successfully logged in");
+    setHasShownLoginToast(true);
+    
+  }
+  if (prevUser && !user && !isLoading) {
+    console.log("🔄 User signed out, resetting toast flag");
+    showSuccessToast("Signed Out");
+    setHasShownLoginToast(false);
+  }
+}, [user, isLoading, hasShownLoginToast]);
 
 
   // Socket event handlers (FOURTH useEffect)
@@ -175,7 +182,7 @@ export default function Dashboard() {
     // Request initial data when socket connects
     console.log("📡 Requesting initial data from socket...");
     socket.emit("client:join");
-
+    
 
 
 
@@ -208,122 +215,147 @@ export default function Dashboard() {
     [10, "phoenix", 1700, ""],
   ];
 
+  // Don't render dashboard if still loading or not authenticated
+  if (isLoading || !user || !session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          
+          <p className="text-gray-400">
+        
+              <img src="/logo.png" alt="Loading..." className = "h-10 w-fit animate-pulse"/>
+            
+  
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="bg-[url('/bg-dashboard.svg')] min-h-screen bg-cover bg-center flex flex-col relative">
-        {/* Loading/Authentication Overlay */}
-        {(isLoading || !user || !session) && (
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="text-center justify-center items-center">
-              <div className="mb-4 flex items-center justify-center">
-                <img src="/battlecode_logo.png" alt="Loading..." className="flex h-50 w-fit animate-pulse" />
+      <div className="bg-[url('/bg-dashboard.svg')] min-h-screen bg-cover bg-center">
+        <div className="h-screen w-full flex">
+          <div className="flex-[1.5]  h-full w-full flex flex-col">
+            <div className="flex-1 ml-3 mt-3 orbitron flex justify-start items-start">
+              <p className="flex-1">{"<> BattleCode Arena"}</p>
+              <div className="flex-1 flex justify-end mr-8">
+                <SignOut />
               </div>
-              <p className="text-gray-400">
-                {isLoading ? "Verifying authentication..." : "Redirecting..."}
-              </p>
             </div>
-          </div>
-        )}
-        <div className="flex-[2]">
-          <div className="flex-1 ml-3 mt-3 orbitron flex justify-start items-start">
-            <p className="flex-1">{"<> BattleCode Arena"}</p>
-            <div className="flex-1 flex justify-end mr-8">
-              <SignOut />
-            </div>
-          </div>
-        </div>
-        <div className="flex-6  flex ">
-          <div className="flex-[1.5] flex flex-col ">
-            <div className="flex-1 flex flex-col ml-5 justify-center">
-              <h1 className="text-5xl font-bold text-white orbitron flex-1">
-                Welcome &nbsp;
-                
-              </h1>
-              <p className ="flex-[1] flex ">
-                <span className="text-orange-500 text-5xl ml-2">
-                  {user?.email?.split('@')[0] || 'Warrior'}
-                </span>
-                <span className="text-orange-300/70 text-3xl ml-2 flex items-center">
-                  #{user?.id?.slice(-4) || '0000'}
-                </span>
+            <div className="flex-1  font-medium text-lg orbitron">
+              <p className="text-5xl pl-8 orbitron">Competition<span className="text-5xl text-amber-700 oxanium orbitron"> Rounds</span></p>
 
-              </p>
-              
-            </div>
-            <div className = "flex-[0.2]"></div>
-            <div className="flex-4 ">
-              {[0, 1, 2, 3].map((i) => {
-                const isCurrentRound = currentRoundData?.currentRoundNumber === i;
-                const roundStatus = currentRoundData?.rounds.find(r => r.roundNumber === i);
-                const isActive = roundStatus?.isActive || false;
-                const locked = islocked[i];
 
-                return (
-                  <div className={`flex-[1.2] flex justify-center items-center pb-5 `} key={i}>
-                    <div
-                      className={`w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${locked
-                        ? "!border-gray-400/50 !border-2"
-                        : "!border-amber-600 !border-2"
-                        } items-center pl-5 transition-transform duration-200 ${!locked ? ' hover:-translate-y-2 cursor-pointer ' : 'cursor-not-allowed opacity-60'
-                        }`}
-                      role="button"
-                      tabIndex={0}
-                      aria-disabled={locked}
-                      onClick={() => {
-                        if (!locked) router.push(`r${i}/rules`);
-                      }}
-                    >
-                      <div className={`rounded-[50%] h-15 w-15 ml-1 ${locked
-                        ? "border-gray-400/50"
-                        : "border-amber-600"
-                        } m-1 items-center justify-center flex border-4`}>
-                        <p className={`text-3xl oxanium ${locked
-                          ? "text-gray-400/50"
-                          : ""
-                          }`}>{i}</p>
+            </div>
+            {[0, 1, 2, 3].map((i) => {
+              const isCurrentRound = currentRoundData?.currentRoundNumber === i;
+              const roundStatus = currentRoundData?.rounds.find(r => r.roundNumber === i);
+              const isActive = roundStatus?.isActive || false;
+              const locked = islocked[i];
+
+              return (
+                <div className={`flex-[1.2] flex justify-center items-center pb-5  `} key={i}>
+                  <div
+                    className={`w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${locked
+                      ? "!border-gray-400/50 !border-2"
+                      : "!border-amber-600 !border-2"
+                      } items-center pl-5 transition-transform duration-200 ${!locked ? ' hover:-translate-y-2 cursor-pointer ' : 'cursor-not-allowed opacity-60'
+                      }`}
+                    role="button"
+                    tabIndex={0}
+                    aria-disabled={locked}
+                    onClick={() => {
+                      if (!locked) router.push(`r${i}/rules`);
+                    }}
+                  >
+                    <div className={`rounded-[50%] h-15 w-15 ml-1 ${locked
+                      ? "border-gray-400/50"
+                      : "border-amber-600"
+                      } m-1 items-center justify-center flex border-4`}>
+                      <p className={`text-3xl oxanium ${locked
+                        ? "text-gray-400/50"
+                        : ""
+                        }`}>{i}</p>
+                    </div>
+                    <div className="flex-5 flex flex-col ml-5">
+                      <div className={`flex-2 text-3xl font-medium ${locked
+                        ? "text-gray-400/50"
+                        : ""
+                        }`}>
+                        <p>{titles[i]}</p>
                       </div>
-                      <div className="flex-5 flex flex-col ml-5">
-                        <div className={`flex-2  p-3 ${locked
-                          ? "text-gray-400/50"
-                          : ""
-                          }`}>
-                          <p className="text-3xl font-medium">{titles[i]}</p>
-                          <p>
-                            {locked
-                              ? "Locked"
-                              : isActive
-                                ? "Active"
-                                : roundStatus?.status === "LOBBY"
-                                  ? "Starting Soon"
-                                  : "Available"}
-                          </p>
-                        </div>
-                        
-                        <div className={`flex-1 ${locked
-                          ? "text-gray-400/50"
-                          : ""
-                          }`}>
-                          
-                        </div>
-                      </div>
-                      <div className={`flex-[0.5] flex justify-center items-center`}>
-                        {locked ? (
-                          <img src="/lock.svg" alt="Locked" />
-                        ) : (
-                          <div className="w-4 h-4 bg-orange-500 rounded-lg animate-pulse"></div>
-                        )}
+                      <div className={`flex-1 ${locked
+                        ? "text-gray-400/50"
+                        : ""
+                        }`}>
+                        <p>
+                          {locked
+                            ? "Locked"
+                            : isActive
+                              ? "Active"
+                              : roundStatus?.status === "LOBBY"
+                                ? "Starting Soon"
+                                : "Available"}
+                        </p>
                       </div>
                     </div>
+                    <div className={`flex-[0.5] flex justify-center items-center`}>
+                      {locked ? (
+                        <img src="/lock.svg" alt="Locked" />
+                      ) : (
+                        <div className="w-4 h-4 bg-orange-500 rounded-lg animate-pulse"></div>
+                      )}
+                    </div>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
+            <div className="flex-2 justify-center items-center flex">
+              {/* Debug info and manual refresh */}
+              <div className="text-xs text-gray-500 text-center space-y-2">
+                {currentRoundData && (
+                  <div>
+                    <p>Current Round: {currentRoundData.currentRoundNumber} ({currentRoundData.currentRoundStatus})</p>
+                    <p>Connected Users: {leaderboard.length}</p>
+                  </div>
+                )}
+                <div className="space-x-2">
+                  <span className={`px-2 py-1 rounded text-xs ${isConnected
+                    ? 'bg-green-500/20 text-green-400'
+                    : hasConnectedOnce
+                      ? 'bg-yellow-500/20 text-yellow-400'
+                      : 'bg-red-500/20 text-red-400'
+                    }`}>
+                    Socket: {
+                      isConnected
+                        ? 'Connected'
+                        : hasConnectedOnce
+                          ? 'Reconnecting...'
+                          : 'Connecting...'
+                    }
+                  </span>
+                  {socket && isConnected && (
+                    <button
+                      onClick={() => {
+                        console.log("Manual refresh requested");
+                        socket.emit("client:getLeaderboard");
+                        socket.emit("client:getCurrentRound");
+                      }}
+                      className="px-2 py-1 rounded text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
+                    >
+                      Refresh Data
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-
           </div>
-          <div className="flex-1 ">
+
+          <div className="flex-1  h-full w-full flex justify-center items-end ">
 
 
-            <div className="w-[95%] h-[95%] rounded-lg border-2 mb-4 flex flex-col glass-box">
+            <div className="w-[95%] h-[85%] rounded-lg border-2 mb-4 flex flex-col glass-box">
 
               <div className="flex-1  justify-center items-center flex">
 
@@ -393,14 +425,11 @@ export default function Dashboard() {
 
 
             </div>
+
           </div>
 
         </div>
-
-
       </div>
-
-
     </>
 
   )

@@ -288,6 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
   };
+  
 
   const updateUsername = async (username: string): Promise<boolean> => {
     try {
