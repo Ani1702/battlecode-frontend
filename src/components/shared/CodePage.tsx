@@ -1,28 +1,39 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useSocket } from "@/contexts/SocketContext";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
-import { Question, QuestionSession, QuestionManager, TestCase, sampleQuestions } from "@/types/question";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import CustomScrollbar from "./CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from "./CustomToast";
 
-interface MatchData {
+interface Problem {
   id: string;
-  playerAId: string;
-  playerBId?: string;
-  status: string;
-  settings: {
-    timeLimit: number;
-    noOfQuestions: number;
-    difficulty: string;
-    topics: string[];
+  title: string;
+  description: string;
+  difficulty: string;
+  constraints: string[];
+  boilerplate: { [key: string]: string };
+  sampleTestCases: TestCase[];
+  hiddenTestCases?: TestCase[];
+  testCases?: TestCase[]; // Legacy support
+  hints: string[];
+  avgTimeComplexity?: string;
+  avgSpaceComplexity?: string;
+}
+
+interface TestCase {
+  stdin?: string;
+  expected_output?: string;
+  input?: {
+    stdin?: string;
+    json?: any;
   };
-  questions?: Question[];
-  currentQuestionIndex?: number;
-  startedAt?: string;
+  output?: {
+    stdout?: string;
+    json?: any;
+  };
+  explanation?: string;
 }
 
 interface SubmissionResult {
@@ -40,37 +51,42 @@ interface SubmissionResult {
 
 interface CodePageProps {
   round: string;
+  currentProblem: Problem | null;
+  problems: Problem[];
+  currentProblemIndex: number;
+  timeRemaining: number;
+  roundDuration: number;
+  isRoundActive: boolean;
+  isLoading: boolean;
+  onNextQuestion?: () => void;
+  onReturnToLobby?: () => void;
 }
 
-export default function CodePage({ round }: CodePageProps) {
-  // const { matchId } = useParams();
+export default function CodePage({ 
+  round,
+  currentProblem,
+  problems,
+  currentProblemIndex,
+  timeRemaining,
+  roundDuration,
+  isRoundActive,
+  isLoading,
+  onNextQuestion,
+  onReturnToLobby
+}: CodePageProps) {
   const router = useRouter();
-  // const { socket } = useSocket();
-  // const { user } = useAuth();
+  const { user, session } = useAuth();
 
-  // Use sample question from the new question types
-  const mockQuestion: Question = sampleQuestions[0];
-
-  const [code, setCode] = useState(mockQuestion.boilerplate["javascript"]);
-  const [language, setLanguage] = useState("javascript");
-  const [timeLeft, setTimeLeft] = useState(mockQuestion.timeLimit); // Use question's time limit
-  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(mockQuestion);
-  const [questionSession, setQuestionSession] = useState<QuestionSession | null>(
-    QuestionManager.createQuestionSession(mockQuestion)
-  );
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [totalQuestions, setTotalQuestions] = useState(1);
-  const [matchStatus, setMatchStatus] = useState("PRACTICE");
-  // const [match, setMatch] = useState<MatchData | null>(null);
-  // const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  // Code editor state
+  const [code, setCode] = useState("");
+  const [language, setLanguage] = useState("python");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
-  const [isTimerRunning, setIsTimerRunning] = useState(true);
   
   // Resizable splitter state
-  const [codeEditorHeight, setCodeEditorHeight] = useState(60); // percentage
+  const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
 
   // Monaco editor configuration
@@ -96,11 +112,12 @@ export default function CodePage({ round }: CodePageProps) {
       'java': 'java',
       'cpp': 'cpp',
       'c': 'c',
+      'javascript': 'javascript',
     };
     return languageMap[lang] || 'python';
   };
 
-  // Custom Monaco theme configuration
+  // Monaco theme setup
   const monaco = useMonaco();
   
   useEffect(() => {
@@ -115,24 +132,158 @@ export default function CodePage({ round }: CodePageProps) {
           { token: 'number', foreground: '#B5CEA8' },
         ],
         colors: {
-          'editor.background': '#0a0a0a', // Very dark background
+          'editor.background': '#0a0a0a',
           'editor.foreground': '#ffffff',
           'editor.lineHighlightBackground': '#1a1a1a',
           'editor.selectionBackground': '#264f78',
           'editor.inactiveSelectionBackground': '#3a3d41',
-          'editorCursor.foreground': '#f97316', // Orange cursor to match your theme
+          'editorCursor.foreground': '#f97316',
           'editorLineNumber.foreground': '#858585',
-          'editorLineNumber.activeForeground': '#f97316', // Orange active line number
+          'editorLineNumber.activeForeground': '#f97316',
           'editor.selectionHighlightBackground': '#ADD6FF26',
           'editor.wordHighlightBackground': '#575757B8',
           'editorBracketMatch.background': '#0064001a',
           'editorBracketMatch.border': '#888888',
         },
       });
-      // Set the theme immediately after defining it
       monaco.editor.setTheme('custom-dark');
     }
   }, [monaco]);
+
+  // Handle language change
+  useEffect(() => {
+    try {
+      if (currentProblem && currentProblem.boilerplate) {
+        const newCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
+        setCode(newCode);
+      }
+    } catch (error) {
+      console.error('Error updating code for language change:', error);
+    }
+  }, [language, currentProblem]);
+
+  // Execute code using /execute-batch endpoint
+  const executeCode = async (isSubmission = false) => {
+    if (!currentProblem) {
+      showErrorToast('No problem loaded');
+      return;
+    }
+
+    const action = isSubmission ? 'submitting' : 'running';
+    showInfoToast(`${action.charAt(0).toUpperCase() + action.slice(1)} your code...`);
+    
+    if (isSubmission) {
+      setIsSubmitting(true);
+    } else {
+      setIsRunning(true);
+    }
+
+    try {
+      // Get language ID for Judge0
+      const languageIds: { [key: string]: number } = {
+        'python': 71,
+        'java': 62,
+        'cpp': 54,
+        'c': 50,
+        'javascript': 63
+      };
+
+      const languageId = languageIds[language] || 71;
+
+      // Prepare test cases - use sample test cases for run, all test cases for submit
+      const testCasesToRun = isSubmission ? 
+        (currentProblem.hiddenTestCases || currentProblem.testCases || currentProblem.sampleTestCases) : 
+        currentProblem.sampleTestCases;
+
+      if (!testCasesToRun || testCasesToRun.length === 0) {
+        throw new Error('No test cases available');
+      }
+
+      const submissions = testCasesToRun.map((testCase, index) => {
+        try {
+          // Handle both old and new test case formats
+          const inputData = testCase.stdin || testCase.input?.stdin || JSON.stringify(testCase.input?.json) || '';
+          const expectedOutput = testCase.expected_output || testCase.output?.stdout || JSON.stringify(testCase.output?.json) || '';
+          
+          return {
+            language_id: languageId,
+            source_code: btoa(code), // Base64 encode
+            stdin: btoa(inputData),
+            expected_output: btoa(expectedOutput)
+          };
+        } catch (encodeError) {
+          console.error(`Error encoding test case ${index}:`, encodeError);
+          throw new Error(`Failed to encode test case ${index + 1}`);
+        }
+      });
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) {
+        throw new Error('API URL not configured');
+      }
+
+      const response = await fetch(`${apiUrl}/execute-batch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ submissions })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+
+      const results = await response.json();
+      
+      if (!Array.isArray(results)) {
+        throw new Error('Invalid response format from execution service');
+      }
+      
+      // Format results for display
+      const formattedResults: SubmissionResult[] = results.map((result: any, index: number) => ({
+        token: result.token || `test_${index}`,
+        status: {
+          id: result.status?.id || 3,
+          description: result.status?.description || 'Accepted'
+        },
+        stdout: result.stdout || null,
+        stderr: result.stderr || null,
+        compile_output: result.compile_output || null,
+        time: result.time || null,
+        memory: result.memory || null
+      }));
+
+      setSubmissionResults(formattedResults);
+
+      // Check results
+      const passedTests = formattedResults.filter(r => r.status.description === 'Accepted').length;
+      const totalTests = formattedResults.length;
+
+      if (isSubmission) {
+        if (passedTests === totalTests) {
+          showSuccessToast(`🎉 All ${totalTests} test cases passed!`);
+        } else {
+          showErrorToast(`${passedTests}/${totalTests} test cases passed`);
+        }
+      } else {
+        showInfoToast(`Test run completed: ${passedTests}/${totalTests} passed`);
+      }
+
+    } catch (error) {
+      console.error('Execution error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      showErrorToast(`Failed to ${action} code: ${errorMessage}`);
+    } finally {
+      if (isSubmission) {
+        setIsSubmitting(false);
+      } else {
+        setIsRunning(false);
+      }
+    }
+  };
 
   // Resizable splitter handlers
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -179,102 +330,30 @@ export default function CodePage({ round }: CodePageProps) {
     };
   }, [isDragging]);
 
-  // Timer countdown effect
-  useEffect(() => {
-    if (!isTimerRunning || timeLeft <= 0 || !questionSession || !currentQuestion) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft(prevTime => {
-        if (prevTime <= 1) {
-          setIsTimerRunning(false);
-          // Update session status
-          setQuestionSession(prev => prev ? { ...prev, status: 'timeout' } : null);
-          console.log("Time's up!");
-          alert("Time's up! The question will be auto-submitted.");
-          return 0;
-        }
-        return prevTime - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isTimerRunning, timeLeft, questionSession, currentQuestion]);
-
-  // Function to reset timer for new question
-  const resetTimer = (newTimeLimit?: number) => {
-    const timeLimit = newTimeLimit || currentQuestion?.timeLimit || 1800;
-    setTimeLeft(timeLimit);
-    setIsTimerRunning(true);
-    if (currentQuestion) {
-      setQuestionSession(QuestionManager.createQuestionSession(currentQuestion));
-    }
+  // Format time display
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // Function to pause/resume timer
-  const toggleTimer = () => {
-    setIsTimerRunning(prev => !prev);
-  };
-
-  // Function to save session to localStorage
-  const saveSession = () => {
-    if (questionSession && currentQuestion) {
-      const sessionData = {
-        ...questionSession,
-        timeRemaining: timeLeft,
-        currentCode: code,
-        currentLanguage: language
-      };
-      localStorage.setItem(`question_session_${currentQuestion.id}`, JSON.stringify(sessionData));
-    }
-  };
-
-  // Function to load session from localStorage
-  const loadSession = (questionId: string) => {
-    const savedSession = localStorage.getItem(`question_session_${questionId}`);
-    if (savedSession) {
-      const sessionData = JSON.parse(savedSession);
-      setQuestionSession(sessionData);
-      setTimeLeft(sessionData.timeRemaining);
-      setCode(sessionData.currentCode || currentQuestion?.boilerplate[language] || "");
-      setLanguage(sessionData.currentLanguage || "javascript");
-      return true;
-    }
-    return false;
-  };
-
-  // Save session periodically
-  useEffect(() => {
-    const saveInterval = setInterval(saveSession, 30000); // Save every 30 seconds
-    return () => clearInterval(saveInterval);
-  }, [questionSession, timeLeft, code, language]);
 
   // Get timer display with color coding
   const getTimerDisplay = (): { time: string; className: string } => {
-    if (!currentQuestion) return {
-      time: QuestionManager.formatTime(timeLeft),
-      className: 'border-amber-600'
-    };
-    
-    const isWarning = QuestionManager.isTimeWarning(timeLeft, currentQuestion.timeLimit);
-    const isCritical = QuestionManager.isTimeCritical(timeLeft, currentQuestion.timeLimit);
+    const isWarning = timeRemaining <= 300; // 5 minutes
+    const isCritical = timeRemaining <= 60;  // 1 minute
     
     return {
-      time: QuestionManager.formatTime(timeLeft),
+      time: formatTime(timeRemaining),
       className: isCritical ? 'border-red-600 text-red-400' : 
                  isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
     };
   };
 
-  // Helper function to format input/output without brackets
+  // Format test case data for display
   const formatTestCaseData = (data: any): string => {
-    if (typeof data === 'string') {
-      return data;
-    }
-    if (Array.isArray(data)) {
-      return data.join(', ');
-    }
+    if (typeof data === 'string') return data;
+    if (Array.isArray(data)) return data.join(', ');
     if (typeof data === 'object' && data !== null) {
-      // For objects like {nums: [2, 7, 11, 15], target: 9}, format as key-value pairs
       const entries = Object.entries(data);
       return entries.map(([key, value]) => {
         if (Array.isArray(value)) {
@@ -286,125 +365,111 @@ export default function CodePage({ round }: CodePageProps) {
     return String(data);
   };
 
-  // Enhanced handleSubmit for client-only mode with session tracking
-  function handleSubmit() {
-    if (!currentQuestion || isSubmitting || !questionSession) return;
-    
-    // Show submission toast
-    showInfoToast('Submitting your solution...');
-    
-    setIsSubmitting(true);
-    
-    // Update session attempts
-    setQuestionSession(prev => prev ? { ...prev, attempts: prev.attempts + 1 } : null);
-    
-    setTimeout(() => {
-      // Mock results - in real implementation, this would call the judge API
-      const mockResults = [
-        {
-          token: "mock1",
-          status: { id: 3, description: "Accepted" },
-          stdout: JSON.stringify([0, 1]),
-          stderr: null,
-          compile_output: null,
-          time: "0.01",
-          memory: "1024",
-        },
-        {
-          token: "mock2",
-          status: { id: 6, description: "Wrong Answer" },
-          stdout: JSON.stringify([1, 0]),
-          stderr: null,
-          compile_output: null,
-          time: "0.01", 
-          memory: "1024",
-        },
-      ];
-      
-      setSubmissionResults(mockResults);
-      
-      // Check if all test cases passed
-      const allPassed = mockResults.every(result => result.status.description === "Accepted");
-      
-      if (allPassed) {
-        setQuestionSession(prev => prev ? { 
-          ...prev, 
-          status: 'completed',
-          endTime: new Date(),
-          score: currentQuestion.points
-        } : null);
-        showSuccessToast("🎉 Congratulations! All test cases passed!");
-      } else {
-        showErrorToast("Some test cases failed. Keep trying!");
-      }
-      
-      setIsSubmitting(false);
-      saveSession(); // Save progress
-    }, 1200);
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-black/40 text-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p>Loading Round {round}...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No problem state
+  if (!currentProblem) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-black/40 text-white">
+        <div className="flex flex-col items-center gap-4">
+          <p>No active round found or waiting for problems to load...</p>
+          <button
+            onClick={onReturnToLobby}
+            className="px-6 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+          >
+            Return to Lobby
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col h-screen  text-white overflow-hidden bg-[url('/bg-code.svg')]  bg-fixed bg-cover  bg-center oxanium">
-      {/* Header and Timer */}
-      {/* <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-gray-700">
-        <h1 className="text-lg font-bold text-amber-400">Code Duel (Practice Mode)</h1>
-        <div className="flex items-center gap-4">
-            <div className="text-center text-sm">Question: {questionIndex + 1} / {totalQuestions}</div>
-            <div className="text-center p-2 font-mono text-lg bg-gray-800 rounded">{formatTime(timeLeft)}</div>
-        </div>
-      </div> */}
-
+    <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
       {/* Main Content */}
-      <div className="flex-1 flex p-4 gap-4 bg-black/40  min-h-0">
+      <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
         {/* Question Panel */}
         <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
           <div className="flex justify-between items-start mb-4 flex-shrink-0">
             <div>
-              <h2 className="text-2xl font-bold">{currentQuestion!.title}</h2>
+              <h2 className="text-2xl font-bold">{currentProblem.title}</h2>
               <div className="flex gap-4 text-sm text-gray-400 mt-1">
-                {/* <span className={`px-2 py-1 rounded ${QuestionManager.getDifficultyColor(currentQuestion!.difficulty)}`}>
-                  {currentQuestion!.difficulty}
-                </span> */}
-                <span>Points: {currentQuestion!.points}</span>
-                <span>Time: {Math.floor(currentQuestion!.timeLimit / 60)}min</span>
+                <span>Difficulty: {currentProblem.difficulty}</span>
                 <span>Round: {round}</span>
+                <span>Question: {currentProblemIndex + 1}/{problems.length}</span>
               </div>
             </div>
-            <Button
-              content={showHints ? "Hide" : "Hint💡"}
-              onClick={() => setShowHints(!showHints)}
-            />
+            <div className="flex gap-2">
+              <Button
+                content={showHints ? "Hide" : "Hint💡"}
+                onClick={() => setShowHints(!showHints)}
+              />
+              {currentProblemIndex < problems.length - 1 && onNextQuestion && (
+                <button
+                  onClick={onNextQuestion}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Next →
+                </button>
+              )}
+            </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto min-h-0 ">
-            {showHints && (
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {showHints && currentProblem.hints && currentProblem.hints.length > 0 && (
               <div className="mb-4 bg-gray-800 p-3 rounded">
                 <h3 className="font-bold mb-2 text-amber-400">Hints:</h3>
                 <ul className="list-disc list-inside text-gray-300 space-y-2">
-                  {currentQuestion!.hints.map((hint, i) => <li key={i}>{hint}</li>)}
+                  {currentProblem.hints.map((hint, i) => <li key={i}>{hint}</li>)}
                 </ul>
               </div>
             )}
             
-            <p className="mb-4 text-gray-300 whitespace-pre-wrap">{currentQuestion!.description}</p>
+            <p className="mb-4 text-gray-300 whitespace-pre-wrap">{currentProblem.description}</p>
 
-            <h3 className="font-bold mb-2 text-amber-400">Constraints:</h3>
-            <ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">
-              {currentQuestion!.constraints.map((constraint, i) => (
-                <li key={i}>{constraint}</li>
-              ))}
-            </ul>
+            {currentProblem.constraints && currentProblem.constraints.length > 0 && (
+              <>
+                <h3 className="font-bold mb-2 text-amber-400">Constraints:</h3>
+                <ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">
+                  {currentProblem.constraints.map((constraint, i) => (
+                    <li key={i}>{constraint}</li>
+                  ))}
+                </ul>
+              </>
+            )}
 
-            <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
-            {currentQuestion!.sampleTestCases.map((testCase, i) => (
-              <div key={i} className="mb-4 bg-gray-800 p-3 rounded font-mono text-sm">
-                <p className="font-bold text-gray-400">Input:</p>
-                <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(testCase.input.stdin || testCase.input.json)}</pre>
-                <p className="mt-2 font-bold text-gray-400">Output:</p>
-                <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(testCase.output.stdout || testCase.output.json)}</pre>
-                {testCase.explanation && <p className="mt-2 text-xs text-gray-400 italic">Explanation: {testCase.explanation}</p>}
-              </div>
-            ))}
+            {currentProblem.sampleTestCases && currentProblem.sampleTestCases.length > 0 && (
+              <>
+                <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
+                {currentProblem.sampleTestCases.map((testCase, i) => (
+                  <div key={i} className="mb-4 bg-gray-800 p-3 rounded font-mono text-sm">
+                    <p className="font-bold text-gray-400">Input:</p>
+                    <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
+                      {formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')}
+                    </pre>
+                    <p className="mt-2 font-bold text-gray-400">Output:</p>
+                    <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
+                      {formatTestCaseData(testCase.expected_output || testCase.output?.stdout || testCase.output?.json || '')}
+                    </pre>
+                    {testCase.explanation && (
+                      <p className="mt-2 text-xs text-gray-400 italic">
+                        Explanation: {testCase.explanation}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </CustomScrollbar>
 
@@ -415,39 +480,40 @@ export default function CodePage({ round }: CodePageProps) {
             className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
             style={{ height: `${codeEditorHeight}%`, minHeight: '200px' }}
           >
-            <div className="flex justify-between items-center mb-2 gap-50">
-              <div className="flex-1 flex ">
-
+            <div className="flex justify-between items-center mb-2 gap-2">
+              <div className="flex-1 flex gap-2">
                 <select
                   value={language}
-                  onChange={(e) => {
-                    setLanguage(e.target.value);
-                    setCode(mockQuestion.boilerplate[e.target.value] || "");
-                  }}
-                  className="bg-gray-800 flex-1 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1"
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="bg-gray-800 flex-1 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="python">Python</option>
                   <option value="java">Java</option>
                   <option value="cpp">C++</option>
                   <option value="c">C</option>
+                  <option value="javascript">JavaScript</option>
                 </select>
-                <div className={`bg-gray-800 flex-[0.7] text-white p-2 rounded border focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1 text-center font-mono ${
+                <div className={`bg-gray-800 flex-1 text-white p-2 rounded border focus:outline-none focus:ring-2 focus:ring-amber-500 text-center font-mono ${
                   getTimerDisplay().className
                 }`}>
                   {getTimerDisplay().time}
                 </div>
               </div>
-              <div className="flex-1 flex">
-                <button className="flex-1 flex justify-end h-fit bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-10">
-                  <span className = "flex-1">Run</span> 
-                  <img src = "/run.svg" className = "flex-1 h-6 w-6"/>
+              <div className="flex gap-2">
+                <button 
+                  className="flex items-center gap-2 bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  onClick={() => executeCode(false)}
+                  disabled={isRunning || isSubmitting}
+                >
+                  <span>Run</span>
+                  <img src="/run.svg" className="h-4 w-4"/>
                 </button>
                 <button 
-                  className="flex-1 justify-end h-fit items-end w-40 bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1"
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
+                  className="bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  onClick={() => executeCode(true)}
+                  disabled={isSubmitting || isRunning}
                 >
-                  {isSubmitting ? "Submitting..." : `Submit`}
+                  {isSubmitting ? "Submitting..." : "Submit"}
                 </button>
               </div>
             </div>
@@ -487,11 +553,10 @@ export default function CodePage({ round }: CodePageProps) {
           >
             <span className="text-lg font-bold flex-shrink-0">Test Results</span>
             <div className="mt-2 flex-grow overflow-y-auto">
-              {/* No real judge, so just show a message or fake result */}
-              {isSubmitting && (
+              {(isSubmitting || isRunning) && (
                 <div className="flex items-center gap-2 text-amber-400">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-500"></div>
-                  <span>Evaluating your solution...</span>
+                  <span>{isSubmitting ? 'Submitting' : 'Running'} your solution...</span>
                 </div>
               )}
               {submissionResults && (

@@ -10,6 +10,9 @@ type AuthContextType = {
   isLoading: boolean;
   avatarUrl: string | null;
   hasUsername: boolean | null;
+  username: string | null;
+  userId: string | null;
+  userRole: string | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   updateUsername: (username: string) => Promise<boolean>;
@@ -23,6 +26,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [hasUsername, setHasUsername] = useState<boolean | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const supabase = createClientComponentClient({
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
     supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -38,12 +44,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setSession(session);
         setUser(session?.user ?? null);
+        setUserId(session?.user?.id ?? null);
         setAvatarUrl(session?.user?.user_metadata?.avatar_url ?? null);
         
         // Check username status if user is logged in
         if (session?.access_token) {
           try {
-            const response = await fetch("http://localhost:8000/api/user/verify", {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/verify`, {
               method: "POST",
               headers: {
                 Authorization: `Bearer ${session.access_token}`,
@@ -53,13 +60,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (response.ok) {
               const data = await response.json();
               setHasUsername(data.hasUsername);
+              
+              // Store the user data from backend
+              if (data.user) {
+                setUsername(data.user.username);
+                setUserId(data.user.id);
+                setUserRole(data.user.role);
+              }
             } else {
               console.error("Initial verification failed - signing out existing session:", await response.text());
               
               // Force complete sign out for existing sessions that fail verification
               setSession(null);
               setUser(null);
+              setUserId(null);
               setHasUsername(null);
+              setUsername(null);
+              setUserRole(null);
               setAvatarUrl(null);
               
               // Sign out from Supabase completely
@@ -77,7 +94,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Force complete sign out for existing sessions that fail verification
             setSession(null);
             setUser(null);
+            setUserId(null);
             setHasUsername(null);
+            setUsername(null);
+            setUserRole(null);
             setAvatarUrl(null);
             
             // Sign out from Supabase completely
@@ -111,14 +131,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state change event:", event, "Current path:", window.location.pathname);
+      
       setSession(session);
       setUser(session?.user ?? null);
+      setUserId(session?.user?.id ?? null);
       setAvatarUrl(session?.user?.user_metadata?.avatar_url ?? null);
 
+      // Handle different auth events appropriately
       if (event === "SIGNED_IN" && session) {
+        // Only handle actual sign-ins, not token refreshes
         setIsLoading(true); // Set loading when starting verification
         try {
-          const response = await fetch("http://localhost:8000/api/user/verify", {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/verify`, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${session.access_token}`,
@@ -128,8 +153,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (response.ok) {
             const data = await response.json();
             setHasUsername(data.hasUsername);
+            
+            // Store the user data from backend
+            if (data.user) {
+              setUsername(data.user.username);
+              setUserId(data.user.id);
+              setUserRole(data.user.role);
+            }
+            
             setIsLoading(false); // Clear loading on success
-            router.push("/dashboard"); // ONLY navigate on success
+            
+            // Only redirect to dashboard if we're on the home page or login page
+            // Don't redirect if user is already navigating within the app
+            const currentPath = window.location.pathname;
+            if (currentPath === '/' || currentPath === '/login') {
+              router.push("/dashboard");
+            }
           } else {
             console.error("Backend verification failed:", await response.text());
             setIsLoading(false); // Clear loading on backend error
@@ -137,13 +176,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Force complete sign out when backend verification fails
             setSession(null);
             setUser(null);
+            setUserId(null);
             setHasUsername(null);
+            setUsername(null);
+            setUserRole(null);
             setAvatarUrl(null);
             
             // Sign out from Supabase completely - DO NOT navigate to dashboard
             await supabase.auth.signOut();
             
-            // Clear any potential cached auth data
+         
             if (typeof window !== 'undefined') {
               localStorage.removeItem('supabase.auth.token');
               localStorage.removeItem('sb-auth-token');
@@ -153,10 +195,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   localStorage.removeItem(key);
                 }
               });
-              // Force reload to ensure clean state - GO TO HOME, NOT DASHBOARD
+              
               window.location.href = '/';
             } else {
-              router.push("/"); // GO TO HOME, NOT DASHBOARD
+              router.push("/"); 
             }
             // Early return to prevent any further execution
             return;
@@ -168,7 +210,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Force complete sign out when verification fails due to network error
           setSession(null);
           setUser(null);
+          setUserId(null);
           setHasUsername(null);
+          setUsername(null);
+          setUserRole(null);
           setAvatarUrl(null);
           
           // Sign out from Supabase completely - DO NOT navigate to dashboard
@@ -194,7 +239,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else if (event === "SIGNED_OUT") {
         setHasUsername(null);
+        setUsername(null);
+        setUserId(null);
+        setUserRole(null);
         setIsLoading(false); // Clear loading on sign out
+      } else if (event === "TOKEN_REFRESHED" && session) {
+        // Handle token refresh without redirecting
+        console.log("Token refreshed, updating session state only");
+        // Just update the session state, don't verify again or redirect
+        setIsLoading(false);
+      } else if (event === "INITIAL_SESSION" && session) {
+        // Handle initial session load without redirecting if already on a page
+        console.log("Initial session loaded");
+        setIsLoading(false);
       }
     });
 
@@ -207,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         options: {
           redirectTo: `${location.origin}/api/auth/callback`,
           queryParams: {
-            prompt: 'select_account', // Force Google account selection
+            prompt: 'select_account', 
           },
         },
       });
@@ -223,56 +280,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      // First, get the current session to access the provider token
+     
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       
-      // If there's a Google provider token, revoke it
+
       if (currentSession?.provider_token) {
         try {
-          // Revoke the Google OAuth token
+    
           await fetch(`https://oauth2.googleapis.com/revoke?token=${currentSession.provider_token}`, {
             method: 'POST',
           });
         } catch (revokeError) {
           console.warn('Failed to revoke Google token:', revokeError);
-          // Continue with sign out even if revoke fails
+         
         }
       }
       
-      // Clear all local state immediately
+   
       setSession(null);
       setUser(null);
+      setUserId(null);
       setHasUsername(null);
+      setUsername(null);
+      setUserRole(null);
       setAvatarUrl(null);
       
-      // Sign out from Supabase
+
       await supabase.auth.signOut();
       
-      // Clear any cached authentication data aggressively
+    
       if (typeof window !== 'undefined') {
-        // Clear all Supabase-related localStorage items
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith('sb-') || key.startsWith('supabase') || key.includes('auth')) {
             localStorage.removeItem(key);
           }
         });
         
-        // Also clear our custom battlecode cache
         localStorage.removeItem('battlecode_leaderboard');
         localStorage.removeItem('battlecode_rounds');
         localStorage.removeItem('battlecode_locks');
         
-        // Force reload to clear any remaining state
+
         window.location.href = '/';
       } else {
         router.push('/');
       }
     } catch (error) {
       console.error('Error signing out:', error);
-      // Fallback: still clear local state and redirect aggressively
+      
       setSession(null);
       setUser(null);
+      setUserId(null);
       setHasUsername(null);
+      setUsername(null);
+      setUserRole(null);
       setAvatarUrl(null);
       
       if (typeof window !== 'undefined') {
@@ -296,7 +357,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("No active session");
       }
 
-      const response = await fetch("http://localhost:8000/api/user/set-username", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/set-username`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -321,7 +382,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, isLoading, avatarUrl, hasUsername, signInWithGoogle, signOut, updateUsername }}
+      value={{ user, session, isLoading, avatarUrl, hasUsername, username, userId, userRole, signInWithGoogle, signOut, updateUsername }}
     >
       {children}
     </AuthContext.Provider>

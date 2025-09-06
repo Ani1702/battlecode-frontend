@@ -41,7 +41,7 @@ interface CurrentRoundData {
 }
 
 export default function Dashboard() {
-  const { user, session, isLoading } = useAuth();
+  const { user, session, isLoading, userRole, username } = useAuth();
   const { socket, isConnected } = useSocket();
   const router = useRouter();
 
@@ -55,6 +55,10 @@ export default function Dashboard() {
   const [hasConnectedOnce, setHasConnectedOnce] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [hasShownLoginToast, setHasShownLoginToast] = useState(false);
+
+  // Admin controls state
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(false);
 
   const prevUserRef = useRef(user);
 
@@ -105,14 +109,25 @@ export default function Dashboard() {
       console.log("🎉 User successfully authenticated, showing login toast");
       showSuccessToast("Successfully logged in");
       setHasShownLoginToast(true);
-
+      
+      // Check if user is admin
+      setIsAdmin(userRole === 'ADMIN');
     }
     if (prevUser && !user && !isLoading) {
       console.log("🔄 User signed out, resetting toast flag");
       showSuccessToast("Signed Out");
       setHasShownLoginToast(false);
+      setIsAdmin(false);
     }
   }, [user, isLoading, hasShownLoginToast]);
+
+  // Update admin status when userRole changes
+  useEffect(() => {
+    const shouldBeAdmin = userRole === 'ADMIN';
+    if (shouldBeAdmin !== isAdmin) {
+      setIsAdmin(shouldBeAdmin);
+    }
+  }, [userRole, isAdmin]);
 
 
   // Socket event handlers (FOURTH useEffect)
@@ -193,6 +208,62 @@ export default function Dashboard() {
   // Constants (after all hooks)
   const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"];
   const leaderboard_titles = ["Rank", "Player", "Score", "Trend"];
+
+  // Admin functions
+  const updateRoundStatus = async (roundNumber: number, newStatus: string) => {
+    if (!isAdmin || adminLoading) return;
+
+    setAdminLoading(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/${roundNumber}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showSuccessToast(`Round ${roundNumber} ${newStatus.toLowerCase()}`);
+      } else {
+        showErrorToast(data.error || 'Failed to update round status');
+      }
+    } catch (error) {
+      console.error('Error updating round status:', error);
+      showErrorToast('Failed to update round status');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const getStatusButtonColor = (currentStatus: string, targetStatus: string) => {
+    const statusColors: { [key: string]: string } = {
+      'LOCKED': 'bg-gray-600 hover:bg-gray-500',
+      'LOBBY': 'bg-blue-600 hover:bg-blue-500',
+      'IN_PROGRESS': 'bg-green-600 hover:bg-green-500',
+      'COMPLETED': 'bg-purple-600 hover:bg-purple-500'
+    };
+    
+    if (currentStatus === targetStatus) {
+      return statusColors[targetStatus] + ' opacity-50 cursor-not-allowed';
+    }
+    
+    return statusColors[targetStatus];
+  };
+
+  const canTransition = (currentStatus: string, targetStatus: string) => {
+    const validTransitions: { [key: string]: string[] } = {
+      'LOCKED': ['LOBBY'],
+      'LOBBY': ['IN_PROGRESS', 'LOCKED'],
+      'IN_PROGRESS': ['COMPLETED', 'LOBBY'],
+      'COMPLETED': ['LOBBY']
+    };
+    
+    return validTransitions[currentStatus]?.includes(targetStatus) || false;
+  };
 
   // Fallback leaderboard data (in case socket hasn't loaded yet)
   const fallbackLeaderboard = [
@@ -399,6 +470,72 @@ export default function Dashboard() {
 
 
       </div>
+
+      {/* Admin Controls - Positioned after 100vh */}
+      {isAdmin && (
+        <div className="min-h-screen w-full bg-[url('/bg-dashboard.svg')] bg-cover bg-center flex items-center justify-center px-5">
+          <div className="w-full max-w-6xl rounded-lg border-2 border-orange-500/50 glass-box p-6">
+            <div className="flex items-center mb-6">
+              <div className="w-4 h-4 bg-orange-500 rounded-full mr-3"></div>
+              <h3 className="text-2xl font-bold text-orange-500">Admin Controls</h3>
+              {adminLoading && (
+                <div className="ml-3 w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-4 gap-6">
+              {[0, 1, 2, 3].map((roundNum) => {
+                const roundData = currentRoundData?.rounds.find(r => r.roundNumber === roundNum);
+                const currentStatus = roundData?.status || 'LOCKED';
+                
+                return (
+                  <div key={roundNum} className="space-y-3">
+                    <h4 className="text-xl font-semibold text-white text-center">
+                      Round {roundNum}
+                    </h4>
+                    <p className="text-sm text-gray-400 text-center">
+                      Current: <span className="text-orange-300 font-medium">{currentStatus}</span>
+                    </p>
+                    
+                    <div className="space-y-2">
+                      {['LOBBY', 'IN_PROGRESS', 'COMPLETED', 'LOCKED'].map((status) => {
+                        const isCurrentStatus = currentStatus === status;
+                        const canMakeTransition = canTransition(currentStatus, status);
+                        const isDisabled = isCurrentStatus || !canMakeTransition || adminLoading;
+                        
+                        return (
+                          <button
+                            key={status}
+                            onClick={() => updateRoundStatus(roundNum, status)}
+                            disabled={isDisabled}
+                            className={`
+                              w-full px-3 py-2 text-sm rounded transition-all duration-200
+                              ${getStatusButtonColor(currentStatus, status)}
+                              ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}
+                              text-white font-medium
+                            `}
+                          >
+                            {status.replace('_', ' ')}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="mt-6 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-4">
+              <h4 className="text-orange-400 font-medium mb-2">Status Transitions:</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <p>• LOCKED → LOBBY: Open for joining</p>
+                <p>• LOBBY → IN_PROGRESS: Start round</p>
+                <p>• IN_PROGRESS → COMPLETED: End round</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
 
     </>
