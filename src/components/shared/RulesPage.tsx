@@ -48,7 +48,7 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
                                     : 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                             }`}
                             disabled={!isChecked}
-                            onClick={() => router.push(`/r${round}/lobby`)}
+                            onClick={() => router.push(`/r${roundString}/lobby`)}
                         >
                             Proceed To Lobby
                         </button>

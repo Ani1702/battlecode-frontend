@@ -169,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (currentPath === '/' || currentPath === '/login') {
               router.push("/dashboard");
             }
+            // For any other path (like /r0/code), let the user stay where they are
           } else {
             console.error("Backend verification failed:", await response.text());
             setIsLoading(false); // Clear loading on backend error
@@ -251,6 +252,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (event === "INITIAL_SESSION" && session) {
         // Handle initial session load without redirecting if already on a page
         console.log("Initial session loaded");
+        // Only clear loading, don't trigger verification again
+        setIsLoading(false);
+      } else {
+        // For any other auth events, clear loading state
         setIsLoading(false);
       }
     });

@@ -1,10 +1,10 @@
 "use client"
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useSocket } from "@/contexts/SocketContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useSocket } from '@/contexts/SocketContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import CodePage from "./CodePage";
-import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
 
 interface Problem {
   id: string;
@@ -35,280 +35,232 @@ interface TestCase {
   explanation?: string;
 }
 
-interface Round0Status {
-  isActive: boolean;
-  currentProblem: Problem;
-  problems: Problem[];
-  problemIndex: number;
-  timeRemaining: number;
-  duration: number;
-}
-
 export default function R0Code() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
-  const { user } = useAuth();
+  const { user, userId, isLoading: authLoading } = useAuth();
   
-  // Round 0 state
+  // Real state management
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const [roundDuration, setRoundDuration] = useState(1200);
+  const [timeRemaining, setTimeRemaining] = useState(1200); // 20 minutes
+  const [roundDuration] = useState(1200);
   const [isRoundActive, setIsRoundActive] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasInitialized, setHasInitialized] = useState(false);
+  const [authenticationChecked, setAuthenticationChecked] = useState(false);
 
-  // Global error handler to prevent unhandled rejections from crashing the app
+  // Handle authentication check first
   useEffect(() => {
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      console.error('Unhandled promise rejection in R0 Code:', {
-        reason: event.reason,
-        stack: event.reason?.stack,
-        message: event.reason?.message,
-        type: typeof event.reason,
-        stringified: JSON.stringify(event.reason),
-        constructor: event.reason?.constructor?.name,
-        isEmptyObject: event.reason && typeof event.reason === 'object' && Object.keys(event.reason).length === 0
-      });
-      
-      console.trace('Promise rejection stack trace');
-      event.preventDefault(); // Prevent the error from bubbling up
-      
-      // Check for specific cancellation errors and ignore them
-      if (event.reason && typeof event.reason === 'object') {
-        if (event.reason.type === 'cancelation' || event.reason.msg?.includes('canceled')) {
-          console.log('Ignoring cancellation error - likely due to component state change');
-          return;
-        }
-      }
-      
-      // Only show toast for non-empty, non-cancellation errors
-      if (event.reason && (typeof event.reason !== 'object' || Object.keys(event.reason).length > 0)) {
-        showErrorToast('An error occurred, but you can continue coding');
-      }
-    };
+    // Don't proceed if auth is still loading
+    if (authLoading) {
+      return;
+    }
+    
+    // Mark authentication as checked
+    setAuthenticationChecked(true);
+    
+    // Check if user is not authenticated after auth loading is complete
+    if (!userId || !user) {
+      console.warn('User not authenticated for code page');
+      showErrorToast('Please log in to access the coding environment');
+      router.push('/dashboard');
+      return;
+    }
+  }, [authLoading, userId, user, router]);
 
-    const handleError = (event: ErrorEvent) => {
-      console.error('Unhandled error in R0 Code:', {
-        error: event.error,
-        stack: event.error?.stack,
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno
-      });
-      event.preventDefault(); // Prevent the error from bubbling up
-      showErrorToast('An error occurred, but you can continue coding');
-    };
-
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    window.addEventListener('error', handleError);
-
-    return () => {
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-      window.removeEventListener('error', handleError);
-    };
-  }, []);
-
-  // Socket event handlers
+  // Initialize round state when component mounts
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    // Don't initialize if auth hasn't been checked yet
+    if (!authenticationChecked || authLoading) {
+      return;
+    }
+    
+    // Don't initialize if user is not authenticated
+    if (!userId || !user) {
+      return;
+    }
 
-    console.log('Setting up socket event handlers in R0 Code');
-
-    // Listen for round start
-    const handleRoundStart = async (data: any) => {
+    if (socket && isConnected && !hasInitialized) {
+      console.log('Initializing Round 0 code page...');
+      setIsLoading(true);
+      
+      // Request current state from backend with ack timeout and robust checks
       try {
-        console.log('Round 0 started in code page:', data);
-        setProblems(data.problems || []);
-        setRoundDuration(data.duration || 1200);
-        setTimeRemaining(data.duration || 1200);
-        setIsRoundActive(true);
-        
-        if (data.problems && data.problems.length > 0) {
-          const firstProblem = data.problems[0];
-          setCurrentProblem(firstProblem);
-          setCurrentProblemIndex(0);
-        }
-        
-        showSuccessToast(data.message || 'Round 0 has started!');
-      } catch (error) {
-        console.error('Error handling round start:', error);
-        showErrorToast('Error starting round');
+        // Use socket.io timeout-based ack to avoid silent hangs
+        // If the server doesn't ack within the timeout, we handle it explicitly
+        (socket as any)
+          .timeout(12000) // Increased timeout for stability
+          .emit('round0:getState', {}, (err: any, response: any) => {
+            if (err) {
+              console.error('round0:getState timed out or failed to ack:', err);
+              showErrorToast('Server connection failed. Checking round status...');
+              setIsLoading(false);
+              // Instead of going to lobby, try dashboard first to check round status
+              setTimeout(() => router.push('/dashboard'), 2000);
+              return;
+            }
+
+            try {
+              console.log('Round 0 state response:', response);
+
+              if (!response || response.success !== true) {
+                const msg = response?.error || 'Round 0 is not currently active';
+                console.error('Failed to get Round 0 state:', msg);
+                
+                // Different error handling based on error type
+                if (msg.includes('not active') || msg.includes('not found') || msg.includes('LOBBY')) {
+                  showErrorToast('Round 0 is not currently active. Redirecting to lobby...');
+                  setTimeout(() => router.push('/r0/lobby'), 1500);
+                } else {
+                  showErrorToast(msg);
+                  setTimeout(() => router.push('/dashboard'), 1500);
+                }
+                setIsLoading(false);
+                return;
+              }
+
+              setProblems(response.problems || []);
+              setCurrentProblem(response.currentProblem || null);
+              setCurrentProblemIndex(response.problemIndex || 0);
+              setTimeRemaining(response.timeRemaining || 0);
+              setIsRoundActive(true);
+              setIsLoading(false);
+              
+              // Validate that we have problems and current problem
+              if (!response.problems || response.problems.length === 0) {
+                showErrorToast('No problems found for Round 0');
+                setTimeout(() => router.push('/dashboard'), 1500);
+                return;
+              }
+              
+              if (!response.currentProblem) {
+                showErrorToast('Current problem not found');
+                setTimeout(() => router.push('/r0/lobby'), 1500);
+                return;
+              }
+              
+              showSuccessToast('Connected to Round 0!');
+            } catch (cbErr) {
+              console.error('Error handling round0:getState response:', cbErr);
+              showErrorToast('Unexpected error parsing server response');
+              setIsLoading(false);
+              setTimeout(() => router.push('/dashboard'), 1500);
+            }
+          });
+      } catch (emitErr) {
+        console.error('Error emitting round0:getState:', emitErr);
+        showErrorToast('Failed to request round state');
+        setIsLoading(false);
+        setTimeout(() => router.push('/dashboard'), 1500);
       }
-    };
+      
+      setHasInitialized(true);
+    }
+  }, [socket, isConnected, authenticationChecked, hasInitialized, router]);
+
+  // Socket event listeners
+  useEffect(() => {
+    if (!socket) return;
 
     // Listen for timer updates
-    const handleTimerUpdate = (data: any) => {
-      try {
-        setTimeRemaining(data.timeRemaining || 0);
-      } catch (error) {
-        console.error('Error handling timer update:', error);
-      }
+    const handleTimer = (data: any) => {
+      console.log('Timer update:', data);
+      setTimeRemaining(data.timeRemaining || 0);
     };
 
     // Listen for round end
     const handleRoundEnd = (data: any) => {
-      try {
-        console.log('Round 0 ended:', data);
-        setIsRoundActive(false);
-        showInfoToast(data.message || 'Round 0 has ended!');
+      console.log('Round 0 ended!', data);
+      setIsRoundActive(false);
+      showSuccessToast('Round 0 has ended! Redirecting to dashboard...');
+      
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 3000);
+    };
+
+    // Listen for reconnection data (when user refreshes page)
+    const handleReconnect = (data: any) => {
+      console.log('Round 0 reconnection data:', data);
+      
+      if (data.success) {
+        setCurrentProblem(data.currentProblem || null);
+        setCurrentProblemIndex(data.problemIndex || 0);
+        setTimeRemaining(data.timeRemaining || 0);
+        setIsRoundActive(true);
+        setIsLoading(false);
         
-        // Redirect to lobby after round ends
-        setTimeout(() => {
-          router.push('/r0/lobby');
-        }, 3000);
-      } catch (error) {
-        console.error('Error handling round end:', error);
+        showSuccessToast('Reconnected to Round 0!');
+      } else {
+        showErrorToast(data.message || 'Failed to reconnect');
+        router.push('/r0/lobby');
       }
     };
 
-    // Listen for reconnection data
-    const handleReconnection = async (data: any) => {
-      try {
-        console.log('Reconnection event received:', data);
-        if (data.success && data.currentProblem) {
-          console.log('Processing reconnection data');
-          setCurrentProblem(data.currentProblem);
-          setCurrentProblemIndex(data.problemIndex || 0);
-          setTimeRemaining(data.timeRemaining || 0);
-          setProblems(data.problems || [data.currentProblem]);
-          setIsRoundActive(true);
-          
-          showSuccessToast(data.message || 'Reconnected successfully');
-        } else {
-          console.log('Reconnection failed or no current problem:', data);
-        }
-      } catch (error) {
-        console.error('Error handling reconnection:', error);
-        showErrorToast('Error reconnecting');
-      }
+    // Error handling
+    const handleError = (error: any) => {
+      console.error('Round 0 error:', error);
+      showErrorToast(error.message || 'An error occurred');
     };
 
     // Register event listeners
-    socket.on('round0:start', handleRoundStart);
-    socket.on('round0:timer', handleTimerUpdate);
+    socket.on('round0:timer', handleTimer);
     socket.on('round0:end', handleRoundEnd);
-    socket.on('round0:reconnect', handleReconnection);
+    socket.on('round0:reconnect', handleReconnect);
+    socket.on('round0:error', handleError);
 
+    // Cleanup
     return () => {
-      socket.off('round0:start', handleRoundStart);
-      socket.off('round0:timer', handleTimerUpdate);
+      socket.off('round0:timer', handleTimer);
       socket.off('round0:end', handleRoundEnd);
-      socket.off('round0:reconnect', handleReconnection);
+      socket.off('round0:reconnect', handleReconnect);
+      socket.off('round0:error', handleError);
     };
-  }, [socket, isConnected, router]);
+  }, [socket, router]);
 
-  // Check for reconnection on mount
-  useEffect(() => {
-    if (!socket || !isConnected || !user) return;
-
-    let isMounted = true; // Track if component is still mounted
-    setIsLoading(true);
-    
-    // Request reconnection explicitly
-    const requestReconnection = () => {
-      console.log('Requesting reconnection data...');
-      
-      try {
-        socket.emit('round0:getState', {}, (response: any) => {
-          // Only process response if component is still mounted
-          if (!isMounted) {
-            console.log('Component unmounted, ignoring reconnection response');
-            return;
-          }
-          
-          try {
-            console.log('Reconnection response received:', response);
-            if (response?.success && response?.currentProblem) {
-              console.log('Setting problem data from reconnection');
-              setCurrentProblem(response.currentProblem);
-              setCurrentProblemIndex(response.problemIndex || 0);
-              setTimeRemaining(response.timeRemaining || 0);
-              setProblems(response.problems || [response.currentProblem]);
-              setIsRoundActive(true);
-              
-              showSuccessToast(response.message || 'Reconnected successfully');
-            } else {
-              console.log('No active round found, response:', response);
-            }
-          } catch (error) {
-            console.error('Error processing reconnection response:', error);
-          } finally {
-            if (isMounted) {
-              setIsLoading(false);
-            }
-          }
-        });
-      } catch (error) {
-        console.error('Error emitting reconnection request:', error);
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    // Try to get reconnection data immediately
-    requestReconnection();
-
-    // Also set a timeout to stop loading even if no response
-    const timeoutId = setTimeout(() => {
-      if (isMounted) {
-        setIsLoading(false);
-      }
-    }, 5000);
-
-    return () => {
-      isMounted = false; // Mark component as unmounted
-      clearTimeout(timeoutId);
-    };
-    
-  }, [socket, isConnected, user]);
-
-  // Next question handler
+  // Handle next question via socket
   const handleNextQuestion = async () => {
-    if (!socket || !isConnected) {
+    if (!socket) {
       showErrorToast('Not connected to server');
       return;
     }
 
+    if (currentProblemIndex >= problems.length - 1) {
+      showInfoToast('You are already on the last question');
+      return;
+    }
+
+    console.log('Moving to next question...');
+    
+    // Set loading state to prevent "Return to Lobby" screen
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
-      
-      const response: any = await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Request timeout'));
-        }, 10000); // 10 second timeout
-
-        try {
-          socket.emit('round0:nextQuestion', {}, (response: any) => {
-            clearTimeout(timeout);
-            if (response) {
-              resolve(response);
-            } else {
-              reject(new Error('No response received'));
-            }
-          });
-        } catch (error) {
-          clearTimeout(timeout);
-          reject(error);
-        }
-      });
-
-      if (response?.success) {
-        setCurrentProblem(response.problem);
-        setCurrentProblemIndex(response.problemIndex);
-        setTimeRemaining(response.timeRemaining || 0);
-        showSuccessToast(`Moved to question ${response.problemIndex + 1}`);
-      } else {
-        showErrorToast(response?.error || 'Failed to get next question');
-      }
-    } catch (error) {
-      console.error('Error handling next question request:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      showErrorToast(`Error getting next question: ${errorMessage}`);
-    } finally {
-      setIsLoading(false);
+      (socket as any)
+        .timeout(8000)
+        .emit('round0:nextQuestion', {}, (err: any, response: any) => {
+          setIsLoading(false); // Clear loading state
+          
+          if (err) {
+            console.error('round0:nextQuestion timed out or failed to ack:', err);
+            showErrorToast('Server did not respond. Please try again.');
+            return;
+          }
+          console.log('Next question response:', response);
+          if (response?.success) {
+            setCurrentProblem(response.problem || response.currentProblem);
+            setCurrentProblemIndex(response.problemIndex);
+            showSuccessToast(`Moved to question ${response.problemIndex + 1}`);
+          } else {
+            showErrorToast(response?.error || 'Failed to move to next question');
+          }
+        });
+    } catch (err) {
+      setIsLoading(false); // Clear loading state on error
+      console.error('Error emitting round0:nextQuestion:', err);
+      showErrorToast('Failed to request next question');
     }
   };
 
@@ -316,6 +268,37 @@ export default function R0Code() {
   const handleReturnToLobby = () => {
     router.push('/r0/lobby');
   };
+
+  // Show loading screen while authentication is being checked
+  if (authLoading || !authenticationChecked) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 flex items-center justify-center">
+            <img src="/battlecode_logo.png" alt="Loading..." className="h-32 w-fit animate-pulse" />
+          </div>
+          <p className="text-gray-400 text-lg">
+            {authLoading ? "Verifying authentication..." : "Loading..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if user is not authenticated
+  if (!user || !userId) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 flex items-center justify-center">
+            <img src="/battlecode_logo.png" alt="Error" className="h-32 w-fit opacity-50" />
+          </div>
+          <p className="text-red-400 text-lg mb-4">Authentication required</p>
+          <p className="text-gray-400">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <CodePage

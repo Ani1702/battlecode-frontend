@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
 import Editor, { useMonaco } from '@monaco-editor/react';
-import CustomScrollbar from "./CustomScrollbar";
-import { showSuccessToast, showErrorToast, showInfoToast } from "./CustomToast";
+import CustomScrollbar from "../../../../components/shared/CustomScrollbar";
+import { showSuccessToast, showErrorToast, showInfoToast } from "../../../../components/shared/CustomToast";
 
 interface Problem {
   id: string;

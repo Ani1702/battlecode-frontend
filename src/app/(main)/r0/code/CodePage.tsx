@@ -6,6 +6,7 @@ import Button from "@/components/shared/button";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
+// import SocketDebug from '@/components/debug/SocketDebug'; // Uncomment for debugging
 
 interface Problem {
   id: string;
@@ -85,6 +86,57 @@ export default function CodePage({
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
   
+  // Code persistence across problems with localStorage
+  const [savedCode, setSavedCode] = useState<{ [problemId: string]: { [language: string]: string } }>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load saved code from localStorage on component mount
+  useEffect(() => {
+    try {
+      const savedCodeFromStorage = localStorage.getItem(`battlecode-r${round}-code`);
+      if (savedCodeFromStorage) {
+        const parsedCode = JSON.parse(savedCodeFromStorage);
+        setSavedCode(parsedCode);
+      }
+    } catch (error) {
+      console.error('Error loading saved code from localStorage:', error);
+    }
+  }, [round]);
+
+  // Save code to localStorage whenever savedCode changes
+  useEffect(() => {
+    try {
+      if (Object.keys(savedCode).length > 0) {
+        localStorage.setItem(`battlecode-r${round}-code`, JSON.stringify(savedCode));
+      }
+    } catch (error) {
+      console.error('Error saving code to localStorage:', error);
+    }
+  }, [savedCode, round]);
+
+  // Save code before page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentProblem && code && code !== (currentProblem.boilerplate[language] || '')) {
+        try {
+          const currentSavedCode = {
+            ...savedCode,
+            [currentProblem.id]: {
+              ...savedCode[currentProblem.id],
+              [language]: code
+            }
+          };
+          localStorage.setItem(`battlecode-r${round}-code`, JSON.stringify(currentSavedCode));
+        } catch (error) {
+          console.error('Error saving code on page unload:', error);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [currentProblem, code, language, savedCode, round]);
+  
   // Resizable splitter state
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
@@ -150,19 +202,85 @@ export default function CodePage({
     }
   }, [monaco]);
 
-  // Handle language change
+  // Handle language change with code persistence
   useEffect(() => {
     try {
-      if (currentProblem && currentProblem.boilerplate) {
-        const newCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
-        setCode(newCode);
+      if (currentProblem) {
+        // Save current code before switching
+        if (code && code !== (currentProblem.boilerplate[language] || '')) {
+          setSavedCode(prev => ({
+            ...prev,
+            [currentProblem.id]: {
+              ...prev[currentProblem.id],
+              [language]: code
+            }
+          }));
+        }
+
+        // Load saved code or boilerplate for new language
+        const savedCodeForLanguage = savedCode[currentProblem.id]?.[language];
+        const boilerplateCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
+        
+        setCode(savedCodeForLanguage || boilerplateCode);
       }
     } catch (error) {
       console.error('Error updating code for language change:', error);
     }
   }, [language, currentProblem]);
 
-  // Execute code using /execute-batch endpoint
+  // Handle problem change with code persistence
+  useEffect(() => {
+    try {
+      if (currentProblem) {
+        // Load saved code for current problem and language, or use boilerplate
+        const savedCodeForProblem = savedCode[currentProblem.id]?.[language];
+        const boilerplateCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
+        
+        setCode(savedCodeForProblem || boilerplateCode);
+        
+        // Reset results when switching problems
+        setSubmissionResults(null);
+        setShowHints(false);
+      }
+    } catch (error) {
+      console.error('Error updating code for problem change:', error);
+    }
+  }, [currentProblem]);
+
+  // Save code periodically and on code changes
+  useEffect(() => {
+    if (currentProblem && code && code !== (currentProblem.boilerplate[language] || '')) {
+      setIsSaving(true);
+      const timeoutId = setTimeout(() => {
+        setSavedCode(prev => {
+          const newSavedCode = {
+            ...prev,
+            [currentProblem.id]: {
+              ...prev[currentProblem.id],
+              [language]: code
+            }
+          };
+          
+          // Also save to localStorage immediately for better persistence
+          try {
+            localStorage.setItem(`battlecode-r${round}-code`, JSON.stringify(newSavedCode));
+          } catch (error) {
+            console.error('Error saving code to localStorage:', error);
+          }
+          
+          return newSavedCode;
+        });
+        setIsSaving(false);
+      }, 500); // Reduced timeout for better responsiveness
+
+      return () => {
+        clearTimeout(timeoutId);
+        setIsSaving(false);
+      };
+    }
+  }, [code, currentProblem, language, round]);
+
+  // Execute code using backend API endpoints
   const executeCode = async (isSubmission = false) => {
     if (!currentProblem) {
       showErrorToast('No problem loaded');
@@ -179,56 +297,28 @@ export default function CodePage({
     }
 
     try {
-      // Get language ID for Judge0
-      const languageIds: { [key: string]: number } = {
-        'python': 71,
-        'java': 62,
-        'cpp': 54,
-        'c': 50,
-        'javascript': 63
-      };
-
-      const languageId = languageIds[language] || 71;
-
-      // Prepare test cases - use sample test cases for run, all test cases for submit
-      const testCasesToRun = isSubmission ? 
-        (currentProblem.hiddenTestCases || currentProblem.testCases || currentProblem.sampleTestCases) : 
-        currentProblem.sampleTestCases;
-
-      if (!testCasesToRun || testCasesToRun.length === 0) {
-        throw new Error('No test cases available');
-      }
-
-      const submissions = testCasesToRun.map((testCase, index) => {
-        try {
-          // Handle both old and new test case formats
-          const inputData = testCase.stdin || testCase.input?.stdin || JSON.stringify(testCase.input?.json) || '';
-          const expectedOutput = testCase.expected_output || testCase.output?.stdout || JSON.stringify(testCase.output?.json) || '';
-          
-          return {
-            language_id: languageId,
-            source_code: btoa(code), // Base64 encode
-            stdin: btoa(inputData),
-            expected_output: btoa(expectedOutput)
-          };
-        } catch (encodeError) {
-          console.error(`Error encoding test case ${index}:`, encodeError);
-          throw new Error(`Failed to encode test case ${index + 1}`);
-        }
-      });
-
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       if (!apiUrl) {
         throw new Error('API URL not configured');
       }
 
-      const response = await fetch(`${apiUrl}/execute-batch`, {
+      // Prepare the request payload
+      const payload = {
+        language: language,
+        source_code: code,
+        problemId: currentProblem.id,
+        ...(isSubmission ? { roundNumber: 0 } : {}) // Add roundNumber only for submissions
+      };
+
+      const endpoint = isSubmission ? '/api/submit/submit' : '/api/submit/run';
+      
+      const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ submissions })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -236,40 +326,58 @@ export default function CodePage({
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
-      const results = await response.json();
+      const result = await response.json();
       
-      if (!Array.isArray(results)) {
-        throw new Error('Invalid response format from execution service');
+      if (!result.success && isSubmission) {
+        // Handle submission failure case
+        showErrorToast(result.message || 'Submission failed');
+        return;
       }
+
+      // Process results for display
+      const results = result.results || [];
       
-      // Format results for display
-      const formattedResults: SubmissionResult[] = results.map((result: any, index: number) => ({
-        token: result.token || `test_${index}`,
+      // Format results for display - adapt to our existing UI structure
+      const formattedResults: SubmissionResult[] = results.map((res: any, index: number) => ({
+        token: res.token || `test_${index}`,
         status: {
-          id: result.status?.id || 3,
-          description: result.status?.description || 'Accepted'
+          id: res.status?.id || (res.passed ? 3 : 4),
+          description: res.status?.description || (res.passed ? 'Accepted' : 'Wrong Answer')
         },
-        stdout: result.stdout || null,
-        stderr: result.stderr || null,
-        compile_output: result.compile_output || null,
-        time: result.time || null,
-        memory: result.memory || null
+        stdout: res.stdout || null,
+        stderr: res.stderr || null,
+        compile_output: res.compile_output || null,
+        time: res.time || null,
+        memory: res.memory || null
       }));
 
       setSubmissionResults(formattedResults);
 
-      // Check results
-      const passedTests = formattedResults.filter(r => r.status.description === 'Accepted').length;
-      const totalTests = formattedResults.length;
+      // Show summary results
+      const summary = result.summary || {};
+      const passedTests = summary.passed || 0;
+      const totalTests = summary.total || results.length;
 
       if (isSubmission) {
-        if (passedTests === totalTests) {
-          showSuccessToast(`🎉 All ${totalTests} test cases passed!`);
+        if (result.success) {
+          if (passedTests === totalTests) {
+            showSuccessToast(`🎉 All ${totalTests} test cases passed! Submission saved.`);
+          } else {
+            showSuccessToast(`${passedTests}/${totalTests} test cases passed. Submission saved.`);
+          }
+          
+          if (result.submission?.scoreUpdated) {
+            showSuccessToast(`Score updated! New score: ${result.submission.score}`);
+          }
         } else {
-          showErrorToast(`${passedTests}/${totalTests} test cases passed`);
+          showErrorToast(result.message || `${passedTests}/${totalTests} test cases passed`);
         }
       } else {
-        showInfoToast(`Test run completed: ${passedTests}/${totalTests} passed`);
+        if (passedTests === totalTests) {
+          showSuccessToast(`✅ All ${totalTests} sample test cases passed!`);
+        } else {
+          showErrorToast(`❌ ${passedTests}/${totalTests} sample test cases passed`);
+        }
       }
 
     } catch (error) {
@@ -497,6 +605,10 @@ export default function CodePage({
                   getTimerDisplay().className
                 }`}>
                   {getTimerDisplay().time}
+                  {isSaving && <span className="ml-2 text-xs text-yellow-400">💾 Saving...</span>}
+                  {!isSaving && currentProblem && savedCode[currentProblem.id]?.[language] && (
+                    <span className="ml-2 text-xs text-green-400">✓ Saved</span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -514,6 +626,35 @@ export default function CodePage({
                   disabled={isSubmitting || isRunning}
                 >
                   {isSubmitting ? "Submitting..." : "Submit"}
+                </button>
+                <button
+                  className="bg-blue-800 text-white p-2 rounded border border-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  onClick={() => {
+                    if (currentProblem) {
+                      const boilerplateCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
+                      setCode(boilerplateCode);
+                      // Remove saved code for this problem-language combination
+                      setSavedCode(prev => {
+                        const newSavedCode = { ...prev };
+                        if (newSavedCode[currentProblem.id]) {
+                          delete newSavedCode[currentProblem.id][language];
+                          if (Object.keys(newSavedCode[currentProblem.id]).length === 0) {
+                            delete newSavedCode[currentProblem.id];
+                          }
+                        }
+                        try {
+                          localStorage.setItem(`battlecode-r${round}-code`, JSON.stringify(newSavedCode));
+                        } catch (error) {
+                          console.error('Error updating localStorage:', error);
+                        }
+                        return newSavedCode;
+                      });
+                      showInfoToast('Code reset to boilerplate');
+                    }
+                  }}
+                  title="Reset to boilerplate code"
+                >
+                  🔄
                 </button>
               </div>
             </div>
@@ -591,6 +732,7 @@ export default function CodePage({
           </div>
         </div>
       </div>
+      {/* <SocketDebug /> */}
     </div>
   );
 }
