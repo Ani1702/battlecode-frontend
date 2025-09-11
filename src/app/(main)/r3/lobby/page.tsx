@@ -1,5 +1,5 @@
-import LobbyPage from "@/components/shared/LobbyPage";
+import Lobbyr0 from "./Lobby";
 
 export default function R3Lobby() {
-  return <LobbyPage round="3" />;
+  return <Lobbyr0 />;
 }

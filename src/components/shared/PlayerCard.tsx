@@ -5,33 +5,39 @@ interface PlayerCardProps {
 
 export default function PlayerCard({ username, avatar }: PlayerCardProps) {
   return (
-    <div className="flex items-center bg-orange-500 rounded-lg p-3 shadow-md hover:shadow-xl hover:shadow-orange-600/50 transition-all duration-300 min-h-[60px] mb-10 hover:scale-105 hover:bg-orange-400 cursor-pointer group">
-      {/* Avatar section with slightly greater height */}
-      <div className="flex-shrink-0 mr-3">
-        <div className="w-12 h-14 rounded-full overflow-hidden bg-orange-600 flex items-center justify-center group-hover:bg-orange-500 transition-all duration-300 group-hover:scale-110">
+    <div className="relative w-full h-[100px] mb-4 hover:scale-105 cursor-pointer group transition-all duration-300">
+      {/* Base SVG Background */}
+      <div 
+        className="absolute inset-0 w-full h-full bg-contain bg-no-repeat bg-center"
+        style={{ 
+          backgroundImage: "url('/player_card.svg')",
+          backgroundSize: '100% 100%'
+        }}
+      />
+      
+      {/* Avatar overlay - positioned over the left dark section
+      <div className="absolute left-[20px] top-1/2 transform -translate-y-1/2 z-10">
+        <div className="w-16 h-16 rounded-sm overflow-hidden bg-gray-800/80 flex items-center justify-center group-hover:bg-gray-700/80 transition-all duration-300 border-2 border-orange-400/50">
           <img 
             src={avatar} 
             alt={`${username}'s avatar`}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110 grayscale group-hover:grayscale-0"
             onError={(e) => {
-              // Fallback to a default avatar or initials if image fails to load
-              e.currentTarget.src = `https://ui-avatars.com/api/?name=${username}&background=ea580c&color=fff`;
+              // Fallback to a default user icon
+              e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0iIzk5OTk5OSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xMCA5YTMgMyAwIDEwMC02IDMgMyAwIDAwMCA2em0tNyA5YTcgNyAwIDAxMTQgMEgzeiIgY2xpcC1ydWxlPSJldmVub2RkIiAvPgo8L3N2Zz4K';
             }}
           />
         </div>
-      </div>
+      </div> */}
       
-      {/* Username section */}
-      <div className="flex-1 min-w-0">
-        <p className="text-white font-semibold text-sm truncate group-hover:text-gray-100 transition-colors duration-300">
+      {/* Username overlay - positioned over the text area, replacing "GLITCH" */}
+      <div className="absolute left-[110px] top-1/2 transform -translate-y-1/2 z-10 right-[80px] ">
+        <p className="text-white font-bold text-xl justify-between flex gap-5 z-10 tracking-wider orbitron uppercase truncate group-hover:text-orange-200 transition-colors duration-300 drop-shadow-lg">
           {username}
+          
         </p>
       </div>
-      
-      {/* Hover indicator */}
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ml-2">
-        <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-      </div>
+      <img src = "" />
     </div>
   );
 }

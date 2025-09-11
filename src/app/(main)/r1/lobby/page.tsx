@@ -1,5 +1,5 @@
-import LobbyPage from "@/components/shared/LobbyPage";
-import Lobbyr0 from "@/components/shared/r0_lobby";
+
+import Lobbyr0 from "./Lobby";
 
 export default function R1Lobby() {
   return (<Lobbyr0 />);

@@ -24,7 +24,7 @@ interface LobbyPageProps {
   onJoinRound?: () => void;
 }
 
-export default function LobbyPage({ 
+export default function Waiting({ 
   round, 
   participants, 
   isRoundActive, 

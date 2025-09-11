@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
-import LobbyPage from "@/components/shared/LobbyPage";
+import LobbyPage from "@/components/shared/waiting";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
+import Waiting from "../../../../components/shared/waiting";
 
 interface Participant {
   userId: string;
@@ -158,7 +159,7 @@ export default function R0Lobby() {
   };
 
   return (
-    <LobbyPage
+    <Waiting
       round="0"
       participants={participants}
       isRoundActive={isRoundActive}

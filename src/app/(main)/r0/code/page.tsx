@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
-import CodePage from "@/components/shared/CodePage";
+import CodePage from "./CodePage";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
 
 interface Problem {
