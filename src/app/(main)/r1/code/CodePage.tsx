@@ -509,7 +509,7 @@ export default function CodePage({
                   <img src="/run.svg" className="h-4 w-4"/>
                 </button>
                 <button 
-                  className="bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="bg-black text-white p-2 rounded border border-amber-600  focus:outline-none focus:ring-2 focus:ring-amber-500"
                   onClick={() => executeCode(true)}
                   disabled={isSubmitting || isRunning}
                 >

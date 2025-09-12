@@ -858,7 +858,7 @@ export default function CodePage({
                   {isSubmitting ? "Submitting..." : "Submit"}
                 </button>
                 <button
-                  className="flex items-center gap-2 bg-blue-800 text-white p-2 rounded border border-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="flex items-center gap-2 bg-black text-white p-2 rounded border border-amber-600  focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   onClick={resetCodeToBoilerplate}
                   title="Reset to boilerplate code"
                 >

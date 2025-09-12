@@ -62,7 +62,7 @@ export default function Lobbyr0(){
         <>
         <div className = "flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
             <div className = "flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
-                <p className='flex-1 flex items-end pt-8'> <p className = "text-white">ROUND</p> <span className="text-orange-500">&nbsp; 1</span></p>
+                <p className='flex-1 flex items-end pt-8'> <span className = "text-white">ROUND</span> <span className="text-orange-500">&nbsp; 1</span></p>
                 <span className = "text-orange-500 text-2xl pb-4">LOBBY</span>
             </div>
             <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4'>

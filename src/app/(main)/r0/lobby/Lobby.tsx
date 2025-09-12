@@ -131,10 +131,10 @@ export default function Lobbyr0() {
   // --- JSX ---
   return (
     <>
-      <div className="flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover min-h-screen max-h-screen">
-        <div className="flex-shrink-0 pt-8 pb-6 orbitron items-center flex flex-col text-4xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
-          <p className='mb-2'> ROUND <span className="text-amber-500">&nbsp; 0</span></p>
-          <span className="text-orange-500 text-lg">LOBBY</span>
+      <div className="flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
+        <div className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
+          <p className='flex-1 flex items-end pt-8'> <span className="text-white">ROUND</span> <span className="text-orange-500">&nbsp; 0</span></p>
+          <span className="text-orange-500 text-2xl pb-4">LOBBY</span>
           
           <div className="mt-2 px-3 py-1 bg-blue-600/20 border border-blue-400 rounded text-blue-300 text-xs flex items-center gap-2">
             <FlaskConical className="h-3 w-3" />
@@ -174,13 +174,13 @@ export default function Lobbyr0() {
           )}
         </div>
         
-        <div className='flex-shrink-0 text-base orbitron ml-10 mb-4'>
+        <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4'>
           Participants: {participants.length}
         </div>
         
-        <div className="flex-1 px-6 pb-4 overflow-hidden">
+        <div className="flex-1 p-6 min-h-0">
           <CustomScrollbar className="h-full overflow-y-auto">
-            <div className="grid grid-cols-5 gap-5 max-w-6xl mx-auto">
+            <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
               {isLoading ? (
                 Array.from({ length: 10 }).map((_, index) => (
                   <div key={index} className="relative w-full h-[90px] mb-3">
@@ -196,7 +196,7 @@ export default function Lobbyr0() {
                   />
                 ))
               ) : (
-                <div className="col-span-5 flex items-center justify-center text-gray-400 text-base py-12">
+                <div className="col-span-3 flex items-center justify-center text-gray-400 text-base py-12">
                   No participants yet. Waiting for players to join...
                 </div>
               )}
