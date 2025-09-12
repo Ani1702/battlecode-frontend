@@ -1,15 +1,17 @@
+import React from 'react';
 import { toast } from 'react-hot-toast';
+import { CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
 
 interface CustomToastProps {
   message: string;
-  icon?: string;
+  icon?: React.ReactNode;
   duration?: number;
   position?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
 }
 
 export const showCustomToast = ({ 
   message, 
-  icon = '✅', 
+  icon = <CheckCircle className="h-4 w-4" />, 
   duration = 2000, 
   position = 'bottom-right' 
 }: CustomToastProps) => {
@@ -32,7 +34,7 @@ export const showCustomToast = ({
     className: '',
 
     // Custom Icon
-    icon,
+    icon: icon as any,
 
     // Change colors of success/error/loading icon to match theme
     iconTheme: {
@@ -54,19 +56,19 @@ export const showCustomToast = ({
 
 // Additional toast variants for different message types
 export const showSuccessToast = (message: string) => {
-  return showCustomToast({ message, icon: '✅' });
+  return showCustomToast({ message, icon: <CheckCircle className="h-4 w-4 text-green-400" /> });
 };
 
 export const showErrorToast = (message: string) => {
-  return showCustomToast({ message, icon: '❌' });
+  return showCustomToast({ message, icon: <XCircle className="h-4 w-4 text-red-400" /> });
 };
 
 export const showWarningToast = (message: string) => {
-  return showCustomToast({ message, icon: '⚠️' });
+  return showCustomToast({ message, icon: <AlertTriangle className="h-4 w-4 text-yellow-400" /> });
 };
 
 export const showInfoToast = (message: string) => {
-  return showCustomToast({ message, icon: 'ℹ️' });
+  return showCustomToast({ message, icon: <Info className="h-4 w-4 text-blue-400" /> });
 };
 
 export default showCustomToast;

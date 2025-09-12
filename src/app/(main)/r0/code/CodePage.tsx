@@ -1,12 +1,22 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { 
+  Lightbulb, 
+  RotateCcw, 
+  Save, 
+  AlertTriangle, 
+  CheckCircle, 
+  Play, 
+  Send,
+  PartyPopper,
+  XCircle
+} from "lucide-react";
 import Button from "@/components/shared/button";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
-// import SocketDebug from '@/components/debug/SocketDebug'; // Uncomment for debugging
 
 interface Problem {
   id: string;
@@ -17,7 +27,7 @@ interface Problem {
   boilerplate: { [key: string]: string };
   sampleTestCases: TestCase[];
   hiddenTestCases?: TestCase[];
-  testCases?: TestCase[]; // Legacy support
+  testCases?: TestCase[];
   hints: string[];
   avgTimeComplexity?: string;
   avgSpaceComplexity?: string;
@@ -63,6 +73,17 @@ interface CodePageProps {
   onReturnToLobby?: () => void;
 }
 
+// ROBUST CONTEXT SYSTEM - Clear Conventions
+interface CodeContext {
+  round: string;
+  questionId: string;
+  language: string;
+}
+
+interface CodeStore {
+  [contextKey: string]: string; // "round:questionId:language" -> code
+}
+
 export default function CodePage({ 
   round,
   currentProblem,
@@ -78,7 +99,11 @@ export default function CodePage({
   const router = useRouter();
   const { user, session } = useAuth();
 
-  // Code editor state
+  // ============================================================================
+  // CORE STATE - Clean and Isolated
+  // ============================================================================
+  
+  // UI State
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("python");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,62 +111,332 @@ export default function CodePage({
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
   
-  // Code persistence across problems with localStorage
-  const [savedCode, setSavedCode] = useState<{ [problemId: string]: { [language: string]: string } }>({});
-  const [isSaving, setIsSaving] = useState(false);
+  // Context & Storage State
+  const [currentContext, setCurrentContext] = useState<CodeContext | null>(null);
+  const [codeStore, setCodeStore] = useState<CodeStore>({});
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [isContextInitialized, setIsContextInitialized] = useState(false);
+  
+  // Stable refs for race-free operations
+  const codeRef = useRef(code);
+  const currentContextRef = useRef(currentContext);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const languageRef = useRef(language);
+  
+  // UI State
+  const [codeEditorHeight, setCodeEditorHeight] = useState(60);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // Load saved code from localStorage on component mount
-  useEffect(() => {
-    try {
-      const savedCodeFromStorage = localStorage.getItem(`battlecode-r${round}-code`);
-      if (savedCodeFromStorage) {
-        const parsedCode = JSON.parse(savedCodeFromStorage);
-        setSavedCode(parsedCode);
+  // Update refs when state changes
+  useEffect(() => { codeRef.current = code; }, [code]);
+  useEffect(() => { currentContextRef.current = currentContext; }, [currentContext]);
+  useEffect(() => { languageRef.current = language; }, [language]);
+
+  // ============================================================================
+  // CONTEXT MANAGEMENT SYSTEM - Ultra Robust
+  // ============================================================================
+
+  const contextManager = {
+    // Generate storage key for localStorage
+    getStorageKey: (round: string): string => `battlecode-round-${round}-code-store`,
+    
+    // Generate context key for current state
+    generateContextKey: (round: string, questionId: string, language: string): string => 
+      `${round}:${questionId}:${language}`,
+    
+    // Parse context key back to components
+    parseContextKey: (contextKey: string): { round: string; questionId: string; language: string } | null => {
+      const parts = contextKey.split(':');
+      if (parts.length !== 3) return null;
+      return { round: parts[0], questionId: parts[1], language: parts[2] };
+    },
+    
+    // Load entire code store from localStorage
+    loadCodeStore: (round: string): CodeStore => {
+      try {
+        const stored = localStorage.getItem(contextManager.getStorageKey(round));
+        return stored ? JSON.parse(stored) : {};
+      } catch (error) {
+        console.error('Failed to load code store:', error);
+        return {};
       }
-    } catch (error) {
-      console.error('Error loading saved code from localStorage:', error);
-    }
-  }, [round]);
-
-  // Save code to localStorage whenever savedCode changes
-  useEffect(() => {
-    try {
-      if (Object.keys(savedCode).length > 0) {
-        localStorage.setItem(`battlecode-r${round}-code`, JSON.stringify(savedCode));
+    },
+    
+    // Save entire code store to localStorage
+    saveCodeStore: (round: string, store: CodeStore): boolean => {
+      try {
+        localStorage.setItem(contextManager.getStorageKey(round), JSON.stringify(store));
+        return true;
+      } catch (error) {
+        console.error('Failed to save code store:', error);
+        return false;
       }
-    } catch (error) {
-      console.error('Error saving code to localStorage:', error);
+    },
+    
+    // Get boilerplate code for a problem and language
+    getBoilerplate: (problem: Problem | null, language: string): string => {
+      if (!problem) return '';
+      return problem.boilerplate[language] || problem.boilerplate['python'] || '';
+    },
+    
+    // Create a new context
+    createContext: (round: string, questionId: string, language: string): CodeContext => ({
+      round,
+      questionId, 
+      language
+    }),
+    
+    // Check if contexts are equal
+    contextEquals: (a: CodeContext | null, b: CodeContext | null): boolean => {
+      if (!a || !b) return false;
+      return a.round === b.round && a.questionId === b.questionId && a.language === b.language;
+    },
+    
+    // Get code for a specific context
+    getCodeForContext: (store: CodeStore, context: CodeContext): string => {
+      const key = contextManager.generateContextKey(context.round, context.questionId, context.language);
+      return store[key] || '';
+    },
+    
+    // Set code for a specific context
+    setCodeForContext: (store: CodeStore, context: CodeContext, code: string): CodeStore => {
+      const key = contextManager.generateContextKey(context.round, context.questionId, context.language);
+      return { ...store, [key]: code };
+    },
+    
+    // Remove code for a specific context
+    removeCodeForContext: (store: CodeStore, context: CodeContext): CodeStore => {
+      const key = contextManager.generateContextKey(context.round, context.questionId, context.language);
+      const newStore = { ...store };
+      delete newStore[key];
+      return newStore;
+    },
+    
+    // Clean up old contexts (optional - for memory management)
+    cleanOldContexts: (store: CodeStore, currentRound: string): CodeStore => {
+      const cleanStore: CodeStore = {};
+      Object.keys(store).forEach(key => {
+        const parsed = contextManager.parseContextKey(key);
+        if (parsed && parsed.round === currentRound) {
+          cleanStore[key] = store[key];
+        }
+      });
+      return cleanStore;
     }
-  }, [savedCode, round]);
+  };
 
-  // Save code before page unload
+  // ============================================================================
+  // INITIALIZATION - Load context and code store
+  // ============================================================================
+  
+  useEffect(() => {
+    if (!currentProblem || isContextInitialized) return;
+    
+    console.log('🚀 Initializing context for:', currentProblem.title);
+    
+    // Load code store from localStorage
+    const loadedStore = contextManager.loadCodeStore(round);
+    setCodeStore(loadedStore);
+    
+    // Create initial context
+    const initialContext = contextManager.createContext(round, currentProblem.id, language);
+    setCurrentContext(initialContext);
+    
+    // Load code for initial context
+    const savedCode = contextManager.getCodeForContext(loadedStore, initialContext);
+    const boilerplate = contextManager.getBoilerplate(currentProblem, language);
+    const codeToLoad = savedCode || boilerplate;
+    
+    console.log('📝 Loading code for context:', initialContext, 'Code length:', codeToLoad.length);
+    setCode(codeToLoad);
+    
+    setIsContextInitialized(true);
+  }, [currentProblem, round, language, isContextInitialized]);
+
+  // ============================================================================
+  // CONTEXT TRANSITION MANAGEMENT - The Heart of Robustness
+  // ============================================================================
+  
+  const handleContextTransition = useCallback((newProblem: Problem | null, newLanguage: string) => {
+    if (!newProblem || !currentContext) return;
+    
+    const newContext = contextManager.createContext(round, newProblem.id, newLanguage);
+    
+    // If context hasn't actually changed, don't do anything
+    if (contextManager.contextEquals(currentContext, newContext)) {
+      console.log('🔄 Context unchanged, skipping transition');
+      return;
+    }
+    
+    console.log('🔄 Context transition:', currentContext, '->', newContext);
+    
+    // STEP 1: Save current code to current context
+    const currentCode = codeRef.current;
+    const currentBoilerplate = contextManager.getBoilerplate(
+      currentProblem, 
+      currentContextRef.current?.language || language
+    );
+    
+    if (currentCode && currentCode !== currentBoilerplate) {
+      console.log('💾 Saving current code before transition');
+      setCodeStore(prevStore => {
+        const updatedStore = contextManager.setCodeForContext(prevStore, currentContext, currentCode);
+        contextManager.saveCodeStore(round, updatedStore);
+        return updatedStore;
+      });
+    }
+    
+    // STEP 2: Clear UI state for clean transition
+    setSubmissionResults(null);
+    if (newProblem.id !== currentProblem?.id) {
+      setShowHints(false); // Only reset hints when changing problems, not languages
+    }
+    
+    // STEP 3: Load code for new context
+    const savedCodeForNewContext = contextManager.getCodeForContext(codeStore, newContext);
+    const newBoilerplate = contextManager.getBoilerplate(newProblem, newLanguage);
+    const codeToLoad = savedCodeForNewContext || newBoilerplate;
+    
+    console.log('📝 Loading code for new context:', newContext, 'Code length:', codeToLoad.length);
+    
+    // STEP 4: Update state atomically
+    setCurrentContext(newContext);
+    setCode(codeToLoad);
+    
+  }, [currentContext, currentProblem, round, language, codeStore]);
+
+  // ============================================================================
+  // REACT TO PROP CHANGES - Problem or Language Changes
+  // ============================================================================
+  
+  useEffect(() => {
+    if (!isContextInitialized || !currentProblem) return;
+    handleContextTransition(currentProblem, language);
+  }, [currentProblem, language, isContextInitialized, handleContextTransition]);
+
+  // ============================================================================
+  // AUTO-SAVE SYSTEM - Debounced and Robust
+  // ============================================================================
+  
+  const scheduleAutoSave = useCallback(() => {
+    if (!currentContext || !codeRef.current) return;
+    
+    const codeToSave = codeRef.current;
+    const boilerplate = contextManager.getBoilerplate(currentProblem, currentContext.language);
+    
+    // Don't save if code is same as boilerplate
+    if (codeToSave === boilerplate) return;
+    
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    setSaveStatus('saving');
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      console.log('💾 Auto-saving code for context:', currentContext);
+      
+      setCodeStore(prevStore => {
+        const updatedStore = contextManager.setCodeForContext(prevStore, currentContext, codeToSave);
+        const saveSuccess = contextManager.saveCodeStore(round, updatedStore);
+        
+        setSaveStatus(saveSuccess ? 'saved' : 'error');
+        
+        // Reset status after 2 seconds
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        
+        return updatedStore;
+      });
+      
+      saveTimeoutRef.current = null;
+    }, 600); // Quick debounce for responsive feel
+    
+  }, [currentContext, currentProblem, round]);
+
+  // Trigger auto-save when code changes
+  useEffect(() => {
+    if (isContextInitialized && code && currentContext) {
+      scheduleAutoSave();
+    }
+  }, [code, isContextInitialized, currentContext, scheduleAutoSave]);
+
+  // ============================================================================
+  // EMERGENCY SAVE - Before page unload
+  // ============================================================================
+  
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (currentProblem && code && code !== (currentProblem.boilerplate[language] || '')) {
-        try {
-          const currentSavedCode = {
-            ...savedCode,
-            [currentProblem.id]: {
-              ...savedCode[currentProblem.id],
-              [language]: code
-            }
-          };
-          localStorage.setItem(`battlecode-r${round}-code`, JSON.stringify(currentSavedCode));
-        } catch (error) {
-          console.error('Error saving code on page unload:', error);
+      try {
+        const context = currentContextRef.current;
+        const codeToSave = codeRef.current;
+        
+        if (context && codeToSave) {
+          const boilerplate = contextManager.getBoilerplate(currentProblem, context.language);
+          if (codeToSave !== boilerplate) {
+            console.log('🚨 Emergency save before page unload');
+            const currentStore = contextManager.loadCodeStore(round);
+            const updatedStore = contextManager.setCodeForContext(currentStore, context, codeToSave);
+            contextManager.saveCodeStore(round, updatedStore);
+          }
         }
+      } catch (error) {
+        console.error('Emergency save failed:', error);
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [currentProblem, code, language, savedCode, round]);
-  
-  // Resizable splitter state
-  const [codeEditorHeight, setCodeEditorHeight] = useState(60);
-  const [isDragging, setIsDragging] = useState(false);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [currentProblem, round]);
 
-  // Monaco editor configuration
+  // ============================================================================
+  // USER ACTIONS
+  // ============================================================================
+
+  const resetCodeToBoilerplate = () => {
+    if (!currentProblem || !currentContext) return;
+    
+    const boilerplate = contextManager.getBoilerplate(currentProblem, language);
+    setCode(boilerplate);
+    
+    // Remove saved code for this context
+    setCodeStore(prevStore => {
+      const updatedStore = contextManager.removeCodeForContext(prevStore, currentContext);
+      contextManager.saveCodeStore(round, updatedStore);
+      return updatedStore;
+    });
+    
+    showInfoToast('Code reset to boilerplate');
+  };
+
+  // Get save status display
+  const getSaveStatusDisplay = () => {
+    if (!currentContext) return { text: '', className: '', icon: null };
+    
+    switch (saveStatus) {
+      case 'saving':
+        return { text: 'Saving...', className: 'text-yellow-400', icon: <Save className="h-3 w-3" /> };
+      case 'saved':
+        return { text: 'Saved', className: 'text-green-400', icon: <CheckCircle className="h-3 w-3" /> };
+      case 'error':
+        return { text: 'Save Error', className: 'text-red-400', icon: <AlertTriangle className="h-3 w-3" /> };
+      default:
+        const savedCode = contextManager.getCodeForContext(codeStore, currentContext);
+        return savedCode 
+          ? { text: 'Saved', className: 'text-green-400', icon: <CheckCircle className="h-3 w-3" /> }
+          : { text: '', className: '', icon: null };
+    }
+  };
+
+  // ============================================================================
+  // MONACO EDITOR SETUP
+  // ============================================================================
+
   const editorOptions = {
     minimap: { enabled: false },
     fontSize: 14,
@@ -157,7 +452,6 @@ export default function CodePage({
     formatOnType: true,
   };
 
-  // Get language mapping for Monaco
   const getMonacoLanguage = (lang: string) => {
     const languageMap: { [key: string]: string } = {
       'python': 'python',
@@ -169,7 +463,6 @@ export default function CodePage({
     return languageMap[lang] || 'python';
   };
 
-  // Monaco theme setup
   const monaco = useMonaco();
   
   useEffect(() => {
@@ -202,85 +495,10 @@ export default function CodePage({
     }
   }, [monaco]);
 
-  // Handle language change with code persistence
-  useEffect(() => {
-    try {
-      if (currentProblem) {
-        // Save current code before switching
-        if (code && code !== (currentProblem.boilerplate[language] || '')) {
-          setSavedCode(prev => ({
-            ...prev,
-            [currentProblem.id]: {
-              ...prev[currentProblem.id],
-              [language]: code
-            }
-          }));
-        }
+  // ============================================================================
+  // CODE EXECUTION
+  // ============================================================================
 
-        // Load saved code or boilerplate for new language
-        const savedCodeForLanguage = savedCode[currentProblem.id]?.[language];
-        const boilerplateCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
-        
-        setCode(savedCodeForLanguage || boilerplateCode);
-      }
-    } catch (error) {
-      console.error('Error updating code for language change:', error);
-    }
-  }, [language, currentProblem]);
-
-  // Handle problem change with code persistence
-  useEffect(() => {
-    try {
-      if (currentProblem) {
-        // Load saved code for current problem and language, or use boilerplate
-        const savedCodeForProblem = savedCode[currentProblem.id]?.[language];
-        const boilerplateCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
-        
-        setCode(savedCodeForProblem || boilerplateCode);
-        
-        // Reset results when switching problems
-        setSubmissionResults(null);
-        setShowHints(false);
-      }
-    } catch (error) {
-      console.error('Error updating code for problem change:', error);
-    }
-  }, [currentProblem]);
-
-  // Save code periodically and on code changes
-  useEffect(() => {
-    if (currentProblem && code && code !== (currentProblem.boilerplate[language] || '')) {
-      setIsSaving(true);
-      const timeoutId = setTimeout(() => {
-        setSavedCode(prev => {
-          const newSavedCode = {
-            ...prev,
-            [currentProblem.id]: {
-              ...prev[currentProblem.id],
-              [language]: code
-            }
-          };
-          
-          // Also save to localStorage immediately for better persistence
-          try {
-            localStorage.setItem(`battlecode-r${round}-code`, JSON.stringify(newSavedCode));
-          } catch (error) {
-            console.error('Error saving code to localStorage:', error);
-          }
-          
-          return newSavedCode;
-        });
-        setIsSaving(false);
-      }, 500); // Reduced timeout for better responsiveness
-
-      return () => {
-        clearTimeout(timeoutId);
-        setIsSaving(false);
-      };
-    }
-  }, [code, currentProblem, language, round]);
-
-  // Execute code using backend API endpoints
   const executeCode = async (isSubmission = false) => {
     if (!currentProblem) {
       showErrorToast('No problem loaded');
@@ -302,17 +520,16 @@ export default function CodePage({
         throw new Error('API URL not configured');
       }
 
-      // Prepare the request payload
       const payload = {
         language: language,
         source_code: code,
         problemId: currentProblem.id,
-        ...(isSubmission ? { roundNumber: 0 } : {}) // Add roundNumber only for submissions
+        ...(isSubmission ? { roundNumber: parseInt(round) } : {})
       };
 
-      const endpoint = isSubmission ? '/api/submit/submit' : '/api/submit/run';
+      const endpoint = isSubmission ? '/submit' : '/run';
       
-      const response = await fetch(`${apiUrl}${endpoint}`, {
+      const response = await fetch(`${apiUrl}/submit${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -329,15 +546,12 @@ export default function CodePage({
       const result = await response.json();
       
       if (!result.success && isSubmission) {
-        // Handle submission failure case
         showErrorToast(result.message || 'Submission failed');
         return;
       }
 
-      // Process results for display
       const results = result.results || [];
       
-      // Format results for display - adapt to our existing UI structure
       const formattedResults: SubmissionResult[] = results.map((res: any, index: number) => ({
         token: res.token || `test_${index}`,
         status: {
@@ -353,7 +567,6 @@ export default function CodePage({
 
       setSubmissionResults(formattedResults);
 
-      // Show summary results
       const summary = result.summary || {};
       const passedTests = summary.passed || 0;
       const totalTests = summary.total || results.length;
@@ -361,7 +574,7 @@ export default function CodePage({
       if (isSubmission) {
         if (result.success) {
           if (passedTests === totalTests) {
-            showSuccessToast(`🎉 All ${totalTests} test cases passed! Submission saved.`);
+            showSuccessToast(`All ${totalTests} test cases passed! Submission saved.`);
           } else {
             showSuccessToast(`${passedTests}/${totalTests} test cases passed. Submission saved.`);
           }
@@ -374,9 +587,9 @@ export default function CodePage({
         }
       } else {
         if (passedTests === totalTests) {
-          showSuccessToast(`✅ All ${totalTests} sample test cases passed!`);
+          showSuccessToast(`All ${totalTests} sample test cases passed!`);
         } else {
-          showErrorToast(`❌ ${passedTests}/${totalTests} sample test cases passed`);
+          showErrorToast(`${passedTests}/${totalTests} sample test cases passed`);
         }
       }
 
@@ -393,7 +606,10 @@ export default function CodePage({
     }
   };
 
-  // Resizable splitter handlers
+  // ============================================================================
+  // RESIZABLE SPLITTER
+  // ============================================================================
+
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     e.preventDefault();
@@ -438,14 +654,16 @@ export default function CodePage({
     };
   }, [isDragging]);
 
-  // Format time display
+  // ============================================================================
+  // UTILITY FUNCTIONS
+  // ============================================================================
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Get timer display with color coding
   const getTimerDisplay = (): { time: string; className: string } => {
     const isWarning = timeRemaining <= 300; // 5 minutes
     const isCritical = timeRemaining <= 60;  // 1 minute
@@ -457,7 +675,6 @@ export default function CodePage({
     };
   };
 
-  // Format test case data for display
   const formatTestCaseData = (data: any): string => {
     if (typeof data === 'string') return data;
     if (Array.isArray(data)) return data.join(', ');
@@ -473,7 +690,10 @@ export default function CodePage({
     return String(data);
   };
 
-  // Loading state
+  // ============================================================================
+  // RENDER CONDITIONS
+  // ============================================================================
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-black/40 text-white">
@@ -485,7 +705,6 @@ export default function CodePage({
     );
   }
 
-  // No problem state
   if (!currentProblem) {
     return (
       <div className="flex items-center justify-center h-screen bg-black/40 text-white">
@@ -502,8 +721,23 @@ export default function CodePage({
     );
   }
 
+  const saveStatusDisplay = getSaveStatusDisplay();
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+
   return (
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
+      {/* Debug Info - Remove in production */}
+      {currentContext && (
+        <div className="bg-gray-900 text-xs p-2 text-gray-400">
+          Context: {currentContext.round}:{currentContext.questionId}:{currentContext.language} | 
+          Code Length: {code.length} | 
+          Store Keys: {Object.keys(codeStore).length}
+        </div>
+      )}
+      
       {/* Main Content */}
       <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
         {/* Question Panel */}
@@ -518,10 +752,13 @@ export default function CodePage({
               </div>
             </div>
             <div className="flex gap-2">
-              <Button
-                content={showHints ? "Hide" : "Hint💡"}
+              <button
                 onClick={() => setShowHints(!showHints)}
-              />
+                className="rounded-lg border p-4 h-12 text-white border-amber-600 font-oxanium w-30 justify-center items-center flex bg-black/20 backdrop-blur-sm hover:bg-amber-600 hover:text-black transition-colors duration-300 shadow-[0_0_20px_rgba(220,38,38,0.3)] gap-2"
+              >
+                <Lightbulb className="h-4 w-4" />
+                {showHints ? "Hide" : "Hint"}
+              </button>
               {currentProblemIndex < problems.length - 1 && onNextQuestion && (
                 <button
                   onClick={onNextQuestion}
@@ -605,9 +842,11 @@ export default function CodePage({
                   getTimerDisplay().className
                 }`}>
                   {getTimerDisplay().time}
-                  {isSaving && <span className="ml-2 text-xs text-yellow-400">💾 Saving...</span>}
-                  {!isSaving && currentProblem && savedCode[currentProblem.id]?.[language] && (
-                    <span className="ml-2 text-xs text-green-400">✓ Saved</span>
+                  {saveStatusDisplay.text && (
+                    <span className={`ml-2 text-xs ${saveStatusDisplay.className} flex items-center gap-1`}>
+                      {saveStatusDisplay.icon}
+                      {saveStatusDisplay.text}
+                    </span>
                   )}
                 </div>
               </div>
@@ -617,44 +856,23 @@ export default function CodePage({
                   onClick={() => executeCode(false)}
                   disabled={isRunning || isSubmitting}
                 >
+                  <Play className="h-4 w-4"/>
                   <span>Run</span>
-                  <img src="/run.svg" className="h-4 w-4"/>
                 </button>
                 <button 
-                  className="bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="flex items-center gap-2 bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   onClick={() => executeCode(true)}
                   disabled={isSubmitting || isRunning}
                 >
+                  <Send className="h-4 w-4"/>
                   {isSubmitting ? "Submitting..." : "Submit"}
                 </button>
                 <button
-                  className="bg-blue-800 text-white p-2 rounded border border-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  onClick={() => {
-                    if (currentProblem) {
-                      const boilerplateCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
-                      setCode(boilerplateCode);
-                      // Remove saved code for this problem-language combination
-                      setSavedCode(prev => {
-                        const newSavedCode = { ...prev };
-                        if (newSavedCode[currentProblem.id]) {
-                          delete newSavedCode[currentProblem.id][language];
-                          if (Object.keys(newSavedCode[currentProblem.id]).length === 0) {
-                            delete newSavedCode[currentProblem.id];
-                          }
-                        }
-                        try {
-                          localStorage.setItem(`battlecode-r${round}-code`, JSON.stringify(newSavedCode));
-                        } catch (error) {
-                          console.error('Error updating localStorage:', error);
-                        }
-                        return newSavedCode;
-                      });
-                      showInfoToast('Code reset to boilerplate');
-                    }
-                  }}
+                  className="flex items-center gap-2 bg-blue-800 text-white p-2 rounded border border-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  onClick={resetCodeToBoilerplate}
                   title="Reset to boilerplate code"
                 >
-                  🔄
+                  <RotateCcw className="h-4 w-4"/>
                 </button>
               </div>
             </div>
@@ -732,7 +950,6 @@ export default function CodePage({
           </div>
         </div>
       </div>
-      {/* <SocketDebug /> */}
     </div>
   );
 }
