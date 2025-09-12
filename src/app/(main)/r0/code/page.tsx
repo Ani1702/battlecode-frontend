@@ -39,7 +39,7 @@ export default function R0Code() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [roundDuration, setRoundDuration] = useState(1200);
+  const [roundDuration, setRoundDuration] = useState(600);
   const [isRoundActive, setIsRoundActive] = useState(false);
   const [pageIsLoading, setPageIsLoading] = useState(true);
 

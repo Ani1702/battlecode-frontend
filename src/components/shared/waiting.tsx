@@ -1,6 +1,7 @@
 "use client"
 import { useAuth } from "@/contexts/AuthContext";
 import CustomScrollbar from "./CustomScrollbar";
+import { useEffect, useState } from "react";
 
 interface LobbyPageProps {
   round: string;
@@ -41,6 +42,102 @@ export default function Waiting({
   // Check if current user is admin
   const isAdmin = userRole === 'ADMIN';
 
+  // State for animated bubbles
+  const [bubbles, setBubbles] = useState<Array<{
+    id: number;
+    initials: string;
+    x: number;
+    y: number;
+    size: number;
+    speed: number;
+    opacity: number;
+    color: string;
+  }>>([]);
+
+  // Get initials from username
+  const getInitials = (username: string): string => {
+    const words = username.trim().split(/\s+/);
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    } else if (words.length === 1 && words[0].length >= 2) {
+      return words[0].substring(0, 2).toUpperCase();
+    } else {
+      return (words[0][0] + (words[0][1] || '')).toUpperCase();
+    }
+  };
+
+  // Colors for bubbles
+  const bubbleColors = [
+    'rgba(249, 115, 22, 0.7)', // orange
+    'rgba(59, 130, 246, 0.7)', // blue
+    'rgba(16, 185, 129, 0.7)', // emerald
+    'rgba(139, 92, 246, 0.7)', // violet
+    'rgba(236, 72, 153, 0.7)', // pink
+    'rgba(245, 158, 11, 0.7)', // amber
+    'rgba(20, 184, 166, 0.7)', // teal
+    'rgba(239, 68, 68, 0.7)',  // red
+  ];
+
+  // Create new bubble
+  const createBubble = () => {
+    if (participants.length === 0) return;
+    
+    const randomParticipant = participants[Math.floor(Math.random() * participants.length)];
+    const initials = getInitials(randomParticipant.username);
+    
+    return {
+      id: Date.now() + Math.random(),
+      initials,
+      x: Math.random() * 70, // limit to left 70% to avoid leaderboard area
+      y: 110, // start below screen
+      size: 40 + Math.random() * 40, // 40-80px
+      speed: 0.5 + Math.random() * 1, // 0.5-1.5% per frame
+      opacity: 0.3 + Math.random() * 0.4, // 0.3-0.7
+      color: 'rgba(239, 68, 68, 0.1)' // very transparent red
+    };
+  };
+
+  // Animation loop
+  useEffect(() => {
+    if (participants.length === 0) return;
+
+    const interval = setInterval(() => {
+      setBubbles(prevBubbles => {
+        let newBubbles = [...prevBubbles];
+        
+        // Update existing bubbles
+        newBubbles = newBubbles
+          .map(bubble => ({
+            ...bubble,
+            y: bubble.y - bubble.speed,
+            // Start fading out when bubble reaches top 10% of screen
+            opacity: bubble.y < 10 ? bubble.opacity * 0.95 : bubble.opacity
+          }))
+          // Remove bubbles when they go off screen at the top
+          .filter(bubble => bubble.y > -10);
+        
+        // Add new bubble occasionally
+        if (Math.random() < 0.3 && newBubbles.length < 15) {
+          const newBubble = createBubble();
+          if (newBubble) {
+            newBubbles.push(newBubble);
+          }
+        }
+        
+        return newBubbles;
+      });
+    }, 100); // 10fps
+
+    return () => clearInterval(interval);
+  }, [participants]);
+
+  // Clear bubbles when participants change
+  useEffect(() => {
+    if (participants.length === 0) {
+      setBubbles([]);
+    }
+  }, [participants.length]);
+
   // Format time display
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -72,16 +169,39 @@ export default function Waiting({
 
   return (
     <>
-      <div className="flex bg-[url('/lobby-bg')] bg-cover h-screen flex-col overflow-hidden">
-        <div className="flex-shrink-0 ml-5 mt-1 py-4">
-          <p> {"<> Battle Arena - Round " + round}</p>
+      <div className="flex bg-[url('/bg_code.png')] bg-cover h-screen flex-col overflow-hidden relative">
+        {/* Animated Background Bubbles - floating to the top but avoiding leaderboard */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {bubbles.map(bubble => (
+            <div
+              key={bubble.id}
+              className="absolute rounded-full flex items-center justify-center text-white font-bold text-sm transition-all duration-300 shadow-lg backdrop-blur-sm border border-white/20"
+              style={{
+                left: `${bubble.x}%`,
+                top: `${bubble.y}%`,
+                width: `${bubble.size}px`,
+                height: `${bubble.size}px`,
+                backgroundColor: bubble.color,
+                opacity: bubble.opacity,
+                fontSize: `${bubble.size * 0.3}px`,
+                transform: 'translateX(-50%) translateY(-50%)',
+                zIndex: 1
+              }}
+            >
+              {bubble.initials}
+            </div>
+          ))}
         </div>
-        <div className="flex-1 flex min-h-0">
+
+        <div className="flex-shrink-0 ml-3 mt-0 py-4 relative z-10 orbitron">
+          <p> {"<> BattleCode Arena"}</p>
+        </div>
+        <div className="flex-1 flex min-h-0 relative z-10">
           <div className="flex-[1]"></div>
           <div className="flex-[6] flex justify-center items-center gap-4 flex-col min-h-0">
             {!isRoundActive && !roundStarted ? (
               <>
-                <div className="text-4xl text-center">Round {round} Lobby</div>
+                <div className="text-5xl text-center bg-gradient-to-r from-[#EEA284] to-[#FF6200] bg-clip-text text-transparent">Searching for opponent</div>
                 <div className="text-gray-200 text-center">
                   {participants.length > 0 ? (
                     <div>

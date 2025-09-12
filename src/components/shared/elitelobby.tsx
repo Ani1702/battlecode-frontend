@@ -98,8 +98,8 @@ export default function EliteLobby() {
 
   return (
     <>
-      <div className="flex bg-[url('/elite-bg.svg')] bg-cover h-screen flex-col overflow-hidden orbitron">
-        <div className="flex-1 flex items-center justify-center text-6xl orbitron">ELITE DASHBOARD</div>
+      <div className="flex bg-[url('/elite_bg2.svg')] bg-[length:1200px_800px] bg-center bg-no-repeat h-screen flex-col overflow-hidden orbitron">
+        <div className="flex-1 flex items-center justify-center text-6xl oxanium white-glow"><img src = "/b-2.svg" className = "h-20"/>ELITE DASHBOARD</div>
         <div className="flex-4 flex flex-row">
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">

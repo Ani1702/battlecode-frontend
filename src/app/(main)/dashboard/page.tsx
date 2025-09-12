@@ -295,33 +295,34 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-        <div className="flex-[2]">
-          <div className="flex-1 ml-3 mt-3 orbitron flex justify-start items-start">
-            <p className="flex-1">{"<> BattleCode Arena"}</p>
-            <div className="flex-1 flex justify-end mr-8">
+        <div className="flex-[2] ">
+          <div className = " h-15">
+          <div className="flex-1 ml-3  orbitron flex justify-start items-start">
+            <p className="flex-1 mt-2">{"<> BattleCode Arena"}</p>
+            <div className="flex-1 flex justify-end mr-8 mt-2">
               <SignOut />
             </div>
+          </div>
           </div>
         </div>
         <div className="flex-6  flex ">
           <div className="flex-[1.5] flex flex-col ">
-            <div className="flex-1 flex flex-col ml-5 justify-center">
-              <h1 className="text-5xl font-bold text-white orbitron flex-1">
-                Welcome &nbsp;
-                
-              </h1>
-              <p className ="flex-[1] flex ">
-                <span className="text-orange-500 text-5xl ml-2">
+            <div className="flex-[0.5] flex flex-col ml-5 justify-center">
+              <h1 className="text-5xl  text-white  flex-[0.2] flex justify-start items-center">
+                <p className = "font-bold">Welcome </p>
+                <span className="text-orange-500  text-5xl ml-2">
                   {user?.email?.split('@')[0] || 'Warrior'}
                 </span>
-                <span className="text-orange-300/70 text-3xl ml-2 flex items-center">
-                  #{user?.id?.slice(-4) || '0000'}
-                </span>
+                
+              </h1>
+              {/* <p className ="flex-[1] flex ">
+                
+                
 
-              </p>
+              </p> */}
               
             </div>
-            <div className = "flex-[0.2]"></div>
+            <div className = "flex-[0.8] ml-5 mt-3 text-4xl flex justify-start items-center orbitron"> Challenger Rounds</div>
             <div className="flex-4 ">
               {[0, 1, 2, 3].map((i) => {
                 const isCurrentRound = currentRoundData?.currentRoundNumber === i;

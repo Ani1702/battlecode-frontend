@@ -268,3 +268,8 @@ input[type="range"].question-count-slider::-moz-range-thumb:active {
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-in-out forwards;
 }
+
+/* White glow effect for elite dashboard */
+.white-glow {
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8));
+}

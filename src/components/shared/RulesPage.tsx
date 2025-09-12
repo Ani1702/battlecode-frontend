@@ -34,11 +34,11 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
                             <span className="oxanium"> I have read and agree to all the rules</span>
                         </p>
                     </div>
-                </div>
+                </div> 
                 <div className="flex-1 flex flex-col h-full p-17 w-full justify-end">
                     <div className="flex-1 w-full h-full flex flex-col justify-end">
-                        <p className="flex-1 h-full w-full flex justify-end text-3xl font-bold shadow-orange-500/40">Round&nbsp;  <span className="text-orange-600">{roundString}</span></p>
-                        <p className="flex-1 h-full w-full flex justify-end">Rules</p>
+                        <p className="flex-1 h-full w-full flex justify-end text-3xl font-bold drop-shadow-[0_4px_8px_rgba(249,115,22,0.8)]">Round&nbsp;  <span className="text-orange-600">{roundString}</span></p>
+                        <p className="flex-1 h-full w-full flex justify-end text-xl drop-shadow-[0_4px_8px_rgba(249,115,22,0.8)]">Rules</p>
                     </div>
                     <div className="flex-[5] flex  items-end">
                         <button

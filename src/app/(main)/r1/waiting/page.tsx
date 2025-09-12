@@ -1,4 +1,4 @@
-import LobbyPage from "@/components/shared/waiting";
+import waiting from "@/components/shared/waiting";
 
 export default function Waiting(){
     return (

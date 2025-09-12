@@ -84,7 +84,7 @@ interface CodeStore {
   [contextKey: string]: string; // "round:questionId:language" -> code
 }
 
-export default function CodePage({ 
+export default function CodePage({
   round,
   currentProblem,
   problems,
@@ -464,7 +464,7 @@ export default function CodePage({
   };
 
   const monaco = useMonaco();
-  
+
   useEffect(() => {
     if (monaco) {
       monaco.editor.defineTheme('custom-dark', {
@@ -507,7 +507,7 @@ export default function CodePage({
 
     const action = isSubmission ? 'submitting' : 'running';
     showInfoToast(`${action.charAt(0).toUpperCase() + action.slice(1)} your code...`);
-    
+
     if (isSubmission) {
       setIsSubmitting(true);
     } else {
@@ -617,15 +617,15 @@ export default function CodePage({
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return;
-    
+
     const container = document.querySelector('.code-results-container') as HTMLElement;
     if (!container) return;
-    
+
     const rect = container.getBoundingClientRect();
     const containerHeight = rect.height;
     const mouseY = e.clientY - rect.top;
     const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
-    
+
     setCodeEditorHeight(newHeightPercentage);
   };
 
@@ -667,11 +667,11 @@ export default function CodePage({
   const getTimerDisplay = (): { time: string; className: string } => {
     const isWarning = timeRemaining <= 300; // 5 minutes
     const isCritical = timeRemaining <= 60;  // 1 minute
-    
+
     return {
       time: formatTime(timeRemaining),
-      className: isCritical ? 'border-red-600 text-red-400' : 
-                 isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
+      className: isCritical ? ' text-red-400' :
+        isWarning ? ' text-yellow-400' : 'border-amber-600'
     };
   };
 
@@ -760,26 +760,24 @@ export default function CodePage({
                 {showHints ? "Hide" : "Hint"}
               </button>
               {currentProblemIndex < problems.length - 1 && onNextQuestion && (
-                <button
+                <Button
+                  content="Next →"
                   onClick={onNextQuestion}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  Next →
-                </button>
+                />
               )}
             </div>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto min-h-0">
             {showHints && currentProblem.hints && currentProblem.hints.length > 0 && (
-              <div className="mb-4 bg-gray-800 p-3 rounded">
+              <div className="mb-4 bg-black p-3 rounded">
                 <h3 className="font-bold mb-2 text-amber-400">Hints:</h3>
                 <ul className="list-disc list-inside text-gray-300 space-y-2">
                   {currentProblem.hints.map((hint, i) => <li key={i}>{hint}</li>)}
                 </ul>
               </div>
             )}
-            
+
             <p className="mb-4 text-gray-300 whitespace-pre-wrap">{currentProblem.description}</p>
 
             {currentProblem.constraints && currentProblem.constraints.length > 0 && (
@@ -797,13 +795,13 @@ export default function CodePage({
               <>
                 <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
                 {currentProblem.sampleTestCases.map((testCase, i) => (
-                  <div key={i} className="mb-4 bg-gray-800 p-3 rounded font-mono text-sm">
+                  <div key={i} className="mb-4 bg-black p-3 rounded font-mono text-sm">
                     <p className="font-bold text-gray-400">Input:</p>
-                    <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
+                    <pre className="bg-gray-800 p-2 rounded mt-1 whitespace-pre-wrap">
                       {formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')}
                     </pre>
                     <p className="mt-2 font-bold text-gray-400">Output:</p>
-                    <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
+                    <pre className="bg-gray-800 p-2 rounded mt-1 whitespace-pre-wrap">
                       {formatTestCaseData(testCase.expected_output || testCase.output?.stdout || testCase.output?.json || '')}
                     </pre>
                     {testCase.explanation && (
@@ -821,26 +819,18 @@ export default function CodePage({
         {/* Code & Results Panel */}
         <div className="w-1/2 flex flex-col code-results-container border-amber-500" style={{ height: '100%' }}>
           {/* Code Editor */}
-          <div 
-            className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
-            style={{ height: `${codeEditorHeight}%`, minHeight: '200px' }}
-          >
+          <div className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0" style={{ height: `${codeEditorHeight}%`, minHeight: '200px' }}>
             <div className="flex justify-between items-center mb-2 gap-2">
               <div className="flex-1 flex gap-2">
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="bg-gray-800 flex-1 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
+                <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-black flex-[0.3]  text-white p-2 rounded border w-20 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500">
                   <option value="python">Python</option>
                   <option value="java">Java</option>
                   <option value="cpp">C++</option>
                   <option value="c">C</option>
                   <option value="javascript">JavaScript</option>
                 </select>
-                <div className={`bg-gray-800 flex-1 text-white p-2 rounded border focus:outline-none focus:ring-2 focus:ring-amber-500 text-center font-mono ${
-                  getTimerDisplay().className
-                }`}>
+                <div className={`bg-black flex-[0.2] text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 text-center font-mono ${getTimerDisplay().className
+                  }`}>
                   {getTimerDisplay().time}
                   {saveStatusDisplay.text && (
                     <span className={`ml-2 text-xs ${saveStatusDisplay.className} flex items-center gap-1`}>
@@ -851,8 +841,8 @@ export default function CodePage({
                 </div>
               </div>
               <div className="flex gap-2">
-                <button 
-                  className="flex items-center gap-2 bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                <button
+                  className="flex items-center gap-2 bg-black text-white p-2 rounded border border-amber-600 hover:bg-black focus:outline-none focus:ring-2 focus:ring-amber-500"
                   onClick={() => executeCode(false)}
                   disabled={isRunning || isSubmitting}
                 >
@@ -876,7 +866,7 @@ export default function CodePage({
                 </button>
               </div>
             </div>
-            
+
             {/* Monaco Editor */}
             <div className="flex-1 rounded overflow-hidden border border-gray-700">
               <Editor
@@ -887,7 +877,7 @@ export default function CodePage({
                 theme="custom-dark"
                 options={editorOptions}
                 loading={
-                  <div className="flex items-center justify-center h-full bg-gray-900">
+                  <div className="flex items-center justify-center h-full bg-black">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
                   </div>
                 }
@@ -897,16 +887,15 @@ export default function CodePage({
 
           {/* Resizable Divider */}
           <div
-            className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors duration-200 flex items-center justify-center ${
-              isDragging ? 'bg-amber-600/60' : ''
-            }`}
+            className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors duration-200 flex items-center justify-center ${isDragging ? 'bg-amber-600/60' : ''
+              }`}
             onMouseDown={handleMouseDown}
           >
             <div className="w-8 h-1 bg-amber-600 rounded-full"></div>
           </div>
 
           {/* Test Results & Actions */}
-          <div 
+          <div
             className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
             style={{ height: `${100 - codeEditorHeight}%`, minHeight: '150px' }}
           >

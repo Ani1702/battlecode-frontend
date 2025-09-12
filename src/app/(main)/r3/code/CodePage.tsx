@@ -1,11 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
-import Editor, { useMonaco } from '@monaco-editor/react';
-import CustomScrollbar from "./CustomScrollbar";
-import { showSuccessToast, showErrorToast, showInfoToast } from "./CustomToast";
 
 interface Problem {
   id: string;
@@ -36,19 +32,6 @@ interface TestCase {
   explanation?: string;
 }
 
-interface SubmissionResult {
-  token: string;
-  status: {
-    id: number;
-    description: string;
-  };
-  stdout: string | null;
-  stderr: string | null;
-  compile_output: string | null;
-  time: string | null;
-  memory: string | null;
-}
-
 interface CodePageProps {
   round: string;
   currentProblem: Problem | null;
@@ -75,80 +58,15 @@ export default function CodePage({
   onReturnToLobby
 }: CodePageProps) {
   const router = useRouter();
-  const { user, session } = useAuth();
 
   // Code editor state
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("python");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
-  const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
   
   // Resizable splitter state
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
-
-  // Monaco editor configuration
-  const editorOptions = {
-    minimap: { enabled: false },
-    fontSize: 14,
-    lineNumbers: 'on' as const,
-    roundedSelection: false,
-    scrollBeyondLastLine: false,
-    automaticLayout: true,
-    tabSize: 2,
-    wordWrap: 'on' as const,
-    bracketPairColorization: { enabled: true },
-    autoIndent: 'full' as const,
-    formatOnPaste: true,
-    formatOnType: true,
-  };
-
-  // Get language mapping for Monaco
-  const getMonacoLanguage = (lang: string) => {
-    const languageMap: { [key: string]: string } = {
-      'python': 'python',
-      'java': 'java',
-      'cpp': 'cpp',
-      'c': 'c',
-      'javascript': 'javascript',
-    };
-    return languageMap[lang] || 'python';
-  };
-
-  // Monaco theme setup
-  const monaco = useMonaco();
-  
-  useEffect(() => {
-    if (monaco) {
-      monaco.editor.defineTheme('custom-dark', {
-        base: 'vs-dark',
-        inherit: true,
-        rules: [
-          { token: 'comment', foreground: '#6A9955' },
-          { token: 'keyword', foreground: '#569CD6' },
-          { token: 'string', foreground: '#CE9178' },
-          { token: 'number', foreground: '#B5CEA8' },
-        ],
-        colors: {
-          'editor.background': '#0a0a0a',
-          'editor.foreground': '#ffffff',
-          'editor.lineHighlightBackground': '#1a1a1a',
-          'editor.selectionBackground': '#264f78',
-          'editor.inactiveSelectionBackground': '#3a3d41',
-          'editorCursor.foreground': '#f97316',
-          'editorLineNumber.foreground': '#858585',
-          'editorLineNumber.activeForeground': '#f97316',
-          'editor.selectionHighlightBackground': '#ADD6FF26',
-          'editor.wordHighlightBackground': '#575757B8',
-          'editorBracketMatch.background': '#0064001a',
-          'editorBracketMatch.border': '#888888',
-        },
-      });
-      monaco.editor.setTheme('custom-dark');
-    }
-  }, [monaco]);
 
   // Handle language change
   useEffect(() => {
@@ -161,129 +79,6 @@ export default function CodePage({
       console.error('Error updating code for language change:', error);
     }
   }, [language, currentProblem]);
-
-  // Execute code using /execute-batch endpoint
-  const executeCode = async (isSubmission = false) => {
-    if (!currentProblem) {
-      showErrorToast('No problem loaded');
-      return;
-    }
-
-    const action = isSubmission ? 'submitting' : 'running';
-    showInfoToast(`${action.charAt(0).toUpperCase() + action.slice(1)} your code...`);
-    
-    if (isSubmission) {
-      setIsSubmitting(true);
-    } else {
-      setIsRunning(true);
-    }
-
-    try {
-      // Get language ID for Judge0
-      const languageIds: { [key: string]: number } = {
-        'python': 71,
-        'java': 62,
-        'cpp': 54,
-        'c': 50,
-        'javascript': 63
-      };
-
-      const languageId = languageIds[language] || 71;
-
-      // Prepare test cases - use sample test cases for run, all test cases for submit
-      const testCasesToRun = isSubmission ? 
-        (currentProblem.hiddenTestCases || currentProblem.testCases || currentProblem.sampleTestCases) : 
-        currentProblem.sampleTestCases;
-
-      if (!testCasesToRun || testCasesToRun.length === 0) {
-        throw new Error('No test cases available');
-      }
-
-      const submissions = testCasesToRun.map((testCase, index) => {
-        try {
-          // Handle both old and new test case formats
-          const inputData = testCase.stdin || testCase.input?.stdin || JSON.stringify(testCase.input?.json) || '';
-          const expectedOutput = testCase.expected_output || testCase.output?.stdout || JSON.stringify(testCase.output?.json) || '';
-          
-          return {
-            language_id: languageId,
-            source_code: btoa(code), // Base64 encode
-            stdin: btoa(inputData),
-            expected_output: btoa(expectedOutput)
-          };
-        } catch (encodeError) {
-          console.error(`Error encoding test case ${index}:`, encodeError);
-          throw new Error(`Failed to encode test case ${index + 1}`);
-        }
-      });
-
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-      if (!apiUrl) {
-        throw new Error('API URL not configured');
-      }
-
-      const response = await fetch(`${apiUrl}/execute-batch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ submissions })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-      }
-
-      const results = await response.json();
-      
-      if (!Array.isArray(results)) {
-        throw new Error('Invalid response format from execution service');
-      }
-      
-      // Format results for display
-      const formattedResults: SubmissionResult[] = results.map((result: any, index: number) => ({
-        token: result.token || `test_${index}`,
-        status: {
-          id: result.status?.id || 3,
-          description: result.status?.description || 'Accepted'
-        },
-        stdout: result.stdout || null,
-        stderr: result.stderr || null,
-        compile_output: result.compile_output || null,
-        time: result.time || null,
-        memory: result.memory || null
-      }));
-
-      setSubmissionResults(formattedResults);
-
-      // Check results
-      const passedTests = formattedResults.filter(r => r.status.description === 'Accepted').length;
-      const totalTests = formattedResults.length;
-
-      if (isSubmission) {
-        if (passedTests === totalTests) {
-          showSuccessToast(`🎉 All ${totalTests} test cases passed!`);
-        } else {
-          showErrorToast(`${passedTests}/${totalTests} test cases passed`);
-        }
-      } else {
-        showInfoToast(`Test run completed: ${passedTests}/${totalTests} passed`);
-      }
-
-    } catch (error) {
-      console.error('Execution error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      showErrorToast(`Failed to ${action} code: ${errorMessage}`);
-    } finally {
-      if (isSubmission) {
-        setIsSubmitting(false);
-      } else {
-        setIsRunning(false);
-      }
-    }
-  };
 
   // Resizable splitter handlers
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -399,7 +194,7 @@ export default function CodePage({
       {/* Main Content */}
       <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
         {/* Question Panel */}
-        <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
+        <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
           <div className="flex justify-between items-start mb-4 flex-shrink-0">
             <div>
               <h2 className="text-2xl font-bold">{currentProblem.title}</h2>
@@ -471,9 +266,9 @@ export default function CodePage({
               </>
             )}
           </div>
-        </CustomScrollbar>
+        </div>
 
-        {/* Code & Results Panel */}
+        {/* Code Panel */}
         <div className="w-1/2 flex flex-col code-results-container border-amber-500" style={{ height: '100%' }}>
           {/* Code Editor */}
           <div 
@@ -499,39 +294,16 @@ export default function CodePage({
                   {getTimerDisplay().time}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button 
-                  className="flex items-center gap-2 bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  onClick={() => executeCode(false)}
-                  disabled={isRunning || isSubmitting}
-                >
-                  <span>Run</span>
-                  <img src="/run.svg" className="h-4 w-4"/>
-                </button>
-                <button 
-                  className="bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  onClick={() => executeCode(true)}
-                  disabled={isSubmitting || isRunning}
-                >
-                  {isSubmitting ? "Submitting..." : "Submit"}
-                </button>
-              </div>
             </div>
             
-            {/* Monaco Editor */}
+            {/* Simple Code Editor */}
             <div className="flex-1 rounded overflow-hidden border border-gray-700">
-              <Editor
-                height="100%"
-                language={getMonacoLanguage(language)}
+              <textarea
                 value={code}
-                onChange={(value) => setCode(value || "")}
-                theme="custom-dark"
-                options={editorOptions}
-                loading={
-                  <div className="flex items-center justify-center h-full bg-gray-900">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
-                  </div>
-                }
+                onChange={(e) => setCode(e.target.value)}
+                className="w-full h-full bg-gray-900 text-white p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
+                placeholder="Write your code here..."
+                spellCheck={false}
               />
             </div>
           </div>
@@ -546,47 +318,16 @@ export default function CodePage({
             <div className="w-8 h-1 bg-amber-600 rounded-full"></div>
           </div>
 
-          {/* Test Results & Actions */}
+          {/* Notes Section */}
           <div 
             className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
             style={{ height: `${100 - codeEditorHeight}%`, minHeight: '150px' }}
           >
-            <span className="text-lg font-bold flex-shrink-0">Test Results</span>
-            <div className="mt-2 flex-grow overflow-y-auto">
-              {(isSubmitting || isRunning) && (
-                <div className="flex items-center gap-2 text-amber-400">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-500"></div>
-                  <span>{isSubmitting ? 'Submitting' : 'Running'} your solution...</span>
-                </div>
-              )}
-              {submissionResults && (
-                <div className="space-y-2">
-                  {submissionResults.map((result, index) => {
-                    const isAccepted = result.status.description === "Accepted";
-                    const isError = result.status.id > 3;
-                    return (
-                      <div key={result.token || index} className={`p-2 rounded ${isAccepted ? "bg-green-800/50" : isError ? "bg-red-800/50" : "bg-yellow-800/50"}`}>
-                        <p className="font-bold">
-                          Test Case {index + 1}:{" "}
-                          <span className={`${isAccepted ? "text-green-400" : isError ? "text-red-400" : "text-yellow-400"}`}>
-                            {result.status.description}
-                          </span>
-                        </p>
-                        {!isAccepted && (result.stderr || result.compile_output) && (
-                          <pre className="text-xs text-red-300 mt-1 whitespace-pre-wrap bg-black/30 p-1 rounded">
-                            {result.stderr || result.compile_output}
-                          </pre>
-                        )}
-                        {result.time && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            Time: {result.time}s | Memory: {result.memory}KB
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+            <span className="text-lg font-bold flex-shrink-0">Notes & Testing</span>
+            <div className="mt-2 flex-grow">
+              <p className="text-gray-400 text-sm">
+                Use this space for your notes and manual testing. The code execution functionality has been removed.
+              </p>
             </div>
           </div>
         </div>
