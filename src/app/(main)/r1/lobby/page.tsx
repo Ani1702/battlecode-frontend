@@ -1,6 +1,7 @@
 
-import Lobbyr0 from "./Lobby";
+"use client"
+import Lobbyr1 from "./Lobby";
 
 export default function R1Lobby() {
-  return (<Lobbyr0 />);
+  return (<Lobbyr1 />);
 }
