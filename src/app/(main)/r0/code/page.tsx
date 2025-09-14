@@ -23,9 +23,36 @@ interface Problem {
 interface TestCase {
   stdin?: string;
   expected_output?: string;
-  input?: { stdin?: string; json?: any; };
-  output?: { stdout?: string; json?: any; };
+  input?: { stdin?: string; json?: Record<string, unknown>; };
+  output?: { stdout?: string; json?: Record<string, unknown>; };
   explanation?: string;
+}
+
+interface TimerData {
+  timeRemaining?: number;
+}
+
+interface RoundEndData {
+  message?: string;
+}
+
+interface StateResponse {
+  success?: boolean;
+  error?: { message?: string } | string;
+  currentProblem?: Problem;
+  problemIndex?: number;
+  timeRemaining?: number;
+  problems?: Problem[];
+  [key: string]: unknown;
+}
+
+interface NextQuestionResponse {
+  success?: boolean;
+  error?: { message?: string } | string;
+  problem?: Problem;
+  problemIndex?: number;
+  timeRemaining?: number;
+  [key: string]: unknown;
 }
 
 // --- Component ---
@@ -55,10 +82,10 @@ export default function R0Code() {
   // --- Socket Event Listeners ---
   useEffect(() => {
     if (!socket || !isConnected) return;
-    const handleTimerUpdate = (data: any) => {
+    const handleTimerUpdate = (data: TimerData) => {
       if (isMountedRef.current) setTimeRemaining(data.timeRemaining || 0);
     };
-    const handleRoundEnd = (data: any) => {
+    const handleRoundEnd = (data: RoundEndData) => {
       if (!isMountedRef.current) return;
       setIsRoundActive(false);
       showInfoToast(data.message || 'Round 0 has ended!');
@@ -113,7 +140,7 @@ export default function R0Code() {
 
     // FALLBACK METHOD: Only runs if sessionStorage is empty (e.g., on page refresh)
     console.log("🟡 No session data. Fetching from server (fallback).");
-    socket.emit('round0:getState', {}, (response: any) => {
+    socket.emit('round0:getState', {}, (response: StateResponse) => {
       if (!isMountedRef.current) return;
       try {
         if (response?.success && response?.currentProblem) {
@@ -147,9 +174,9 @@ export default function R0Code() {
 
     setPageIsLoading(true);
     try {
-      const response: any = await new Promise((resolve, reject) => {
+      const response: NextQuestionResponse = await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Request timeout')), 10000);
-          socket.emit('round0:nextQuestion', {}, (res: any) => {
+          socket.emit('round0:nextQuestion', {}, (res: NextQuestionResponse) => {
               clearTimeout(timeout);
               resolve(res);
           });
@@ -158,10 +185,10 @@ export default function R0Code() {
       if (!isMountedRef.current) return;
 
       if (response?.success) {
-        setCurrentProblem(response.problem);
-        setCurrentProblemIndex(response.problemIndex);
+        if (response.problem) setCurrentProblem(response.problem);
+        if (response.problemIndex !== undefined) setCurrentProblemIndex(response.problemIndex);
         setTimeRemaining(response.timeRemaining || 0);
-        showSuccessToast(`Moved to question ${response.problemIndex + 1}`);
+        showSuccessToast(`Moved to question ${(response.problemIndex || 0) + 1}`);
       } else {
         const errorMessage = typeof response?.error === 'string' ? response.error : 
                             (response?.error?.message || 'Failed to get next question');

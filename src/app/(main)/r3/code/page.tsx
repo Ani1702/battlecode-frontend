@@ -1,5 +1,5 @@
-import CodePage from "@/components/shared/CodePage";
+import CodePage from "./CodePage";
 
 export default function R3Code() {
-  return <CodePage round="3" />;
+  return <CodePage />;
 }

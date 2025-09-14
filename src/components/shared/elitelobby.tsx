@@ -23,7 +23,7 @@ export default function EliteLobby() {
   ]);
 
   // Mock data for bounty questions - replace with actual data source
-  const [bountyQuestions, setBountyQuestions] = useState<BountyQuestion[]>([
+  const [bountyQuestions, /*setBountyQuestions*/] = useState<BountyQuestion[]>([
     {
       id: '1',
       name: 'Binary Tree Maximum Path Sum',

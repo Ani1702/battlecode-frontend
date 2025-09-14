@@ -19,6 +19,26 @@ interface Participant {
   finishedAt?: string;
 }
 
+interface LobbyData {
+  participants?: Record<string, Participant>;
+  [key: string]: unknown;
+}
+
+interface RoundStartData {
+  problems?: unknown[];
+  startTime?: number;
+  [key: string]: unknown;
+}
+
+interface TimerData {
+  timeRemaining?: number;
+}
+
+interface ErrorData {
+  message?: string;
+  [key: string]: unknown;
+}
+
 export default function Lobbyr0() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
@@ -55,14 +75,14 @@ export default function Lobbyr0() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleLobbyUpdate = (lobbyData: any) => {
+    const handleLobbyUpdate = (lobbyData: LobbyData) => {
       setIsLoading(false);
       if (lobbyData.participants) {
         setParticipants(Object.values(lobbyData.participants));
       }
     };
 
-    const handleRoundStart = (data: any) => {
+    const handleRoundStart = (data: RoundStartData) => {
       console.log('Round 0 started! Data received:', data);
       
       // **** FIX: SAVE DATA TO sessionStorage WITH PROPER ERROR HANDLING ****
@@ -94,9 +114,9 @@ export default function Lobbyr0() {
       }, 1500); // Reduced delay slightly
     };
 
-    const handleTimer = (data: any) => setTimeRemaining(data.timeRemaining || 0);
+    const handleTimer = (data: TimerData) => setTimeRemaining(data.timeRemaining || 0);
     const handleRoundEnd = () => router.push('/dashboard');
-    const handleError = (error: any) => {
+    const handleError = (error: ErrorData) => {
       const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
       showErrorToast(errorMessage);
     };

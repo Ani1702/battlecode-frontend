@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
+// import { useRouter } from "next/navigation";
+// import { useAuth } from "@/contexts/AuthContext";
 import { 
   Lightbulb, 
   RotateCcw, 
@@ -10,8 +10,8 @@ import {
   CheckCircle, 
   Play, 
   Send,
-  PartyPopper,
-  XCircle
+  // PartyPopper,
+  // XCircle
 } from "lucide-react";
 import Button from "@/components/shared/button";
 import Editor, { useMonaco } from '@monaco-editor/react';
@@ -38,11 +38,11 @@ interface TestCase {
   expected_output?: string;
   input?: {
     stdin?: string;
-    json?: any;
+    json?: Record<string, unknown>;
   };
   output?: {
     stdout?: string;
-    json?: any;
+    json?: Record<string, unknown>;
   };
   explanation?: string;
 }
@@ -90,14 +90,14 @@ export default function CodePage({
   problems,
   currentProblemIndex,
   timeRemaining,
-  roundDuration,
-  isRoundActive,
+  /*roundDuration,
+  isRoundActive,*/
   isLoading,
   onNextQuestion,
   onReturnToLobby
 }: CodePageProps) {
-  const router = useRouter();
-  const { user, session } = useAuth();
+  /*const router = useRouter();*/
+  /*const { user, session } = useAuth();*/
 
   // ============================================================================
   // CORE STATE - Clean and Isolated
@@ -533,7 +533,7 @@ export default function CodePage({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          // 'Authorization': `Bearer ${session?.access_token}` // Remove session dependency for now
         },
         body: JSON.stringify(payload)
       });
@@ -552,7 +552,21 @@ export default function CodePage({
 
       const results = result.results || [];
       
-      const formattedResults: SubmissionResult[] = results.map((res: any, index: number) => ({
+      interface TestResult {
+        token?: string;
+        status?: {
+          id?: number;
+          description?: string;
+        };
+        passed?: boolean;
+        stdout?: string;
+        stderr?: string;
+        compile_output?: string;
+        time?: string;
+        memory?: string;
+      }
+
+      const formattedResults: SubmissionResult[] = results.map((res: TestResult, index: number) => ({
         token: res.token || `test_${index}`,
         status: {
           id: res.status?.id || (res.passed ? 3 : 4),
@@ -675,7 +689,7 @@ export default function CodePage({
     };
   };
 
-  const formatTestCaseData = (data: any): string => {
+  const formatTestCaseData = (data: unknown): string => {
     if (typeof data === 'string') return data;
     if (Array.isArray(data)) return data.join(', ');
     if (typeof data === 'object' && data !== null) {

@@ -19,7 +19,12 @@ export default function IncomingChallengeCard({
   onDeny 
 }: IncomingChallengeCardProps) {
   return (
-    <div className="bg-gradient-to-r from-orange-600 to-orange-300 rounded-lg p-4 mb-3 shadow-md">
+    <div 
+      className="rounded-lg p-4 mb-3 shadow-md"
+      style={{
+        background: 'linear-gradient(to right, #FB6528, #BF2201)'
+      }}
+    >
       <div className="flex items-center justify-between">
         {/* Player Info */}
         <div className="flex-1">

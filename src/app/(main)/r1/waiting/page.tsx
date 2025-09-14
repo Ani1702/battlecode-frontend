@@ -1,7 +1,7 @@
-import waiting from "@/components/shared/waiting";
 
-export default function Waiting(){
+
+export default function Waiting_room(){
     return (
-        <Waiting />
+        <div>Waiting Room</div>
     );
 }

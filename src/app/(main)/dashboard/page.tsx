@@ -1,7 +1,7 @@
 "use client"
-import ContributionsGrid from "@/components/shared/ContributionsGrid";
-import Rewards from "@/components/shared/Rewards";
-import Navbar from "@/components/shared/Navbar";
+// import ContributionsGrid from "@/components/shared/ContributionsGrid";
+// import Rewards from "@/components/shared/Rewards";
+// import Navbar from "@/components/shared/Navbar";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showErrorToast, showSuccessToast } from "@/components/shared/CustomToast";
 import { useState, useEffect } from "react";
@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
 import { useRouter } from "next/navigation";
 import SignOut from "@/components/auth/SignOut"
-import toast from "react-hot-toast";
+// import toast from "react-hot-toast";
 import { useRef } from 'react';
 
 
@@ -41,7 +41,7 @@ interface CurrentRoundData {
 }
 
 export default function Dashboard() {
-  const { user, session, isLoading, userRole, username } = useAuth();
+  const { user, session, isLoading, userRole, /*username*/ } = useAuth();
   const { socket, isConnected } = useSocket();
   const router = useRouter();
 
@@ -325,7 +325,7 @@ export default function Dashboard() {
             <div className = "flex-[0.8] ml-5 mt-3 text-4xl flex justify-start items-center orbitron"> Challenger Rounds</div>
             <div className="flex-4 ">
               {[0, 1, 2, 3].map((i) => {
-                const isCurrentRound = currentRoundData?.currentRoundNumber === i;
+                /*const isCurrentRound = currentRoundData?.currentRoundNumber === i;*/
                 const roundStatus = currentRoundData?.rounds.find(r => r.roundNumber === i);
                 const isActive = roundStatus?.isActive || false;
                 const locked = islocked[i];

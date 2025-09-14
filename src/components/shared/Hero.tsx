@@ -18,7 +18,7 @@ const Hero = () => {
       await signInWithGoogle();
     }
   };
-  const handleKeyPress = (event:any) => {
+  const handleKeyPress = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && user) {
       setIsExiting(true);
       setTimeout(() => {
@@ -109,11 +109,11 @@ const Hero = () => {
 
         <div className="w-[27rem] quote flex relative bottom-8 z-10 left-1/2 transform -translate-x-1/2 justify-center">
           <p className="z-1 text-center uppercase tracking-[4px] absolute bottom-[5rem] text-[0.85rem]">
-            This is more than just programming—it's precision under pressure.
+            This is more than just programming—it&apos;s precision under pressure.
             Enter the match with intent. Exit with impact.
           </p>
           <p className="text-center uppercase tracking-[4px] absolute bottom-[5rem] blur-md text-[0.85rem]">
-            This is more than just programming—it's precision under pressure.
+            This is more than just programming—it&apos;s precision under pressure.
             Enter the match with intent. Exit with impact.
           </p>
         </div>

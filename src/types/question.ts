@@ -1,11 +1,11 @@
 export interface TestCase {
   input: {
     stdin?: string;
-    json?: any;
+    json?: unknown;
   };
   output: {
     stdout?: string;
-    json?: any;
+    json?: unknown;
   };
   explanation?: string;
 }

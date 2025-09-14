@@ -1,6 +1,6 @@
 // ColoredBtn.tsx
 "use client";
-import { ReactNode } from "react";
+// import { ReactNode } from "react";
 
 interface ColoredBtnProps {
   onClick?: () => void;

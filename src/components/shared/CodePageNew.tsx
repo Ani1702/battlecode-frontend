@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useSocket } from "@/contexts/SocketContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { /*useRouter*/ } from "next/navigation";
+// import { useSocket } from "@/contexts/SocketContext";
+// import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
-import { Question, QuestionSession, QuestionManager, TestCase, sampleQuestions } from "@/types/question";
+import { Question, QuestionSession, QuestionManager, /*TestCase,*/ sampleQuestions } from "@/types/question";
 import Editor, { useMonaco } from '@monaco-editor/react';
 
+/*
 interface MatchData {
   id: string;
   playerAId: string;
@@ -22,6 +23,7 @@ interface MatchData {
   currentQuestionIndex?: number;
   startedAt?: string;
 }
+*/
 
 interface SubmissionResult {
   token: string;
@@ -42,7 +44,7 @@ interface CodePageProps {
 
 export default function CodePage({ round }: CodePageProps) {
   // const { matchId } = useParams();
-  const router = useRouter();
+  /*const router = useRouter();*/
   // const { socket } = useSocket();
   // const { user } = useAuth();
 
@@ -52,16 +54,16 @@ export default function CodePage({ round }: CodePageProps) {
   const [code, setCode] = useState(mockQuestion.boilerplate["javascript"]);
   const [language, setLanguage] = useState("javascript");
   const [timeLeft, setTimeLeft] = useState(mockQuestion.timeLimit); // Use question's time limit
-  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(mockQuestion);
+  const [currentQuestion, /*setCurrentQuestion*/] = useState<Question | null>(mockQuestion);
   const [questionSession, setQuestionSession] = useState<QuestionSession | null>(
     QuestionManager.createQuestionSession(mockQuestion)
   );
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [totalQuestions, setTotalQuestions] = useState(1);
-  const [matchStatus, setMatchStatus] = useState("PRACTICE");
+  const [/*questionIndex, setQuestionIndex*/] = useState(0);
+  const [/*totalQuestions, setTotalQuestions*/] = useState(1);
+  const [/*matchStatus, setMatchStatus*/] = useState("PRACTICE");
   // const [match, setMatch] = useState<MatchData | null>(null);
   // const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [/*loading, setLoading*/] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
@@ -188,19 +190,19 @@ export default function CodePage({ round }: CodePageProps) {
   }, [isTimerRunning, timeLeft, questionSession, currentQuestion]);
 
   // Function to reset timer for new question
-  const resetTimer = (newTimeLimit?: number) => {
+  /*const resetTimer = (newTimeLimit?: number) => {
     const timeLimit = newTimeLimit || currentQuestion?.timeLimit || 1800;
     setTimeLeft(timeLimit);
     setIsTimerRunning(true);
     if (currentQuestion) {
       setQuestionSession(QuestionManager.createQuestionSession(currentQuestion));
     }
-  };
+  };*/
 
   // Function to pause/resume timer
-  const toggleTimer = () => {
+  /*const toggleTimer = () => {
     setIsTimerRunning(prev => !prev);
-  };
+  };*/
 
   // Function to save session to localStorage
   const saveSession = () => {
@@ -216,7 +218,7 @@ export default function CodePage({ round }: CodePageProps) {
   };
 
   // Function to load session from localStorage
-  const loadSession = (questionId: string) => {
+  /*const loadSession = (questionId: string) => {
     const savedSession = localStorage.getItem(`question_session_${questionId}`);
     if (savedSession) {
       const sessionData = JSON.parse(savedSession);
@@ -227,7 +229,7 @@ export default function CodePage({ round }: CodePageProps) {
       return true;
     }
     return false;
-  };
+  };*/
 
   // Save session periodically
   useEffect(() => {
@@ -253,7 +255,7 @@ export default function CodePage({ round }: CodePageProps) {
   };
 
   // Helper function to format input/output without brackets
-  const formatTestCaseData = (data: any): string => {
+  const formatTestCaseData = (data: unknown): string => {
     if (typeof data === 'string') {
       return data;
     }

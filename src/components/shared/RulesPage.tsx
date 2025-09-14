@@ -1,5 +1,5 @@
 "use client";
-import { useParams, useRouter } from "next/navigation";
+import { /*useParams,*/ useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function RulesPage({ rules, round }: { rules: string[]; round: string | string[] }) {

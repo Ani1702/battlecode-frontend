@@ -67,7 +67,7 @@ export default function Waiting({
   };
 
   // Colors for bubbles
-  const bubbleColors = [
+  /*const bubbleColors = [
     'rgba(249, 115, 22, 0.7)', // orange
     'rgba(59, 130, 246, 0.7)', // blue
     'rgba(16, 185, 129, 0.7)', // emerald
@@ -76,7 +76,7 @@ export default function Waiting({
     'rgba(245, 158, 11, 0.7)', // amber
     'rgba(20, 184, 166, 0.7)', // teal
     'rgba(239, 68, 68, 0.7)',  // red
-  ];
+  ];*/
 
   // Create new bubble
   const createBubble = () => {

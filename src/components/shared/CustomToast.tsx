@@ -1,10 +1,10 @@
 import React from 'react';
-import { toast } from 'react-hot-toast';
+import { toast, Renderable } from 'react-hot-toast';
 import { CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
 
 interface CustomToastProps {
   message: string;
-  icon?: React.ReactNode;
+  icon?: Renderable;
   duration?: number;
   position?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
 }
@@ -34,7 +34,7 @@ export const showCustomToast = ({
     className: '',
 
     // Custom Icon
-    icon: icon as any,
+    icon: icon,
 
     // Change colors of success/error/loading icon to match theme
     iconTheme: {

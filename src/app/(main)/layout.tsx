@@ -1,5 +1,5 @@
 "use client";
-import Navbar from "@/components/shared/Navbar";
+
 import UsernamePopup from "@/components/shared/UsernamePopup";
 import { useAuth } from "@/contexts/AuthContext";
 import { ReactNode, useState, useEffect } from "react";

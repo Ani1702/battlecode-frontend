@@ -4,8 +4,12 @@ import { createContext, useContext, useState, ReactNode } from "react";
 // Define the shape of the data we will store
 interface Problem {
   id: string;
-  // Add other problem properties as needed from your main interface
-  [key: string]: any; 
+  title?: string;
+  description?: string;
+  difficulty?: string;
+  constraints?: string[];
+  hints?: string[];
+  [key: string]: unknown; 
 }
 
 interface RoundData {

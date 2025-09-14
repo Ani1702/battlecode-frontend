@@ -3,7 +3,7 @@ interface PlayerCardProps {
   avatar: string;
 }
 
-export default function PlayerCard({ username, avatar }: PlayerCardProps) {
+export default function PlayerCard({ username, /*avatar*/ }: PlayerCardProps) {
   return (
     <div className="relative w-full h-[100px] mb-4 hover:scale-105 cursor-pointer group transition-all duration-300">
       {/* Base SVG Background */}

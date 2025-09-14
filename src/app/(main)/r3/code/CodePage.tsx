@@ -1,337 +1,343 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Button from "@/components/shared/button";
 
-interface Problem {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: string;
-  constraints: string[];
-  boilerplate: { [key: string]: string };
-  sampleTestCases: TestCase[];
-  hiddenTestCases?: TestCase[];
-  testCases?: TestCase[]; // Legacy support
-  hints: string[];
-  avgTimeComplexity?: string;
-  avgSpaceComplexity?: string;
-}
-
-interface TestCase {
-  stdin?: string;
-  expected_output?: string;
-  input?: {
-    stdin?: string;
-    json?: any;
-  };
-  output?: {
-    stdout?: string;
-    json?: any;
-  };
-  explanation?: string;
-}
-
-interface CodePageProps {
-  round: string;
-  currentProblem: Problem | null;
-  problems: Problem[];
-  currentProblemIndex: number;
-  timeRemaining: number;
-  roundDuration: number;
-  isRoundActive: boolean;
-  isLoading: boolean;
-  onNextQuestion?: () => void;
-  onReturnToLobby?: () => void;
-}
-
-export default function CodePage({ 
-  round,
-  currentProblem,
-  problems,
-  currentProblemIndex,
-  timeRemaining,
-  roundDuration,
-  isRoundActive,
-  isLoading,
-  onNextQuestion,
-  onReturnToLobby
-}: CodePageProps) {
-  const router = useRouter();
-
-  // Code editor state
-  const [code, setCode] = useState("");
-  const [language, setLanguage] = useState("python");
-  const [showHints, setShowHints] = useState(false);
-  
-  // Resizable splitter state
-  const [codeEditorHeight, setCodeEditorHeight] = useState(60);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // Handle language change
-  useEffect(() => {
-    try {
-      if (currentProblem && currentProblem.boilerplate) {
-        const newCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
-        setCode(newCode);
-      }
-    } catch (error) {
-      console.error('Error updating code for language change:', error);
-    }
-  }, [language, currentProblem]);
-
-  // Resizable splitter handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    e.preventDefault();
-  };
-
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return;
-    
-    const container = document.querySelector('.code-results-container') as HTMLElement;
-    if (!container) return;
-    
-    const rect = container.getBoundingClientRect();
-    const containerHeight = rect.height;
-    const mouseY = e.clientY - rect.top;
-    const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
-    
-    setCodeEditorHeight(newHeightPercentage);
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-    } else {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isDragging]);
-
-  // Format time display
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Get timer display with color coding
-  const getTimerDisplay = (): { time: string; className: string } => {
-    const isWarning = timeRemaining <= 300; // 5 minutes
-    const isCritical = timeRemaining <= 60;  // 1 minute
-    
-    return {
-      time: formatTime(timeRemaining),
-      className: isCritical ? 'border-red-600 text-red-400' : 
-                 isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
-    };
-  };
-
-  // Format test case data for display
-  const formatTestCaseData = (data: any): string => {
-    if (typeof data === 'string') return data;
-    if (Array.isArray(data)) return data.join(', ');
-    if (typeof data === 'object' && data !== null) {
-      const entries = Object.entries(data);
-      return entries.map(([key, value]) => {
-        if (Array.isArray(value)) {
-          return `${key} = [${value.join(', ')}]`;
-        }
-        return `${key} = ${value}`;
-      }).join('\n');
-    }
-    return String(data);
-  };
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black/40 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p>Loading Round {round}...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // No problem state
-  if (!currentProblem) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black/40 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <p>No active round found or waiting for problems to load...</p>
-          <button
-            onClick={onReturnToLobby}
-            className="px-6 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
-          >
-            Return to Lobby
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+export default function CodePage() {
   return (
-    <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
-      {/* Main Content */}
-      <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
-        {/* Question Panel */}
-        <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
-          <div className="flex justify-between items-start mb-4 flex-shrink-0">
-            <div>
-              <h2 className="text-2xl font-bold">{currentProblem.title}</h2>
-              <div className="flex gap-4 text-sm text-gray-400 mt-1">
-                <span>Difficulty: {currentProblem.difficulty}</span>
-                <span>Round: {round}</span>
-                <span>Question: {currentProblemIndex + 1}/{problems.length}</span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                content={showHints ? "Hide" : "Hint💡"}
-                onClick={() => setShowHints(!showHints)}
-              />
-              {currentProblemIndex < problems.length - 1 && onNextQuestion && (
-                <button
-                  onClick={onNextQuestion}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  Next →
-                </button>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {showHints && currentProblem.hints && currentProblem.hints.length > 0 && (
-              <div className="mb-4 bg-gray-800 p-3 rounded">
-                <h3 className="font-bold mb-2 text-amber-400">Hints:</h3>
-                <ul className="list-disc list-inside text-gray-300 space-y-2">
-                  {currentProblem.hints.map((hint, i) => <li key={i}>{hint}</li>)}
-                </ul>
-              </div>
-            )}
-            
-            <p className="mb-4 text-gray-300 whitespace-pre-wrap">{currentProblem.description}</p>
-
-            {currentProblem.constraints && currentProblem.constraints.length > 0 && (
-              <>
-                <h3 className="font-bold mb-2 text-amber-400">Constraints:</h3>
-                <ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">
-                  {currentProblem.constraints.map((constraint, i) => (
-                    <li key={i}>{constraint}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {currentProblem.sampleTestCases && currentProblem.sampleTestCases.length > 0 && (
-              <>
-                <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
-                {currentProblem.sampleTestCases.map((testCase, i) => (
-                  <div key={i} className="mb-4 bg-gray-800 p-3 rounded font-mono text-sm">
-                    <p className="font-bold text-gray-400">Input:</p>
-                    <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
-                      {formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')}
-                    </pre>
-                    <p className="mt-2 font-bold text-gray-400">Output:</p>
-                    <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
-                      {formatTestCaseData(testCase.expected_output || testCase.output?.stdout || testCase.output?.json || '')}
-                    </pre>
-                    {testCase.explanation && (
-                      <p className="mt-2 text-xs text-gray-400 italic">
-                        Explanation: {testCase.explanation}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Code Panel */}
-        <div className="w-1/2 flex flex-col code-results-container border-amber-500" style={{ height: '100%' }}>
-          {/* Code Editor */}
-          <div 
-            className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
-            style={{ height: `${codeEditorHeight}%`, minHeight: '200px' }}
-          >
-            <div className="flex justify-between items-center mb-2 gap-2">
-              <div className="flex-1 flex gap-2">
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="bg-gray-800 flex-1 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
-                  <option value="python">Python</option>
-                  <option value="java">Java</option>
-                  <option value="cpp">C++</option>
-                  <option value="c">C</option>
-                  <option value="javascript">JavaScript</option>
-                </select>
-                <div className={`bg-gray-800 flex-1 text-white p-2 rounded border focus:outline-none focus:ring-2 focus:ring-amber-500 text-center font-mono ${
-                  getTimerDisplay().className
-                }`}>
-                  {getTimerDisplay().time}
-                </div>
-              </div>
-            </div>
-            
-            {/* Simple Code Editor */}
-            <div className="flex-1 rounded overflow-hidden border border-gray-700">
-              <textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full h-full bg-gray-900 text-white p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
-                placeholder="Write your code here..."
-                spellCheck={false}
-              />
-            </div>
-          </div>
-
-          {/* Resizable Divider */}
-          <div
-            className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors duration-200 flex items-center justify-center ${
-              isDragging ? 'bg-amber-600/60' : ''
-            }`}
-            onMouseDown={handleMouseDown}
-          >
-            <div className="w-8 h-1 bg-amber-600 rounded-full"></div>
-          </div>
-
-          {/* Notes Section */}
-          <div 
-            className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
-            style={{ height: `${100 - codeEditorHeight}%`, minHeight: '150px' }}
-          >
-            <span className="text-lg font-bold flex-shrink-0">Notes & Testing</span>
-            <div className="mt-2 flex-grow">
-              <p className="text-gray-400 text-sm">
-                Use this space for your notes and manual testing. The code execution functionality has been removed.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <h1 className="text-2xl font-bold mb-4">Round 3 - Code Challenge</h1>
+      <p>Coming soon...</p>
     </div>
   );
 }
+
+// interface Problem {
+//   id: string;
+//   title: string;
+//   description: string;
+//   difficulty: string;
+//   constraints: string[];
+//   boilerplate: { [key: string]: string };
+//   sampleTestCases: TestCase[];
+//   hiddenTestCases?: TestCase[];
+//   testCases?: TestCase[]; // Legacy support
+//   hints: string[];
+//   avgTimeComplexity?: string;
+//   avgSpaceComplexity?: string;
+// }
+
+// interface TestCase {
+//   stdin?: string;
+//   expected_output?: string;
+//   input?: {
+//     stdin?: string;
+//     json?: any;
+//   };
+//   output?: {
+//     stdout?: string;
+//     json?: any;
+//   };
+//   explanation?: string;
+// }
+
+// interface CodePageProps {
+//   round: string;
+//   currentProblem: Problem | null;
+//   problems: Problem[];
+//   currentProblemIndex: number;
+//   timeRemaining: number;
+//   roundDuration: number;
+//   isRoundActive: boolean;
+//   isLoading: boolean;
+//   onNextQuestion?: () => void;
+//   onReturnToLobby?: () => void;
+// }
+
+// export default function CodePage({ 
+//   round,
+//   currentProblem,
+//   problems,
+//   currentProblemIndex,
+//   timeRemaining,
+//   roundDuration,
+//   isRoundActive,
+//   isLoading,
+//   onNextQuestion,
+//   onReturnToLobby
+// }: CodePageProps) {
+//   const router = useRouter();
+
+//   // Code editor state
+//   const [code, setCode] = useState("");
+//   const [language, setLanguage] = useState("python");
+//   const [showHints, setShowHints] = useState(false);
+  
+//   // Resizable splitter state
+//   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
+//   const [isDragging, setIsDragging] = useState(false);
+
+//   // Handle language change
+//   useEffect(() => {
+//     try {
+//       if (currentProblem && currentProblem.boilerplate) {
+//         const newCode = currentProblem.boilerplate[language] || currentProblem.boilerplate['python'] || '';
+//         setCode(newCode);
+//       }
+//     } catch (error) {
+//       console.error('Error updating code for language change:', error);
+//     }
+//   }, [language, currentProblem]);
+
+//   // Resizable splitter handlers
+//   const handleMouseDown = (e: React.MouseEvent) => {
+//     setIsDragging(true);
+//     e.preventDefault();
+//   };
+
+//   const handleMouseMove = (e: MouseEvent) => {
+//     if (!isDragging) return;
+    
+//     const container = document.querySelector('.code-results-container') as HTMLElement;
+//     if (!container) return;
+    
+//     const rect = container.getBoundingClientRect();
+//     const containerHeight = rect.height;
+//     const mouseY = e.clientY - rect.top;
+//     const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
+    
+//     setCodeEditorHeight(newHeightPercentage);
+//   };
+
+//   const handleMouseUp = () => {
+//     setIsDragging(false);
+//   };
+
+//   useEffect(() => {
+//     if (isDragging) {
+//       document.addEventListener('mousemove', handleMouseMove);
+//       document.addEventListener('mouseup', handleMouseUp);
+//       document.body.style.cursor = 'row-resize';
+//       document.body.style.userSelect = 'none';
+//     } else {
+//       document.removeEventListener('mousemove', handleMouseMove);
+//       document.removeEventListener('mouseup', handleMouseUp);
+//       document.body.style.cursor = '';
+//       document.body.style.userSelect = '';
+//     }
+
+//     return () => {
+//       document.removeEventListener('mousemove', handleMouseMove);
+//       document.removeEventListener('mouseup', handleMouseUp);
+//       document.body.style.cursor = '';
+//       document.body.style.userSelect = '';
+//     };
+//   }, [isDragging]);
+
+//   // Format time display
+//   const formatTime = (seconds: number): string => {
+//     const mins = Math.floor(seconds / 60);
+//     const secs = seconds % 60;
+//     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+//   };
+
+//   // Get timer display with color coding
+//   const getTimerDisplay = (): { time: string; className: string } => {
+//     const isWarning = timeRemaining <= 300; // 5 minutes
+//     const isCritical = timeRemaining <= 60;  // 1 minute
+    
+//     return {
+//       time: formatTime(timeRemaining),
+//       className: isCritical ? 'border-red-600 text-red-400' : 
+//                  isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
+//     };
+//   };
+
+//   // Format test case data for display
+//   const formatTestCaseData = (data: any): string => {
+//     if (typeof data === 'string') return data;
+//     if (Array.isArray(data)) return data.join(', ');
+//     if (typeof data === 'object' && data !== null) {
+//       const entries = Object.entries(data);
+//       return entries.map(([key, value]) => {
+//         if (Array.isArray(value)) {
+//           return `${key} = [${value.join(', ')}]`;
+//         }
+//         return `${key} = ${value}`;
+//       }).join('\n');
+//     }
+//     return String(data);
+//   };
+
+//   // Loading state
+//   if (isLoading) {
+//     return (
+//       <div className="flex items-center justify-center h-screen bg-black/40 text-white">
+//         <div className="flex flex-col items-center gap-4">
+//           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+//           <p>Loading Round {round}...</p>
+//         </div>
+//       </div>
+//     );
+//   }
+
+//   // No problem state
+//   if (!currentProblem) {
+//     return (
+//       <div className="flex items-center justify-center h-screen bg-black/40 text-white">
+//         <div className="flex flex-col items-center gap-4">
+//           <p>No active round found or waiting for problems to load...</p>
+//           <button
+//             onClick={onReturnToLobby}
+//             className="px-6 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+//           >
+//             Return to Lobby
+//           </button>
+//         </div>
+//       </div>
+//     );
+//   }
+
+//   return (
+//     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
+//       {/* Main Content */}
+//       <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
+//         {/* Question Panel */}
+//         <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
+//           <div className="flex justify-between items-start mb-4 flex-shrink-0">
+//             <div>
+//               <h2 className="text-2xl font-bold">{currentProblem.title}</h2>
+//               <div className="flex gap-4 text-sm text-gray-400 mt-1">
+//                 <span>Difficulty: {currentProblem.difficulty}</span>
+//                 <span>Round: {round}</span>
+//                 <span>Question: {currentProblemIndex + 1}/{problems.length}</span>
+//               </div>
+//             </div>
+//             <div className="flex gap-2">
+//               <Button
+//                 content={showHints ? "Hide" : "Hint💡"}
+//                 onClick={() => setShowHints(!showHints)}
+//               />
+//               {currentProblemIndex < problems.length - 1 && onNextQuestion && (
+//                 <button
+//                   onClick={onNextQuestion}
+//                   className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+//                 >
+//                   Next →
+//                 </button>
+//               )}
+//             </div>
+//           </div>
+          
+//           <div className="flex-1 overflow-y-auto min-h-0">
+//             {showHints && currentProblem.hints && currentProblem.hints.length > 0 && (
+//               <div className="mb-4 bg-gray-800 p-3 rounded">
+//                 <h3 className="font-bold mb-2 text-amber-400">Hints:</h3>
+//                 <ul className="list-disc list-inside text-gray-300 space-y-2">
+//                   {currentProblem.hints.map((hint, i) => <li key={i}>{hint}</li>)}
+//                 </ul>
+//               </div>
+//             )}
+            
+//             <p className="mb-4 text-gray-300 whitespace-pre-wrap">{currentProblem.description}</p>
+
+//             {currentProblem.constraints && currentProblem.constraints.length > 0 && (
+//               <>
+//                 <h3 className="font-bold mb-2 text-amber-400">Constraints:</h3>
+//                 <ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">
+//                   {currentProblem.constraints.map((constraint, i) => (
+//                     <li key={i}>{constraint}</li>
+//                   ))}
+//                 </ul>
+//               </>
+//             )}
+
+//             {currentProblem.sampleTestCases && currentProblem.sampleTestCases.length > 0 && (
+//               <>
+//                 <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
+//                 {currentProblem.sampleTestCases.map((testCase, i) => (
+//                   <div key={i} className="mb-4 bg-gray-800 p-3 rounded font-mono text-sm">
+//                     <p className="font-bold text-gray-400">Input:</p>
+//                     <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
+//                       {formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')}
+//                     </pre>
+//                     <p className="mt-2 font-bold text-gray-400">Output:</p>
+//                     <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
+//                       {formatTestCaseData(testCase.expected_output || testCase.output?.stdout || testCase.output?.json || '')}
+//                     </pre>
+//                     {testCase.explanation && (
+//                       <p className="mt-2 text-xs text-gray-400 italic">
+//                         Explanation: {testCase.explanation}
+//                       </p>
+//                     )}
+//                   </div>
+//                 ))}
+//               </>
+//             )}
+//           </div>
+//         </div>
+
+//         {/* Code Panel */}
+//         <div className="w-1/2 flex flex-col code-results-container border-amber-500" style={{ height: '100%' }}>
+//           {/* Code Editor */}
+//           <div 
+//             className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
+//             style={{ height: `${codeEditorHeight}%`, minHeight: '200px' }}
+//           >
+//             <div className="flex justify-between items-center mb-2 gap-2">
+//               <div className="flex-1 flex gap-2">
+//                 <select
+//                   value={language}
+//                   onChange={(e) => setLanguage(e.target.value)}
+//                   className="bg-gray-800 flex-1 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
+//                 >
+//                   <option value="python">Python</option>
+//                   <option value="java">Java</option>
+//                   <option value="cpp">C++</option>
+//                   <option value="c">C</option>
+//                   <option value="javascript">JavaScript</option>
+//                 </select>
+//                 <div className={`bg-gray-800 flex-1 text-white p-2 rounded border focus:outline-none focus:ring-2 focus:ring-amber-500 text-center font-mono ${
+//                   getTimerDisplay().className
+//                 }`}>
+//                   {getTimerDisplay().time}
+//                 </div>
+//               </div>
+//             </div>
+            
+//             {/* Simple Code Editor */}
+//             <div className="flex-1 rounded overflow-hidden border border-gray-700">
+//               <textarea
+//                 value={code}
+//                 onChange={(e) => setCode(e.target.value)}
+//                 className="w-full h-full bg-gray-900 text-white p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
+//                 placeholder="Write your code here..."
+//                 spellCheck={false}
+//               />
+//             </div>
+//           </div>
+
+//           {/* Resizable Divider */}
+//           <div
+//             className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors duration-200 flex items-center justify-center ${
+//               isDragging ? 'bg-amber-600/60' : ''
+//             }`}
+//             onMouseDown={handleMouseDown}
+//           >
+//             <div className="w-8 h-1 bg-amber-600 rounded-full"></div>
+//           </div>
+
+//           {/* Notes Section */}
+//           <div 
+//             className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
+//             style={{ height: `${100 - codeEditorHeight}%`, minHeight: '150px' }}
+//           >
+//             <span className="text-lg font-bold flex-shrink-0">Notes & Testing</span>
+//             <div className="mt-2 flex-grow">
+//               <p className="text-gray-400 text-sm">
+//                 Use this space for your notes and manual testing. The code execution functionality has been removed.
+//               </p>
+//             </div>
+//           </div>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }

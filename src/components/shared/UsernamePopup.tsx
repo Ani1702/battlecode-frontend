@@ -36,7 +36,7 @@ export default function UsernamePopup({ isOpen, onClose }: UsernamePopupProps) {
       } else {
         setError("Username is already taken or invalid");
       }
-    } catch (error) {
+    } catch {
       setError("Failed to update username. Please try again.");
     } finally {
       setIsLoading(false);

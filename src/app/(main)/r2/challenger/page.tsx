@@ -13,7 +13,7 @@ interface Player {
 
 export default function ChallengerLobby() {
   // Mock data for elites - replace with actual data source
-  const [elites, setElites] = useState<Player[]>([
+  const [elites, /*setElites*/] = useState<Player[]>([
     { id: '1', username: 'CodeMaster2024', rank: 15 },
     { id: '2', username: 'AlgorithmNinja', rank: 8 },
     { id: '3', username: 'ByteWarrior', rank: 23 },
@@ -23,7 +23,7 @@ export default function ChallengerLobby() {
   ]);
 
   // Mock data for bounty questions - replace with actual data source
-  const [bountyQuestions, setBountyQuestions] = useState<BountyQuestion[]>([
+  const [bountyQuestions, /*setBountyQuestions*/] = useState<BountyQuestion[]>([
     {
       id: '1',
       name: 'Binary Tree Maximum Path Sum',
@@ -89,8 +89,8 @@ export default function ChallengerLobby() {
 
   return (
     <>
-      <div className="flex bg-[url('/elite-bg.svg')] bg-cover h-screen flex-col overflow-hidden orbitron">
-        <div className="flex-1 flex items-center justify-center text-6xl orbitron">CHALLENGER LOBBY</div>
+      <div className="flex bg-[url('/elite_bg2.svg')] bg-[length:1200px_800px] bg-center bg-no-repeat h-screen flex-col overflow-hidden orbitron">
+        <div className="flex-1 flex items-center justify-center text-6xl oxanium white-glow"><img src = "/b-2.svg" className = "h-20"/>CHALLENGER DASHBOARD</div>
         <div className="flex-4 flex flex-row">
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">

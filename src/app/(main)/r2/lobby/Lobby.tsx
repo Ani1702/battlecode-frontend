@@ -18,21 +18,17 @@ interface Participant {
   waitingSince?: number;
 }
 
-interface LobbyData {
+interface LobbyUpdateData {
   participants?: Participant[];
   isActive?: boolean;
   [key: string]: unknown;
 }
 
 interface RoundStartData {
-  problems?: unknown[];
-  startTime?: number;
   [key: string]: unknown;
 }
 
 interface MatchFoundData {
-  matchId?: string;
-  opponent?: Participant;
   [key: string]: unknown;
 }
 
@@ -85,7 +81,7 @@ export default function Lobbyr1(){
     useEffect(() => {
         if (!socket) return;
 
-        const handleLobbyUpdate = (lobbyData: LobbyData) => {
+        const handleLobbyUpdate = (lobbyData: LobbyUpdateData) => {
             setIsLoading(false);
             if (lobbyData.participants) {
                 setParticipants(lobbyData.participants);
