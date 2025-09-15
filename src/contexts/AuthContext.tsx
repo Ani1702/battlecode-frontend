@@ -11,6 +11,7 @@ type AuthContextType = {
   avatarUrl: string | null;
   hasUsername: boolean | null;
   username: string | null;
+  userName: string | null; // Added name from database
   userId: string | null;
   userRole: string | null;
   signInWithGoogle: () => Promise<void>;
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [hasUsername, setHasUsername] = useState<boolean | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null); // Added name state
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const supabase = createBrowserClient(
@@ -58,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUserId(null);
             setHasUsername(null);
             setUsername(null);
+            setUserName(null);
             setUserRole(null);
             setAvatarUrl(null);
             setIsLoading(false);
@@ -94,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               // Store the user data from backend
               if (data.user) {
                 setUsername(data.user.username);
+                setUserName(data.user.name); // Store the name
                 setUserId(data.user.id);
                 setUserRole(data.user.role);
               }
@@ -112,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUserId(null);
               setHasUsername(null);
               setUsername(null);
+              setUserName(null); // Clear name
               setUserRole(null);
               setAvatarUrl(null);
               
@@ -309,7 +314,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase.auth, router]);
   const signInWithGoogle = async () => {
     try {
-      const { /*data,*/ error } = await supabase.auth.signInWithOAuth({
+      console.log("🔐 Starting Google OAuth...");
+      console.log("🔐 Redirect URL will be:", `${location.origin}/api/auth/callback`);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${location.origin}/api/auth/callback`,
@@ -319,12 +327,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
+      console.log("🔐 OAuth response:", { data, error });
+
       if (error) {
-        console.error("Sign-in error:", error);
+        console.error("❌ Sign-in error:", error);
         throw error;
       }
+      
+      console.log("🔐 OAuth initiated successfully, redirecting...");
     } catch (error) {
-      console.error("Error during Google sign-in:", error);
+      console.error("❌ Error during Google sign-in:", error);
     }
   };
 
@@ -352,6 +364,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserId(null);
       setHasUsername(null);
       setUsername(null);
+      setUserName(null);
       setUserRole(null);
       setAvatarUrl(null);
       
@@ -432,7 +445,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, isLoading, avatarUrl, hasUsername, username, userId, userRole, signInWithGoogle, signOut, updateUsername }}
+      value={{ user, session, isLoading, avatarUrl, hasUsername, username, userName, userId, userRole, signInWithGoogle, signOut, updateUsername }}
     >
       {children}
     </AuthContext.Provider>

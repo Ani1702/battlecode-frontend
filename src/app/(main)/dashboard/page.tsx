@@ -41,7 +41,7 @@ interface CurrentRoundData {
 }
 
 export default function Dashboard() {
-  const { user, session, isLoading, userRole, /*username*/ } = useAuth();
+  const { user, session, isLoading, userRole, userName /*username*/ } = useAuth();
   const { socket, isConnected } = useSocket();
   const router = useRouter();
 
@@ -320,7 +320,11 @@ export default function Dashboard() {
               <h1 className="text-5xl  text-white  flex-[0.2] flex justify-start items-center">
                 <p className = "font-bold">Welcome </p>
                 <span className="text-orange-500  text-5xl ml-2">
-                  {user?.email?.split('@')[0] || 'Warrior'}
+                  {(isLoading || (user && !userName)) ? (
+                    <span className="animate-pulse">...</span>
+                  ) : (
+                    userName || 'Warrior'
+                  )}
                 </span>
                 
               </h1>

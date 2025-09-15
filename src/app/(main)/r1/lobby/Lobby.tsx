@@ -71,7 +71,7 @@ export default function Lobbyr1(){
         if (!authenticationChecked || authLoading || !userId || !user || !socket || !isConnected || hasJoinedLobby) {
             return;
         }
-        socket.emit('round1:join', { userId, username: user?.user_metadata?.full_name || user?.email }, (response: { success?: boolean; error?: string }) => {
+        socket.emit('round1:join', { userId, username: user?.user_metadata?.full_name || user?.id }, (response: { success?: boolean; error?: string }) => {
             if (response?.success) {
                 showSuccessToast('Successfully joined Round 1 lobby');
             } else {

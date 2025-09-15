@@ -67,7 +67,7 @@ export default function Lobbyr0() {
     if (!authenticationChecked || authLoading || !userId || !user || !socket || !isConnected || hasJoinedLobby) {
       return;
     }
-    socket.emit('round0:join', { userId, username: user?.user_metadata?.full_name || user?.email });
+    socket.emit('round0:join', { userId, username: user?.user_metadata?.full_name || user?.id });
     setHasJoinedLobby(true);
   }, [socket, isConnected, authenticationChecked, hasJoinedLobby, userId, user, authLoading]);
 

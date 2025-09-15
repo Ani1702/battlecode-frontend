@@ -13,7 +13,7 @@ export default function SocketDebug() {
         <div>Status: <span className={isConnected ? 'text-green-400' : 'text-red-400'}>
           {isLoading ? 'Connecting...' : isConnected ? 'Connected' : 'Disconnected'}
         </span></div>
-        <div>User: <span className="text-blue-400">{user?.email || 'Not logged in'}</span></div>
+        <div>User: <span className="text-blue-400">{user?.id || 'Not logged in'}</span></div>
         <div>UserID: <span className="text-blue-400">{userId || 'None'}</span></div>
         <div>Socket ID: <span className="text-yellow-400">{socket?.id || 'None'}</span></div>
         <div>Socket URL: <span className="text-gray-400">{process.env.NEXT_PUBLIC_SOCKET_URL}</span></div>
