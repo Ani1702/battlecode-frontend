@@ -1,5 +1,6 @@
 "use client"
 import { useAuth } from "@/contexts/AuthContext";
+import Image from "next/image";
 import CustomScrollbar from "./CustomScrollbar";
 import { useEffect, useState, useCallback } from "react";
 
@@ -266,7 +267,7 @@ export default function Waiting({
 
             <div className="flex-1 max-h-full rounded-lg border-2 mb-4 mr-8 flex flex-col glass-box overflow-hidden">
               <div className="flex-shrink-0 bg-inherit rounded-t-lg z-10 justify-center items-center flex py-4">
-                <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" />
+                <Image src="/leaderboard-img.svg" alt="Leaderboard Icon" className="w-4 h-4 mr-2" width={16} height={16} />
                 <p className="text-2xl text-orange-500">Round {round} Participants</p>
               </div>
               <CustomScrollbar className="flex-1 overflow-y-auto px-4 pb-4 min-h-0">

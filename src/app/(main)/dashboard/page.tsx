@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import SignOut from "@/components/auth/SignOut"
 // import toast from "react-hot-toast";
 import { useRef } from 'react';
@@ -296,7 +297,7 @@ export default function Dashboard() {
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="text-center justify-center items-center">
               <div className="mb-4 flex items-center justify-center">
-                <img src="/battlecode_logo.png" alt="Loading..." className="flex h-50 w-fit animate-pulse" />
+                <Image src="/battlecode_logo.png" alt="Loading..." className="flex h-50 w-fit animate-pulse" width={200} height={50} />
               </div>
               <p className="text-gray-400">
                 {isLoading ? "Verifying authentication..." : "Redirecting..."}
@@ -314,12 +315,12 @@ export default function Dashboard() {
           </div>
           </div>
         </div>
-        <div className="flex-6  flex ">
+        <div className="flex-6  flex flex-col lg:flex-row p-4 lg:p-0 gap-4 lg:gap-0">
           <div className="flex-[1.5] flex flex-col ">
-            <div className="flex-[0.5] flex flex-col ml-5 justify-center">
-              <h1 className="text-5xl  text-white  flex-[0.2] flex justify-start items-center">
+            <div className="flex-[0.5] flex flex-col lg:ml-5 justify-center">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl text-white flex-wrap flex-[0.2] flex justify-start items-center">
                 <p className = "font-bold">Welcome </p>
-                <span className="text-orange-500  text-5xl ml-2">
+                <span className="text-orange-500 text-3xl sm:text-4xl lg:text-5xl ml-2">
                   {(isLoading || (user && !userName)) ? (
                     <span className="animate-pulse">...</span>
                   ) : (
@@ -335,7 +336,7 @@ export default function Dashboard() {
               </p> */}
               
             </div>
-            <div className = "flex-[0.8] ml-5 mt-3 text-4xl flex justify-start items-center orbitron"> Challenger Rounds</div>
+            <div className = "flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron"> Challenger Rounds</div>
             <div className="flex-4 ">
               {[0, 1, 2, 3].map((i) => {
                 /*const isCurrentRound = currentRoundData?.currentRoundNumber === i;*/
@@ -346,7 +347,7 @@ export default function Dashboard() {
                 return (
                   <div className={`flex-[1.2] flex justify-center items-center pb-5 `} key={i}>
                     <div
-                      className={`w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${locked
+                      className={`w-full lg:w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${locked
                         ? "!border-gray-400/50 !border-2"
                         : "!border-amber-600 !border-2"
                         } items-center pl-5 transition-transform duration-200 ${!locked ? ' hover:-translate-y-2 cursor-pointer ' : 'cursor-not-allowed opacity-60'
@@ -362,7 +363,7 @@ export default function Dashboard() {
                         ? "border-gray-400/50"
                         : "border-amber-600"
                         } m-1 items-center justify-center flex border-4`}>
-                        <p className={`text-3xl oxanium ${locked
+                        <p className={`text-2xl lg:text-3xl oxanium ${locked
                           ? "text-gray-400/50"
                           : ""
                           }`}>{i}</p>
@@ -372,7 +373,7 @@ export default function Dashboard() {
                           ? "text-gray-400/50"
                           : ""
                           }`}>
-                          <p className="text-3xl font-medium">{titles[i]}</p>
+                          <p className="text-2xl lg:text-3xl font-medium">{titles[i]}</p>
                           <p>
                             {locked
                               ? "Locked"
@@ -393,7 +394,7 @@ export default function Dashboard() {
                       </div>
                       <div className={`flex-[0.5] flex justify-center items-center`}>
                         {locked ? (
-                          <img src="/lock.svg" alt="Locked" />
+                          <Image src="/lock.svg" alt="Locked" width={16} height={16} />
                         ) : (
                           <div className="w-4 h-4 bg-orange-500 rounded-lg animate-pulse"></div>
                         )}
@@ -405,15 +406,15 @@ export default function Dashboard() {
             </div>
 
           </div>
-          <div className="flex-1 ">
+          <div className="flex-1 flex justify-center items-center">
 
 
-            <div className="w-[95%] h-[95%] rounded-lg border-2 mb-4 flex flex-col glass-box">
+            <div className="w-full h-[95%] rounded-lg border-2 mb-4 flex flex-col glass-box">
 
               <div className="flex-1  justify-center items-center flex">
 
 
-                <img src="/leaderboard-img.svg" className="w-4 h-4 mr-2" /><span></span>
+                <Image src="/leaderboard-img.svg" alt="Leaderboard" className="w-4 h-4 mr-2" width={16} height={16} /><span></span>
                 <p className="text-2xl text-orange-500">Live Leaderboard</p>
                 {!isConnected && !hasConnectedOnce && (
                   <span className="ml-2 text-sm text-gray-400">(Connecting...)</span>

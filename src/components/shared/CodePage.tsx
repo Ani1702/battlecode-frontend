@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 // import { useRouter } from "next/navigation";
 // import { useAuth } from "@/contexts/AuthContext";
+import Image from "next/image";
 import Button from "@/components/shared/button";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import CustomScrollbar from "./CustomScrollbar";
@@ -520,7 +521,7 @@ export default function CodePage({
                   disabled={isRunning || isSubmitting}
                 >
                   <span>Run</span>
-                  <img src="/run.svg" className="h-4 w-4"/>
+                  <Image src="/run.svg" alt="Run Icon" className="h-4 w-4" width={16} height={16}/>
                 </button>
                 <button 
                   className="bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"

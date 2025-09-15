@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 
 interface Badge {
   id: number;
@@ -63,11 +64,13 @@ const Rewards: React.FC<RewardsProps> = ({ badges, onBadgeClick }) => {
                 type="button"
               >
                 <div className="h-40 w-auto flex items-center justify-center mb-4 relative z-10 pointer-events-none">
-                  <img 
+                  <Image 
                     src={badge.imageUrl} 
                     alt={badge.name} 
                     className="max-h-full transition-transform duration-200 hover:scale-105" 
                     draggable={false}
+                    width={160}
+                    height={160}
                   />
                 </div>
                 <p className="text-base font-sans uppercase tracking-widest text-gray-400 relative z-10 pointer-events-none">

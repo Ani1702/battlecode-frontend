@@ -1,5 +1,6 @@
 "use client";
 import { useState } from 'react';
+import Image from 'next/image';
 import CustomScrollbar from './CustomScrollbar';
 import IncomingChallengeCard from './IncomingChallengeCard';
 import BountyQuestionCard from './BountyQuestionCard';
@@ -99,7 +100,7 @@ export default function EliteLobby() {
   return (
     <>
       <div className="flex bg-[url('/elite_bg2.svg')] bg-[length:1200px_800px] bg-center bg-no-repeat h-screen flex-col overflow-hidden orbitron">
-        <div className="flex-1 flex items-center justify-center text-6xl oxanium white-glow"><img src = "/b-2.svg" className = "h-20"/>ELITE DASHBOARD</div>
+        <div className="flex-1 flex items-center justify-center text-6xl oxanium white-glow"><Image src="/b-2.svg" alt="Battlecode Logo" className="h-20" width={80} height={80}/>ELITE DASHBOARD</div>
         <div className="flex-4 flex flex-row">
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">

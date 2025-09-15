@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { /*useRouter*/ } from "next/navigation";
+import Image from "next/image";
 // import { useSocket } from "@/contexts/SocketContext";
 // import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
@@ -423,7 +424,7 @@ export default function CodePage({ round }: CodePageProps) {
               <div className="flex-1 flex">
                 <button className="flex-1 flex justify-end h-fit bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-10">
                   <span className = "flex-1">Run</span> 
-                  <img src = "/run.svg" className = "flex-1 h-6 w-6"/>
+                  <Image src="/run.svg" alt="Run Icon" className="flex-1 h-6 w-6" width={24} height={24}/>
                 </button>
                 <button 
                   className="flex-1 justify-end h-fit items-end w-40 bg-gray-800 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 ml-1"

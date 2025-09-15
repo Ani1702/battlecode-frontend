@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 interface Square {
     id: number;
@@ -114,7 +115,7 @@ export default function Submit(){
                 />
             ))}
             <div className = "h-[60%] w-[50%] flex justify-center items-center border-2 border-white flex-col relative z-10">
-                <img src = "/submit_logo.svg" className = "flex-3 h-20"/>
+                <Image src="/submit_logo.svg" alt="Submit Logo" className="flex-3 h-20" width={80} height={80}/>
                 <div className = "text-center flex-[0.5]">
                     <p className = "text-orange-500 text-2xl orbitron">SUBMITION RECIEVED!</p>
                     <p className = "text-white text-sm flex justify-center">Thank you for participating...</p>
