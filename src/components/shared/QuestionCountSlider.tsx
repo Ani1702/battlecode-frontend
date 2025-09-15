@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 interface QuestionCountSliderProps {
   value: number;
@@ -8,12 +8,12 @@ interface QuestionCountSliderProps {
 }
 
 export default function QuestionCountSlider({ value, onChange, className = "" }: QuestionCountSliderProps) {
-  const allowedValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const allowedValues = useMemo(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], []);
   const [sliderValue, setSliderValue] = useState(allowedValues.indexOf(value));
 
   useEffect(() => {
     setSliderValue(allowedValues.indexOf(value));
-  }, [value]);
+  }, [value, allowedValues]);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newIndex = parseInt(e.target.value);

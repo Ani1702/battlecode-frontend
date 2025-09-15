@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 // import { useRouter } from "next/navigation";
 // import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
@@ -305,7 +305,7 @@ export default function CodePage({
     e.preventDefault();
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     
     const container = document.querySelector('.code-results-container') as HTMLElement;
@@ -317,7 +317,7 @@ export default function CodePage({
     const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
     
     setCodeEditorHeight(newHeightPercentage);
-  };
+  }, [isDragging]);
 
   const handleMouseUp = () => {
     setIsDragging(false);
@@ -342,7 +342,7 @@ export default function CodePage({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging]);
+  }, [isDragging, handleMouseMove]);
 
   // Format time display
   const formatTime = (seconds: number): string => {

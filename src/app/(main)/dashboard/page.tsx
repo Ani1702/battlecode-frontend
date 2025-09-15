@@ -65,8 +65,11 @@ export default function Dashboard() {
   // Security: Redirect if not authenticated (FIRST useEffect)
   useEffect(() => {
     const prevUser = prevUserRef.current;
-    if (!isLoading && (!user || !session)) {
-      console.warn("Unauthorized access to dashboard - redirecting to home");
+    
+    // Only redirect if we're done loading AND have no session at all
+    // Don't redirect if we have a session but user is still being verified
+    if (!isLoading && !session) {
+      console.warn("Unauthorized access to dashboard - no session - redirecting to home");
       if (prevUser) {
         showErrorToast("Authentication failed. Please log in again.");
       }
@@ -78,6 +81,12 @@ export default function Dashboard() {
 
       return () => clearTimeout(redirectTimer);
     }
+    
+    // If we have a session but no user and we're not loading, it means verification is in progress
+    if (!isLoading && session && !user) {
+      console.log("Session exists but user verification in progress...");
+    }
+    
     prevUserRef.current = user;
   }, [user, session, isLoading, router]);
 
@@ -119,7 +128,7 @@ export default function Dashboard() {
       setHasShownLoginToast(false);
       setIsAdmin(false);
     }
-  }, [user, isLoading, hasShownLoginToast]);
+  }, [user, isLoading, hasShownLoginToast, userRole]);
 
   // Update admin status when userRole changes
   useEffect(() => {

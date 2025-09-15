@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 // import { useRouter } from "next/navigation";
 // import { useAuth } from "@/contexts/AuthContext";
 import { 
@@ -136,7 +136,7 @@ export default function CodePage({
   // CONTEXT MANAGEMENT SYSTEM - Ultra Robust
   // ============================================================================
 
-  const contextManager = {
+  const contextManager = useMemo(() => ({
     // Generate storage key for localStorage
     getStorageKey: (round: string): string => `battlecode-round-${round}-code-store`,
     
@@ -223,7 +223,7 @@ export default function CodePage({
       });
       return cleanStore;
     }
-  };
+  }), []);
 
   // ============================================================================
   // INITIALIZATION - Load context and code store
@@ -251,7 +251,7 @@ export default function CodePage({
     setCode(codeToLoad);
     
     setIsContextInitialized(true);
-  }, [currentProblem, round, language, isContextInitialized]);
+  }, [currentProblem, round, language, isContextInitialized, contextManager]);
 
   // ============================================================================
   // CONTEXT TRANSITION MANAGEMENT - The Heart of Robustness
@@ -303,7 +303,7 @@ export default function CodePage({
     setCurrentContext(newContext);
     setCode(codeToLoad);
     
-  }, [currentContext, currentProblem, round, language, codeStore]);
+  }, [currentContext, currentProblem, round, language, codeStore, contextManager]);
 
   // ============================================================================
   // REACT TO PROP CHANGES - Problem or Language Changes
@@ -352,7 +352,7 @@ export default function CodePage({
       saveTimeoutRef.current = null;
     }, 600); // Quick debounce for responsive feel
     
-  }, [currentContext, currentProblem, round]);
+  }, [currentContext, currentProblem, round, contextManager]);
 
   // Trigger auto-save when code changes
   useEffect(() => {
@@ -392,7 +392,7 @@ export default function CodePage({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [currentProblem, round]);
+  }, [currentProblem, round, contextManager]);
 
   // ============================================================================
   // USER ACTIONS
@@ -629,7 +629,7 @@ export default function CodePage({
     e.preventDefault();
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
 
     const container = document.querySelector('.code-results-container') as HTMLElement;
@@ -641,7 +641,7 @@ export default function CodePage({
     const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
 
     setCodeEditorHeight(newHeightPercentage);
-  };
+  }, [isDragging]);
 
   const handleMouseUp = () => {
     setIsDragging(false);
@@ -666,7 +666,7 @@ export default function CodePage({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging]);
+  }, [isDragging, handleMouseMove]);
 
   // ============================================================================
   // UTILITY FUNCTIONS

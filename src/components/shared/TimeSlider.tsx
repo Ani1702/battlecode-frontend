@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 interface TimeSliderProps {
   value: number;
@@ -8,12 +8,12 @@ interface TimeSliderProps {
 }
 
 export default function TimeSlider({ value, onChange, className = "" }: TimeSliderProps) {
-  const allowedValues = [15, 30, 45, 60, 75, 90];
+  const allowedValues = useMemo(() => [15, 30, 45, 60, 75, 90], []);
   const [sliderValue, setSliderValue] = useState(allowedValues.indexOf(value));
 
   useEffect(() => {
     setSliderValue(allowedValues.indexOf(value));
-  }, [value]);
+  }, [value, allowedValues]);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newIndex = parseInt(e.target.value);

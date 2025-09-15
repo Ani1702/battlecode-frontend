@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { /*useRouter*/ } from "next/navigation";
 // import { useSocket } from "@/contexts/SocketContext";
 // import { useAuth } from "@/contexts/AuthContext";
@@ -129,7 +129,7 @@ export default function CodePage({ round }: CodePageProps) {
     e.preventDefault();
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     
     const container = document.querySelector('.code-results-container') as HTMLElement;
@@ -141,7 +141,7 @@ export default function CodePage({ round }: CodePageProps) {
     const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
     
     setCodeEditorHeight(newHeightPercentage);
-  };
+  }, [isDragging]);
 
   const handleMouseUp = () => {
     setIsDragging(false);
@@ -166,7 +166,7 @@ export default function CodePage({ round }: CodePageProps) {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging]);
+  }, [isDragging, handleMouseMove]);
 
   // Timer countdown effect
   useEffect(() => {
@@ -205,7 +205,7 @@ export default function CodePage({ round }: CodePageProps) {
   };*/
 
   // Function to save session to localStorage
-  const saveSession = () => {
+  const saveSession = useCallback(() => {
     if (questionSession && currentQuestion) {
       const sessionData = {
         ...questionSession,
@@ -215,7 +215,7 @@ export default function CodePage({ round }: CodePageProps) {
       };
       localStorage.setItem(`question_session_${currentQuestion.id}`, JSON.stringify(sessionData));
     }
-  };
+  }, [questionSession, currentQuestion, timeLeft, code, language]);
 
   // Function to load session from localStorage
   /*const loadSession = (questionId: string) => {
@@ -235,7 +235,7 @@ export default function CodePage({ round }: CodePageProps) {
   useEffect(() => {
     const saveInterval = setInterval(saveSession, 30000); // Save every 30 seconds
     return () => clearInterval(saveInterval);
-  }, [questionSession, timeLeft, code, language]);
+  }, [saveSession]);
 
   // Get timer display with color coding
   const getTimerDisplay = (): { time: string; className: string } => {

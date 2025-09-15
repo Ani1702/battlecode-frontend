@@ -1,7 +1,7 @@
 "use client"
 import { useAuth } from "@/contexts/AuthContext";
 import CustomScrollbar from "./CustomScrollbar";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 interface LobbyPageProps {
   round: string;
@@ -79,7 +79,7 @@ export default function Waiting({
   ];*/
 
   // Create new bubble
-  const createBubble = () => {
+  const createBubble = useCallback(() => {
     if (participants.length === 0) return;
     
     const randomParticipant = participants[Math.floor(Math.random() * participants.length)];
@@ -95,7 +95,7 @@ export default function Waiting({
       opacity: 0.3 + Math.random() * 0.4, // 0.3-0.7
       color: 'rgba(239, 68, 68, 0.1)' // very transparent red
     };
-  };
+  }, [participants]);
 
   // Animation loop
   useEffect(() => {
@@ -129,7 +129,7 @@ export default function Waiting({
     }, 100); // 10fps
 
     return () => clearInterval(interval);
-  }, [participants]);
+  }, [participants, createBubble]);
 
   // Clear bubbles when participants change
   useEffect(() => {

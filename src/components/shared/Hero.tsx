@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 const Hero = () => {
   const router = useRouter();
@@ -18,14 +18,14 @@ const Hero = () => {
       await signInWithGoogle();
     }
   };
-  const handleKeyPress = (event: KeyboardEvent) => {
+  const handleKeyPress = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Enter' && user) {
       setIsExiting(true);
       setTimeout(() => {
         router.push('/dashboard');
       }, 1000); // Wait for animation to complete
     }
-  };
+  }, [user, router]);
 
   useEffect(() => {
     // Add event listener for keydown
@@ -35,7 +35,7 @@ const Hero = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, []);
+  }, [handleKeyPress]);
 
   return (
     <div className={`bg-[url(/Landingpage.svg)] bg-cover h-screen transform transition-transform duration-1000 ease-out ${

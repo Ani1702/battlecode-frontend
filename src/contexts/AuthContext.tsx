@@ -1,5 +1,5 @@
 "use client";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 import { User, Session } from "@supabase/supabase-js";
@@ -29,15 +29,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [username, setUsername] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const supabase = createClientComponentClient({
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  });
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const router = useRouter();
 
   useEffect(() => {
     const getSession = async () => {
       try {
+        // Force clear any stuck sessions on initial load
+        if (typeof window !== 'undefined') {
+          const hasStuckSession = localStorage.getItem('stuck_session_detected');
+          
+          // Only clear if we explicitly marked a session as stuck, not just because we're on dashboard
+          if (hasStuckSession === 'true') {
+            console.log('Clearing explicitly marked stuck session...');
+            await supabase.auth.signOut();
+            localStorage.removeItem('stuck_session_detected');
+            // Clear all auth-related storage
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith('sb-') || key.startsWith('supabase') || key.includes('auth')) {
+                localStorage.removeItem(key);
+              }
+            });
+            setSession(null);
+            setUser(null);
+            setUserId(null);
+            setHasUsername(null);
+            setUsername(null);
+            setUserRole(null);
+            setAvatarUrl(null);
+            setIsLoading(false);
+            return;
+          }
+        }
+
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -49,7 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Check username status if user is logged in
         if (session?.access_token) {
+          setIsLoading(true); // Set loading during verification
           try {
+            console.log("Initial session verification starting...");
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/verify`, {
               method: "POST",
               headers: {
@@ -59,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (response.ok) {
               const data = await response.json();
+              console.log("Initial session verification successful:", data);
               setHasUsername(data.hasUsername);
               
               // Store the user data from backend
@@ -67,8 +97,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setUserId(data.user.id);
                 setUserRole(data.user.role);
               }
+              setIsLoading(false); // Clear loading on success
             } else {
               console.error("Initial verification failed - signing out existing session:", await response.text());
+              
+              // Mark as stuck session and clear everything
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('stuck_session_detected', 'true');
+              }
               
               // Force complete sign out for existing sessions that fail verification
               setSession(null);
@@ -90,6 +126,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } catch (error) {
             console.error("Error checking username status - signing out existing session:", error);
+            
+            // Mark as stuck session
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('stuck_session_detected', 'true');
+            }
             
             // Force complete sign out for existing sessions that fail verification
             setSession(null);
@@ -130,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event: string, session: Session | null) => {
       console.log("Auth state change event:", event, "Current path:", window.location.pathname);
       
       setSession(session);
@@ -143,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Only handle actual sign-ins, not token refreshes
         setIsLoading(true); // Set loading when starting verification
         try {
+          console.log("Starting backend verification for SIGNED_IN event...");
           const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/verify`, {
             method: "POST",
             headers: {
@@ -152,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (response.ok) {
             const data = await response.json();
+            console.log("Backend verification successful:", data);
             setHasUsername(data.hasUsername);
             
             // Store the user data from backend
@@ -166,7 +209,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Only redirect to dashboard if we're on the home page or login page
             // Don't redirect if user is already navigating within the app
             const currentPath = window.location.pathname;
-            if (currentPath === '/' || currentPath === '/login') {
+            console.log("Current path after verification:", currentPath);
+            if (currentPath === '/' || currentPath === '/login' || currentPath === '/auth-error') {
+              console.log("Redirecting to dashboard...");
               router.push("/dashboard");
             }
             // For any other path (like /r0/code), let the user stay where they are
