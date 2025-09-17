@@ -27,12 +27,15 @@ interface LobbyData {
 interface RoundStartData {
   problems?: unknown[];
   startTime?: number;
+  duration?: number;
   [key: string]: unknown;
 }
 
 interface MatchFoundData {
   matchId?: string;
   opponent?: Participant;
+  startTime?: number;
+  duration?: number;
   [key: string]: unknown;
 }
 
@@ -53,10 +56,9 @@ export default function Lobbyr1(){
     const [roundStarted, setRoundStarted] = useState(false);
     const [hasJoinedLobby, setHasJoinedLobby] = useState(false);
     const [authenticationChecked, setAuthenticationChecked] = useState(false);
-    const [matchFound, setMatchFound] = useState(false);
-    const [matchCountdown, setMatchCountdown] = useState(5);
     
-    const isAdmin = user?.role === 'ADMIN';
+    // For now, all users can start rounds (will be moved to admin panel later)
+    const isAdmin = true; // user?.role === 'ADMIN';
     // Authentication check
     useEffect(() => {
         if (authLoading) return;
@@ -106,21 +108,24 @@ export default function Lobbyr1(){
                 try {
                     const dataToStore = {
                         startTime: data.startTime,
-                        duration: data.duration || 5400 // 90 minutes default
+                        duration: (data.duration || 5400) * 1000 // Ensure duration is in ms
                     };
                     sessionStorage.setItem('round1_data', JSON.stringify(dataToStore));
                 } catch (error) {
                     console.error("Failed to save round data to sessionStorage:", error);
                 }
             }
+            
+            // Redirect to waiting room after round starts
+            setTimeout(() => {
+                router.push('/r1/waiting');
+            }, 2000); // Give user 2 seconds to see the success message
         };
 
         const handleMatchFound = (data: MatchFoundData) => {
             console.log('Match found! Data:', data);
-            setMatchFound(true);
-            setMatchCountdown(5);
             
-            // Store match data
+            // FIX: Store the complete match data, including the new startTime and duration
             if (data) {
                 try {
                     sessionStorage.setItem('round1_match_data', JSON.stringify(data));
@@ -130,6 +135,11 @@ export default function Lobbyr1(){
             }
             
             showSuccessToast('Match found! Redirecting to code room...');
+            
+            // Immediate redirect to code room since this means a match was found
+            setTimeout(() => {
+                router.push('/r1/code');
+            }, 1500);
         };
 
         const handleRoundEnd = () => {
@@ -156,20 +166,6 @@ export default function Lobbyr1(){
             socket.off('round1:error', handleError);
         };
     }, [socket, router]);
-
-    // Match countdown timer
-    useEffect(() => {
-        if (matchFound && matchCountdown > 0) {
-            const timer = setTimeout(() => {
-                setMatchCountdown(matchCountdown - 1);
-            }, 1000);
-            return () => clearTimeout(timer);
-        } else if (matchFound && matchCountdown === 0) {
-            // Redirect to r1 code room
-            console.log("Redirecting to code room...");
-            router.push('/r1/code');
-        }
-    }, [matchFound, matchCountdown, router]);
 
     const handleStartRound = () => {
         if (!socket || participants.length === 0) return;
@@ -252,13 +248,7 @@ export default function Lobbyr1(){
                 </CustomScrollbar>
             </div>
 
-            {matchFound && (
-                <div className="flex-shrink-0 h-12 flex items-start justify-center text-2xl orbitron">
-                    Match starting in.. {matchCountdown}
-                </div>
-            )}
-
-            {!isRoundActive && !roundStarted && !matchFound && (
+            {!isRoundActive && !roundStarted && (
                 <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
                     <div className="text-sm text-gray-200 text-center">
                         {!isConnected ? (
@@ -322,5 +312,3 @@ export default function Lobbyr1(){
 
     );
 }
-
-
