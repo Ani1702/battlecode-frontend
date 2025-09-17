@@ -17,18 +17,68 @@ interface Participant {
   finishedAt?: string;
 }
 
+interface GlobalJoinResponse {
+  success: boolean;
+  leaderboard?: Array<{
+    id: string;
+    username: string;
+    score: number;
+    rank: number;
+  }>;
+}
+
+interface Round1StateResponse {
+  success: boolean;
+  isActive: boolean;
+  globalTimeRemaining?: number;
+  participant?: {
+    id: string;
+    username: string;
+    status: string;
+    joinedAt: string;
+  };
+}
+
+interface Round1JoinResponse {
+  success: boolean;
+  error?: string;
+}
+
+interface MatchFoundData {
+  opponent: { id: string; rank?: number };
+  question: {
+    id: string;
+    title: string;
+    description: string;
+    difficulty: string;
+    duration?: number;
+    constraints?: string[];
+    boilerplate?: { [key: string]: string };
+    sampleTestCases?: Array<{
+      stdin?: string;
+      expected_output?: string;
+      input?: { stdin?: string; json?: unknown };
+      output?: { stdout?: string; json?: unknown };
+      explanation?: string;
+    }>;
+    hints?: string[];
+  };
+  startTime: number;
+  duration: number;
+  difficulty?: string;
+}
+
 export default function Waiting_room(){
     const router = useRouter();
     const { socket, isConnected } = useSocket();
     const { user, userId, isLoading: authLoading } = useAuth();
     
     const [participants, setParticipants] = useState<Participant[]>([]);
-    const [allUsers, setAllUsers] = useState<any[]>([]); // Global leaderboard
+    const [allUsers, setAllUsers] = useState<Array<{ id: string; username: string; score: number; rank: number }>>([]);
     const [isRoundActive, setIsRoundActive] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState(0);
     const [roundDuration] = useState(5400); // 90 minutes
     const [isLoading, setIsLoading] = useState(true);
-    const [roundStarted, setRoundStarted] = useState(false);
     const [hasJoinedLobby, setHasJoinedLobby] = useState(false);
     const [countdown, setCountdown] = useState(0);
     const [showCountdown, setShowCountdown] = useState(false);
@@ -36,13 +86,13 @@ export default function Waiting_room(){
     useEffect(() => {
         if (!socket || !isConnected || !userId) return;
 
-        socket.emit('global:join', {}, (response: any) => {
+        socket.emit('global:join', {}, (response: GlobalJoinResponse) => {
             if (response?.success && response.leaderboard) {
                 setAllUsers(response.leaderboard);
             }
         });
 
-        socket.emit('round1:getState', {}, (response: any) => {
+        socket.emit('round1:getState', {}, (response: Round1StateResponse) => {
             if (response?.success) {
                 setIsRoundActive(response.isActive);
                 setTimeRemaining(response.globalTimeRemaining || 0);
@@ -50,7 +100,7 @@ export default function Waiting_room(){
                     const participantData: Participant = {
                         userId: response.participant.id,
                         username: response.participant.username,
-                        status: response.participant.status?.toUpperCase() || 'WAITING',
+                        status: (response.participant.status?.toUpperCase() as Participant['status']) || 'WAITING',
                         joinedAt: response.participant.joinedAt || new Date().toISOString(),
                         isReady: true
                     };
@@ -68,7 +118,7 @@ export default function Waiting_room(){
     useEffect(() => {
         if (!socket || !isConnected || !userId || !user || hasJoinedLobby || authLoading || isLoading) return;
 
-        socket.emit('round1:join', { userId, username: user?.user_metadata?.full_name || user?.id }, (response: any) => {
+        socket.emit('round1:join', { userId, username: user?.user_metadata?.full_name || user?.id }, (response: Round1JoinResponse) => {
             if (response?.success) {
                 showSuccessToast('Joined Round 1 matchmaking queue');
                 setHasJoinedLobby(true);
@@ -100,7 +150,7 @@ export default function Waiting_room(){
     useEffect(() => {
         if (!socket) return;
 
-        const handleMatchFound = (data: any) => {
+        const handleMatchFound = (data: MatchFoundData) => {
             showSuccessToast('Match found! Redirecting to code room...');
             
             try {
@@ -134,7 +184,7 @@ export default function Waiting_room(){
             showSuccessToast('Match completed! Entering cooldown period...');
         };
 
-        const handleError = (error: any) => {
+        const handleError = (error: { message?: string } | string) => {
             const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
             showErrorToast(errorMessage);
         };
@@ -182,7 +232,7 @@ export default function Waiting_room(){
                 roundDuration={roundDuration}
                 totalParticipants={allUsers.length || participants.length}
                 isLoading={isLoading}
-                roundStarted={showCountdown ? false : roundStarted}
+                roundStarted={showCountdown ? false : isRoundActive}
                 onStartRound={undefined}
                 onJoinRound={undefined}
             />

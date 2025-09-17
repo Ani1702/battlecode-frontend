@@ -50,8 +50,8 @@ interface Problem {
 }
 interface TestCase {
   stdin?: string; expected_output?: string;
-  input?: { stdin?: string; json?: any; };
-  output?: { stdout?: string; json?: any; };
+  input?: { stdin?: string; json?: unknown; };
+  output?: { stdout?: string; json?: unknown; };
   explanation?: string;
 }
 interface SubmissionResult {
@@ -251,15 +251,15 @@ export default function R1CodePage() {
 
   useEffect(() => {
     if (!socket) return;
-    const handleMatchPause = (data: any) => {
+    const handleMatchPause = (data: { message?: string }) => {
       setMatchPaused(true);
       showInfoToast(data.message || 'Match paused - opponent disconnected');
     };
-    const handleMatchResume = (data: any) => {
+    const handleMatchResume = (data: { message?: string; startTime?: number; duration?: number }) => {
       setMatchPaused(false);
       showSuccessToast(data.message || 'Match resumed - opponent reconnected');
       if (data.startTime && data.duration) {
-        setMatchData(prev => prev ? { ...prev, startTime: data.startTime, duration: data.duration } : null);
+        setMatchData(prev => prev ? { ...prev, startTime: data.startTime!, duration: data.duration! } : null);
       }
     };
     const handleCooldown = () => {
@@ -301,7 +301,7 @@ export default function R1CodePage() {
       socket.off('round1:ended', handleRoundEnd);
       socket.off('round1:timerUpdate', handleTimerUpdate);
     };
-  }, [socket, router, problem]);
+  }, [socket, router, problem, handleSubmit]);
 
   // Request timer sync when socket and matchData are available
   useEffect(() => {
@@ -403,7 +403,7 @@ export default function R1CodePage() {
                  isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
     };
   };
-  const formatTestCaseData = (data: any): string => {
+  const formatTestCaseData = (data: unknown): string => {
     if (typeof data === 'string') return data;
     if (Array.isArray(data)) return data.join(', ');
     if (typeof data === 'object' && data !== null) {
