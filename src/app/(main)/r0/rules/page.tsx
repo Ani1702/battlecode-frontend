@@ -10,5 +10,13 @@ export default function Rules() {
         "Winning grants you more points on the leaderboard.", 
         "Winning grants you more points on the leaderboard."
     ];
-    return <RulesPage rules={rules} round={round} />;
+    return (
+        <>
+            <head>
+                <link rel="preload" as="image" href="/rule.svg" type="image/svg+xml" />
+
+            </head>
+            <RulesPage rules={rules} round={round} />;
+        </>
+    );
 }

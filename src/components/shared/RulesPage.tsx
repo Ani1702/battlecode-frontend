@@ -1,6 +1,7 @@
 "use client";
 import { /*useParams,*/ useRouter } from "next/navigation";
 import { useState } from "react";
+import Head from "next/head";
 
 export default function RulesPage({ rules, round }: { rules: string[]; round: string | string[] }) {
     const router = useRouter();
@@ -11,6 +12,11 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
     const roundString = Array.isArray(round) ? round[0] : round || "0";
 
     return (
+        <>
+        <Head>
+        <link rel="preload" as="image" href="/rule.svg" type="image/svg+xml" />
+       
+      </Head>
         <div className="bg-[url('/rule-bg.svg')] bg-cover min-h-screen flex justify-center items-center">
             <div className="h-[60vh] w-[60vw] glass-box flex rounded-2xl justify-center items-center">
                 <div className="flex-[2.3]  h-full w-full flex flex-col ml-10 mb-10 mr-10 mt-10 justify-center items-center">
@@ -56,5 +62,6 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
                 </div>
             </div>
         </div>
+        </>
     );
 }
