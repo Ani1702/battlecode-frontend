@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 // import { useRouter } from "next/navigation";
-// import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   Lightbulb, 
   RotateCcw, 
@@ -97,7 +97,7 @@ export default function CodePage({
   onReturnToLobby
 }: CodePageProps) {
   /*const router = useRouter();*/
-  /*const { user, session } = useAuth();*/
+  const { user, session } = useAuth();
 
   // ============================================================================
   // CORE STATE - Clean and Isolated
@@ -529,11 +529,11 @@ export default function CodePage({
 
       const endpoint = isSubmission ? '/submit' : '/run';
       
-      const response = await fetch(`${apiUrl}/submit${endpoint}`, {
+      const response = await fetch(`${apiUrl}/api/submit${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // 'Authorization': `Bearer ${session?.access_token}` // Remove session dependency for now
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify(payload)
       });
