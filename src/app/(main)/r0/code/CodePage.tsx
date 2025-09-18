@@ -97,7 +97,7 @@ export default function CodePage({
   onReturnToLobby
 }: CodePageProps) {
   /*const router = useRouter();*/
-  const { user, session } = useAuth();
+  const { session } = useAuth();
 
   // ============================================================================
   // CORE STATE - Clean and Isolated
