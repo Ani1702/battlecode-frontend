@@ -69,6 +69,7 @@ export default function UsernamePopup({ isOpen, onClose }: UsernamePopupProps) {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter username"
               className="w-full px-4 py-3 rounded-lg bg-black/40 border border-amber-600/50 text-white placeholder-gray-400 font-oxanium focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 transition-all"
+              maxLength={10}
               disabled={isLoading}
               autoFocus
             />

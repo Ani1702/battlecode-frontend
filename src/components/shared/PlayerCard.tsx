@@ -8,7 +8,7 @@ export default function PlayerCard({ username, /*avatar*/ }: PlayerCardProps) {
     <div className="relative w-full h-[100px] mb-4 hover:scale-105 cursor-pointer group transition-all duration-300">
       {/* Base SVG Background */}
       <div 
-        className="absolute inset-0 w-full h-full bg-contain bg-no-repeat bg-center"
+        className="absolute inset-0 w-full z-0 h-full bg-contain bg-no-repeat bg-center"
         style={{ 
           backgroundImage: "url('/player_card.svg')",
           backgroundSize: '100% 100%'
@@ -31,8 +31,8 @@ export default function PlayerCard({ username, /*avatar*/ }: PlayerCardProps) {
       </div> */}
       
       {/* Username overlay - positioned over the text area, replacing "GLITCH" */}
-      <div className="absolute left-[110px] top-1/2 transform -translate-y-1/2 z-10 right-[80px] ">
-        <p className="text-white font-bold text-xl justify-between flex gap-5 z-10 tracking-wider orbitron uppercase truncate group-hover:text-orange-200 transition-colors duration-300 drop-shadow-lg">
+      <div className="ml-4 relative left-[80px] top-1/2 transform -translate-y-1/2 z-10 right-[80px] ">
+        <p className="text-white font-bold text-sm  z-10 tracking-wider orbitron uppercase  group-hover:text-orange-200 transition-colors duration-300 drop-shadow-lg">
           {username}
           
         </p>
