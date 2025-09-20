@@ -4,253 +4,366 @@ import { useRouter } from "next/navigation";
 import Waiting from '@/components/shared/waiting';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 
-interface Participant {
-  userId: string;
+interface R1Participant {
+  id: string;
   username: string;
-  status: 'WAITING' | 'IN_MATCH' | 'DISCONNECTED' | 'FINISHED';
+  rank: number;
+  status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
+  cooldownStartTime?: number;
+  waitingSince?: number;
   joinedAt: string;
-  isReady: boolean;
-  disconnectedAt?: string;
-  reconnectedAt?: string;
-  finishedAt?: string;
-}
-
-interface GlobalJoinResponse {
-  success: boolean;
-  leaderboard?: Array<{
-    id: string;
-    username: string;
-    score: number;
-    rank: number;
-  }>;
-}
-
-interface Round1StateResponse {
-  success: boolean;
-  isActive: boolean;
-  globalTimeRemaining?: number;
-  participant?: {
-    id: string;
-    username: string;
-    status: string;
-    joinedAt: string;
-  };
-}
-
-interface Round1JoinResponse {
-  success: boolean;
-  error?: string;
 }
 
 interface MatchFoundData {
   opponent: { id: string; rank?: number };
-  question: {
-    id: string;
-    title: string;
-    description: string;
-    difficulty: string;
-    duration?: number;
-    constraints?: string[];
-    boilerplate?: { [key: string]: string };
-    sampleTestCases?: Array<{
-      stdin?: string;
-      expected_output?: string;
-      input?: { stdin?: string; json?: unknown };
-      output?: { stdout?: string; json?: unknown };
-      explanation?: string;
-    }>;
-    hints?: string[];
-  };
+  question: { id: string; title: string; };
   startTime: number;
   duration: number;
-  difficulty?: string;
 }
 
-export default function Waiting_room(){
+interface RoundTimerData {
+  globalTimeRemaining: number;
+  roundStartTime: number;
+  roundDuration: number;
+}
+
+export default function WaitingRoomR1() {
     const router = useRouter();
     const { socket, isConnected } = useSocket();
-    const { user, userId, isLoading: authLoading } = useAuth();
+    const { user, userId, userRole, isLoading: authLoading } = useAuth();
     
-    const [participants, setParticipants] = useState<Participant[]>([]);
-    const [allUsers, setAllUsers] = useState<Array<{ id: string; username: string; score: number; rank: number }>>([]);
+    const [round1Participants, setRound1Participants] = useState<R1Participant[]>([]);
     const [isRoundActive, setIsRoundActive] = useState(false);
-    const [timeRemaining, setTimeRemaining] = useState(0);
-    const [roundDuration] = useState(5400); // 90 minutes
     const [isLoading, setIsLoading] = useState(true);
-    const [hasJoinedLobby, setHasJoinedLobby] = useState(false);
-    const [countdown, setCountdown] = useState(0);
-    const [showCountdown, setShowCountdown] = useState(false);
+    const [hasSeenRoundStart, setHasSeenRoundStart] = useState(false);
+    
+    // Global timer state
+    const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(0);
+    const [roundStartTime, setRoundStartTime] = useState<number | null>(null);
+    const [roundDuration] = useState(90 * 60); // 90 minutes in seconds
+    
+    // Cooldown state - FIXED: Better state management
+    const [isInCooldown, setIsInCooldown] = useState(false);
+    const [cooldownTimeRemaining, setCooldownTimeRemaining] = useState<number | null>(null);
+    const [cooldownStartTime, setCooldownStartTime] = useState<number | null>(null);
+    
+    // Matchmaking cycle state
+    const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<number | null>(null);
+    const [isFirstCycle, setIsFirstCycle] = useState(true);
 
+    // Check if current user is admin
+    const isAdmin = userRole === 'ADMIN';
+
+    // FIXED: Better cooldown calculation with fallback
+    const calculateCooldownRemaining = (startTime: number): number => {
+        const COOLDOWN_DURATION = 2 * 60 * 1000; // 2 minutes in milliseconds
+        const elapsed = Date.now() - startTime;
+        return Math.max(0, Math.ceil((COOLDOWN_DURATION - elapsed) / 1000));
+    };
+
+    // Auto-redirect effect - handles end of round
+    useEffect(() => {
+        if (!isRoundActive) return;
+
+        // Only handle auto-redirect when globalTimeRemaining reaches 0
+        if (globalTimeRemaining === 0) {
+            showInfoToast('Round 1 has ended! Redirecting to dashboard...');
+            setTimeout(() => router.push('/dashboard'), 2000);
+        }
+    }, [globalTimeRemaining, isRoundActive, router]);
+
+    // Initial state fetch and setup - FIXED: Better cooldown handling
     useEffect(() => {
         if (!socket || !isConnected || !userId) return;
 
-        socket.emit('global:join', {}, (response: GlobalJoinResponse) => {
-            if (response?.success && response.leaderboard) {
-                setAllUsers(response.leaderboard);
-            }
-        });
-
-        socket.emit('round1:getState', {}, (response: Round1StateResponse) => {
+        console.log('[GetState] Requesting state from backend...');
+        socket.emit('round1:getState', {}, (response: any) => {
+            console.log('[GetState] Raw response:', response);
             if (response?.success) {
+                console.log('[GetState] Successfully received state:', {
+                    participantStatus: response.participant?.status,
+                    isActive: response.isActive,
+                    participantCount: response.round1Participants?.length,
+                    cooldownTimeRemaining: response.cooldownTimeRemaining,
+                    userInQueue: response.userInQueue
+                });
+                
                 setIsRoundActive(response.isActive);
-                setTimeRemaining(response.globalTimeRemaining || 0);
-                if (response.participant) {
-                    const participantData: Participant = {
-                        userId: response.participant.id,
-                        username: response.participant.username,
-                        status: (response.participant.status?.toUpperCase() as Participant['status']) || 'WAITING',
-                        joinedAt: response.participant.joinedAt || new Date().toISOString(),
-                        isReady: true
-                    };
-                    setParticipants([participantData]);
-                    
-                    if (response.participant.status) {
-                        setHasJoinedLobby(true);
+                if (response.round1Participants) {
+                    setRound1Participants(response.round1Participants);
+                }
+                
+                // Check if user is in a match and should be redirected
+                if (response.participant?.status === 'in-match') {
+                    showInfoToast('Redirecting to your active match...');
+                    router.push('/r1/code');
+                    return;
+                }
+                
+                // Set all timer states from backend ONLY
+                if (response.isActive) {
+                    if (response.roundStartTime) {
+                        setRoundStartTime(response.roundStartTime);
+                    }
+                    if (response.globalTimeRemaining !== undefined) {
+                        setGlobalTimeRemaining(response.globalTimeRemaining);
                     }
                 }
+                
+                // BULLETPROOF: Simple cooldown state restoration
+                const participant = response.participant;
+                
+                console.log('[GetState] Participant status:', participant?.status);
+                console.log('[GetState] Backend cooldown time:', response.cooldownTimeRemaining);
+                
+                if (participant?.status === 'cooldown' && response.cooldownTimeRemaining > 0) {
+                    // User is in cooldown with valid time remaining
+                    console.log('[GetState] ✅ Restoring cooldown:', response.cooldownTimeRemaining, 'seconds');
+                    setIsInCooldown(true);
+                    setCooldownTimeRemaining(response.cooldownTimeRemaining);
+                    if (participant.cooldownStartTime) {
+                        setCooldownStartTime(participant.cooldownStartTime);
+                    }
+                } else {
+                    // User is not in cooldown or cooldown expired
+                    console.log('[GetState] ✅ Clearing cooldown state');
+                    setIsInCooldown(false);
+                    setCooldownTimeRemaining(null);
+                    setCooldownStartTime(null);
+                }
+                
+                // Set matchmaking cycle from backend
+                if (response.nextMatchmakingCycle !== undefined) {
+                    setNextMatchmakingCycle(response.nextMatchmakingCycle);
+                }
+                
+                // Set first cycle status
+                setIsFirstCycle(response.isFirstCycle !== false);
+                
                 setIsLoading(false);
-            }
-        });
-    }, [socket, isConnected, userId]);
-
-    useEffect(() => {
-        if (!socket || !isConnected || !userId || !user || hasJoinedLobby || authLoading || isLoading) return;
-
-        socket.emit('round1:join', { userId, username: user?.user_metadata?.full_name || user?.id }, (response: Round1JoinResponse) => {
-            if (response?.success) {
-                showSuccessToast('Joined Round 1 matchmaking queue');
-                setHasJoinedLobby(true);
             } else {
-                showErrorToast(response?.error || 'Failed to join queue');
+                showErrorToast(response?.error || "Could not get round state.");
+                router.push('/dashboard');
             }
         });
-    }, [socket, isConnected, userId, user, hasJoinedLobby, authLoading, isLoading]);
 
+    }, [socket, isConnected, userId, router]);
+
+    // FIXED: Client-side cooldown countdown for smooth UI when backend timer is missing
     useEffect(() => {
-        if (isRoundActive || hasJoinedLobby) {
-            setShowCountdown(true);
-            setCountdown(10);
-        }
-    }, [isRoundActive, hasJoinedLobby]);
+        if (!isInCooldown || cooldownTimeRemaining === null || cooldownTimeRemaining <= 0) return;
 
-    useEffect(() => {
-        if (showCountdown && countdown > 0) {
-            const timer = setTimeout(() => {
-                setCountdown(countdown - 1);
-            }, 1000);
-            return () => clearTimeout(timer);
-        } else if (showCountdown && countdown === 0) {
-            setShowCountdown(false);
-            showSuccessToast('Entering matchmaking queue...');
-        }
-    }, [showCountdown, countdown]);
+        const interval = setInterval(() => {
+            setCooldownTimeRemaining(prev => {
+                if (prev === null || prev <= 1) {
+                    // Cooldown finished
+                    setIsInCooldown(false);
+                    setCooldownTimeRemaining(null);
+                    setCooldownStartTime(null);
+                    showSuccessToast("You are back in the matchmaking queue!");
+                    return null;
+                }
+                return prev - 1;
+            });
+        }, 1000);
 
+        return () => clearInterval(interval);
+    }, [isInCooldown, cooldownTimeRemaining]);
+
+    // Socket event listeners - FIXED: Better cooldown timer handling
     useEffect(() => {
         if (!socket) return;
 
         const handleMatchFound = (data: MatchFoundData) => {
-            showSuccessToast('Match found! Redirecting to code room...');
-            
-            try {
-                Object.keys(localStorage).forEach(key => {
-                    if (key.startsWith('round1_match_state_')) {
-                        localStorage.removeItem(key);
-                    }
-                });
-                console.log("Cleared previous Round 1 match states from localStorage.");
-            } catch (error) {
-                console.error("Failed to clear previous match states:", error);
+            if (isInCooldown) {
+                console.warn('[MatchFound] Ignoring match found during cooldown');
+                return;
             }
-
-            if (data) {
-                try {
-                    sessionStorage.setItem('round1_match_data', JSON.stringify(data));
-                } catch (error) {
-                    console.error("Failed to save match data:", error);
-                }
-            }
-            
+            showSuccessToast('Match found! Redirecting...');
+            sessionStorage.setItem('round1_match_data', JSON.stringify(data));
             router.push('/r1/code');
         };
 
+        const handleGlobalTimer = (data: { timeRemaining: number }) => {
+            console.log('[Frontend] Received globalTimer:', data.timeRemaining);
+            setGlobalTimeRemaining(data.timeRemaining);
+        };
+
+        const handleCooldownTimer = (data: { timeRemaining: number }) => {
+            console.log('[Frontend] Received cooldownTimer:', data.timeRemaining);
+            // Only update if we're actually in cooldown state
+            if (isInCooldown) {
+                setCooldownTimeRemaining(data.timeRemaining);
+            }
+        };
+
+        const handleMatchmakingCycle = (data: { nextCycle: number; isFirstCycle: boolean }) => {
+            console.log('[Frontend] Received matchmakingCycle:', data);
+            setNextMatchmakingCycle(data.nextCycle);
+            setIsFirstCycle(data.isFirstCycle);
+        };
+
+        const handleRoundStarted = (data?: RoundTimerData) => {
+            console.log('[RoundStarted] Received round start event:', data);
+            if (!hasSeenRoundStart) {
+                showSuccessToast('Round 1 has started!');
+                setIsRoundActive(true);
+                setHasSeenRoundStart(true);
+                
+                // Set round timer from backend data
+                if (data?.roundStartTime) {
+                    setRoundStartTime(data.roundStartTime);
+                }
+                setIsFirstCycle(true);
+                
+                // Force refresh state to get updated participant status
+                console.log('[RoundStarted] Requesting updated state after round start...');
+                socket?.emit('round1:getState', {}, (response: any) => {
+                    if (response?.success) {
+                        console.log('[RoundStarted] Updated state received:', response.participant?.status);
+                        setRound1Participants(response.round1Participants || []);
+                    }
+                });
+            }
+        };
+        
+        const handleCooldownStart = (data: { duration: number; startTime: number }) => {
+            console.log('[CooldownStart] Received cooldown start:', data);
+            showInfoToast("Match finished. Entering 2-minute cooldown.");
+            setIsInCooldown(true);
+            setCooldownStartTime(data.startTime);
+            
+            // Calculate initial cooldown time
+            const initialCooldown = Math.ceil(data.duration / 1000);
+            setCooldownTimeRemaining(initialCooldown);
+            
+            console.log('[CooldownStart] Set cooldown for', initialCooldown, 'seconds');
+        };
+
+        const handleCooldownEnd = () => {
+            console.log('[CooldownEnd] Received cooldown end signal');
+            showSuccessToast("You are back in the matchmaking queue!");
+            setIsInCooldown(false);
+            setCooldownTimeRemaining(null);
+            setCooldownStartTime(null);
+        };
+
         const handleRoundEnd = () => {
-            showSuccessToast('Round 1 has ended');
+            showInfoToast('Round 1 has ended.');
             router.push('/dashboard');
         };
 
-        const handleCooldown = () => {
-            showSuccessToast('Match completed! Entering cooldown period...');
+        const handleParticipantsUpdate = (data: { participants: R1Participant[] }) => {
+            console.log('[ParticipantsUpdate] Received participants update:', data.participants?.length, 'participants');
+            setRound1Participants(data.participants || []);
+            
+            // Check if current user's status has changed
+            const currentUser = data.participants?.find(p => p.id === userId);
+            if (currentUser) {
+                console.log('[ParticipantsUpdate] Current user status:', currentUser.status);
+                
+                // Update cooldown state if user status changed
+                if (currentUser.status === 'cooldown' && !isInCooldown) {
+                    console.log('[ParticipantsUpdate] User entered cooldown, updating state');
+                    setIsInCooldown(true);
+                    if (currentUser.cooldownStartTime) {
+                        const remaining = calculateCooldownRemaining(currentUser.cooldownStartTime);
+                        setCooldownTimeRemaining(remaining);
+                        setCooldownStartTime(currentUser.cooldownStartTime);
+                    }
+                } else if (currentUser.status !== 'cooldown' && isInCooldown) {
+                    console.log('[ParticipantsUpdate] User left cooldown, clearing state');
+                    setIsInCooldown(false);
+                    setCooldownTimeRemaining(null);
+                    setCooldownStartTime(null);
+                }
+            }
         };
 
-        const handleError = (error: { message?: string } | string) => {
-            const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
-            showErrorToast(errorMessage);
+        const handleFirstCycleComplete = () => {
+            setIsFirstCycle(false);
         };
 
         socket.on('round1:matchFound', handleMatchFound);
+        socket.on('round1:started', handleRoundStarted);
+        socket.on('round1:cooldown', handleCooldownStart);
+        socket.on('round1:cooldownEnd', handleCooldownEnd);
         socket.on('round1:ended', handleRoundEnd);
-        socket.on('round1:cooldown', handleCooldown);
-        socket.on('round1:error', handleError);
+        socket.on('round1:participantsUpdate', handleParticipantsUpdate);
+        socket.on('round1:firstCycleComplete', handleFirstCycleComplete);
+        socket.on('round1:globalTimer', handleGlobalTimer);
+        socket.on('round1:cooldownTimer', handleCooldownTimer);
+        socket.on('round1:matchmakingCycle', handleMatchmakingCycle);
 
         return () => {
             socket.off('round1:matchFound', handleMatchFound);
+            socket.off('round1:started', handleRoundStarted);
+            socket.off('round1:cooldown', handleCooldownStart);
+            socket.off('round1:cooldownEnd', handleCooldownEnd);
             socket.off('round1:ended', handleRoundEnd);
-            socket.off('round1:cooldown', handleCooldown);
-            socket.off('round1:error', handleError);
+            socket.off('round1:participantsUpdate', handleParticipantsUpdate);
+            socket.off('round1:firstCycleComplete', handleFirstCycleComplete);
+            socket.off('round1:globalTimer', handleGlobalTimer);
+            socket.off('round1:cooldownTimer', handleCooldownTimer);
+            socket.off('round1:matchmakingCycle', handleMatchmakingCycle);
         };
-    }, [socket, router]);
+    }, [socket, router, isInCooldown, hasSeenRoundStart, roundDuration]);
 
-    useEffect(() => {
-        if (!isRoundActive || timeRemaining <= 0) return;
+    // Start round function for admin
+    const handleStartRound = () => {
+        if (!isAdmin || !socket) {
+            console.error('[StartRound] Cannot start round - not admin or no socket connection');
+            showErrorToast('Cannot start round - insufficient permissions or no connection');
+            return;
+        }
+        
+        console.log('[StartRound] Admin starting round 1...');
+        socket.emit('round1:ready', {}, (response: any) => {
+            console.log('[StartRound] Response:', response);
+            if (response?.success) {
+                showSuccessToast('Round 1 started successfully!');
+            } else {
+                console.error('[StartRound] Failed:', response?.error);
+                showErrorToast(response?.error || 'Failed to start round');
+            }
+        });
+    };
 
-        const timer = setInterval(() => {
-            setTimeRemaining(prev => Math.max(0, prev - 1));
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [isRoundActive, timeRemaining]);
-
-    if (authLoading) {
+    if (authLoading || isLoading) {
         return <div className="flex items-center justify-center h-screen bg-black text-white">Loading...</div>;
     }
 
+    // Convert R1Participant to the format expected by the Waiting component
+    const waitingComponentParticipants = round1Participants.map(p => ({
+        userId: p.id,
+        username: p.username,
+        status: p.status.toUpperCase() as 'WAITING' | 'IN_MATCH' | 'DISCONNECTED' | 'FINISHED' | 'LOBBY' | 'COOLDOWN',
+        joinedAt: p.joinedAt || new Date().toISOString(),
+        isReady: true,
+        rank: p.rank,
+        cooldownStartTime: p.cooldownStartTime,
+        waitingSince: p.waitingSince,
+        rawStatus: p.status
+    }));
+
     return (
-        <>
-            <Waiting
-                round="1"
-                participants={allUsers.length > 0 ? allUsers.map(user => ({
-                    userId: user.id,
-                    username: user.username,
-                    status: user.id === userId ? 'WAITING' : 'DISCONNECTED',
-                    joinedAt: new Date().toISOString(),
-                    isReady: true
-                })) : participants}
-                isRoundActive={isRoundActive}
-                timeRemaining={timeRemaining}
-                roundDuration={roundDuration}
-                totalParticipants={allUsers.length || participants.length}
-                isLoading={isLoading}
-                roundStarted={showCountdown ? false : isRoundActive}
-                onStartRound={undefined}
-                onJoinRound={undefined}
-            />
-            
-            {showCountdown && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-                    <div className="bg-gray-800 p-12 rounded-lg border border-amber-600 text-center">
-                        <h2 className="text-4xl font-bold text-amber-400 mb-6">Round 1 Starting</h2>
-                        <div className="text-6xl font-bold text-white mb-4">{countdown}</div>
-                        <p className="text-gray-300">Preparing matchmaking system...</p>
-                        <div className="flex justify-center items-center gap-2 mt-4">
-                            <div className="bg-amber-500 rounded-full h-3 w-3 animate-pulse"></div>
-                            <div className="bg-amber-500 rounded-full h-3 w-3 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                            <div className="bg-amber-500 rounded-full h-3 w-3 animate-pulse" style={{animationDelay: '1s'}}></div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </>
+        <Waiting
+            round="1"
+            participants={waitingComponentParticipants}
+            isRoundActive={isRoundActive}
+            timeRemaining={globalTimeRemaining}
+            roundDuration={roundDuration}
+            totalParticipants={round1Participants.length}
+            isLoading={isLoading}
+            roundStarted={isRoundActive}
+            isInCooldown={isInCooldown}
+            cooldownTimeRemaining={cooldownTimeRemaining}
+            onStartRound={isAdmin ? handleStartRound : undefined}
+            nextMatchmakingCycle={nextMatchmakingCycle}
+            isFirstCycle={isFirstCycle}
+            isAdmin={isAdmin}
+        />
     );
 }

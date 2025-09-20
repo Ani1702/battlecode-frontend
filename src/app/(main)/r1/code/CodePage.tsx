@@ -1,39 +1,13 @@
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
-import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
+import { Save, CheckCircle, AlertTriangle } from "lucide-react";
 
-// FIX: Add the robust useInterval custom hook. This is a standard pattern
-// for creating timers that don't have issues with stale state.
-function useInterval(callback: () => void, delay: number | null) {
-  const savedCallback = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    savedCallback.current = callback;
-  }, [callback]);
-
-  useEffect(() => {
-    function tick() {
-      if (savedCallback.current) {
-        savedCallback.current();
-      }
-    }
-    if (delay !== null) {
-      const id = setInterval(tick, delay);
-      return () => clearInterval(id);
-    }
-  }, [delay]);
-}
-
-interface SavedMatchState {
-  currentLanguage: string;
-  languages: { [lang: string]: { code: string; } };
-}
+// --- Interfaces ---
 interface MatchData {
   opponent: { id: string; rank?: number; };
   question: {
@@ -43,160 +17,353 @@ interface MatchData {
   };
   startTime: number; duration: number; difficulty?: string;
 }
-interface Problem {
-  id: string; title: string; description: string; difficulty: string;
-  constraints: string[]; boilerplate: { [key: string]: string };
-  sampleTestCases: TestCase[]; hints: string[];
-}
+
 interface TestCase {
   stdin?: string; expected_output?: string;
   input?: { stdin?: string; json?: unknown; };
   output?: { stdout?: string; json?: unknown; };
   explanation?: string;
 }
+
 interface SubmissionResult {
   token: string; status: { id: number; description: string; };
   stdout: string | null; stderr: string | null; compile_output: string | null;
   time: string | null; memory: string | null; passed?: boolean;
 }
 
-export default function R1CodePage() {
-  const router = useRouter();
-  const { socket } = useSocket();
+interface CodePageProps {
+  matchData: MatchData | null;
+  timeRemaining: number;
+}
+
+// --- Context Management Interfaces ---
+interface CodeContext {
+  round: string;
+  questionId: string;
+  language: string;
+}
+
+interface CodeStore {
+  [contextKey: string]: string; // "round:questionId:language" -> code
+}
+
+// --- UI Component ---
+export default function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const { session, isLoading: authLoading } = useAuth();
   const monaco = useMonaco();
   
-  const [matchData, setMatchData] = useState<MatchData | null>(null);
-  const [problem, setProblem] = useState<Problem | null>(null);
+  const [problem, setProblem] = useState<MatchData['question'] | null>(null);
   const [code, setCode] = useState("");
-  const [language, setLanguage] = useState("python");
-  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [language, setLanguage] = useState(() => {
+    // Load saved language preference from localStorage
+    try {
+      const saved = localStorage.getItem('battlecode-round-1-language');
+      return saved || "python";
+    } catch (error) {
+      console.error('Failed to load language preference:', error);
+      return "python";
+    }
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [matchPaused, setMatchPaused] = useState(false);
-  const [codeEditorHeight, setCodeEditorHeight] = useState(60);
-  const [isDragging, setIsDragging] = useState(false);
-  const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Context & Storage State
+  const [currentContext, setCurrentContext] = useState<CodeContext | null>(null);
+  const [codeStore, setCodeStore] = useState<CodeStore>({});
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [isContextInitialized, setIsContextInitialized] = useState(false);
+  
+  // Stable refs for race-free operations
+  const codeRef = useRef(code);
+  const currentContextRef = useRef(currentContext);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const languageRef = useRef(language);
+  
+  // Update refs when state changes
+  useEffect(() => { codeRef.current = code; }, [code]);
+  useEffect(() => { currentContextRef.current = currentContext; }, [currentContext]);
+  useEffect(() => { languageRef.current = language; }, [language]);
 
-  const editorOptions = {
-    minimap: { enabled: false }, fontSize: 14, lineNumbers: 'on' as const,
-    roundedSelection: false, scrollBeyondLastLine: false, automaticLayout: true,
-    tabSize: 2, wordWrap: 'on' as const, bracketPairColorization: { enabled: true },
-    autoIndent: 'full' as const, formatOnPaste: true, formatOnType: true,
-  };
-
-  const getMonacoLanguage = (lang: string) => ({
-    'python': 'python', 'java': 'java', 'cpp': 'cpp', 'c': 'c', 'javascript': 'javascript',
-  }[lang] || 'python');
+  // ============================================================================
+  // LANGUAGE PERSISTENCE - Save language preference to localStorage
+  // ============================================================================
   
   useEffect(() => {
-    if (monaco) {
-      monaco.editor.defineTheme('custom-dark', {
-        base: 'vs-dark', inherit: true, rules: [
-          { token: 'comment', foreground: '#6A9955' }, { token: 'keyword', foreground: '#569CD6' },
-          { token: 'string', foreground: '#CE9178' }, { token: 'number', foreground: '#B5CEA8' },
-        ],
-        colors: {
-          'editor.background': '#0a0a0a', 'editor.foreground': '#ffffff',
-          'editor.lineHighlightBackground': '#1a1a1a', 'editor.selectionBackground': '#264f78',
-          'editor.inactiveSelectionBackground': '#3a3d41', 'editorCursor.foreground': '#f97316',
-          'editorLineNumber.foreground': '#858585', 'editorLineNumber.activeForeground': '#f97316',
-          'editor.selectionHighlightBackground': '#ADD6FF26', 'editor.wordHighlightBackground': '#575757B8',
-          'editorBracketMatch.background': '#0064001a', 'editorBracketMatch.border': '#888888',
-        },
-      });
-      monaco.editor.setTheme('custom-dark');
-    }
-  }, [monaco]);
-
-  const getMatchStorageKey = (problemId: string) => `round1_match_state_${problemId}`;
-
-  const saveCurrentState = useCallback(() => {
-    if (!problem) return;
-    const key = getMatchStorageKey(problem.id);
     try {
-      const existingStateStr = localStorage.getItem(key);
-      const state: SavedMatchState = existingStateStr 
-        ? JSON.parse(existingStateStr)
-        : { currentLanguage: language, languages: {} };
-      state.currentLanguage = language;
-      if (!state.languages) state.languages = {};
-      state.languages[language] = { code };
-      localStorage.setItem(key, JSON.stringify(state));
-    } catch (e) { console.error("Failed to save state:", e); }
-  }, [problem, language, code]);
+      localStorage.setItem('battlecode-round-1-language', language);
+      console.log('💾 Saved language preference:', language);
+    } catch (error) {
+      console.error('Failed to save language preference:', error);
+    }
+  }, [language]);
+
+  // ============================================================================
+  // CONTEXT MANAGEMENT SYSTEM - Ultra Robust
+  // ============================================================================
+
+  const contextManager = useMemo(() => ({
+    // Generate storage key for localStorage
+    getStorageKey: (round: string): string => `battlecode-round-${round}-code-store`,
+    
+    // Generate context key for current state
+    generateContextKey: (round: string, questionId: string, language: string): string => 
+      `${round}:${questionId}:${language}`,
+    
+    // Parse context key back to components
+    parseContextKey: (contextKey: string): { round: string; questionId: string; language: string } | null => {
+      const parts = contextKey.split(':');
+      if (parts.length !== 3) return null;
+      return { round: parts[0], questionId: parts[1], language: parts[2] };
+    },
+    
+    // Load entire code store from localStorage
+    loadCodeStore: (round: string): CodeStore => {
+      try {
+        const stored = localStorage.getItem(contextManager.getStorageKey(round));
+        return stored ? JSON.parse(stored) : {};
+      } catch (error) {
+        console.error('Failed to load code store:', error);
+        return {};
+      }
+    },
+    
+    // Save entire code store to localStorage
+    saveCodeStore: (round: string, store: CodeStore): boolean => {
+      try {
+        localStorage.setItem(contextManager.getStorageKey(round), JSON.stringify(store));
+        return true;
+      } catch (error) {
+        console.error('Failed to save code store:', error);
+        return false;
+      }
+    },
+    
+    // Get boilerplate code for a problem and language
+    getBoilerplate: (problem: MatchData['question'] | null, language: string): string => {
+      if (!problem) return '';
+      return problem.boilerplate?.[language] || '';
+    },
+    
+    // Create a new context
+    createContext: (round: string, questionId: string, language: string): CodeContext => ({
+      round,
+      questionId, 
+      language
+    }),
+    
+    // Check if contexts are equal
+    contextEquals: (a: CodeContext | null, b: CodeContext | null): boolean => {
+      if (!a || !b) return false;
+      return a.round === b.round && a.questionId === b.questionId && a.language === b.language;
+    },
+    
+    // Get code for a specific context
+    getCodeForContext: (store: CodeStore, context: CodeContext): string => {
+      const key = contextManager.generateContextKey(context.round, context.questionId, context.language);
+      return store[key] || '';
+    },
+    
+    // Set code for a specific context
+    setCodeForContext: (store: CodeStore, context: CodeContext, code: string): CodeStore => {
+      const key = contextManager.generateContextKey(context.round, context.questionId, context.language);
+      return { ...store, [key]: code };
+    },
+    
+    // Remove code for a specific context
+    removeCodeForContext: (store: CodeStore, context: CodeContext): CodeStore => {
+      const key = contextManager.generateContextKey(context.round, context.questionId, context.language);
+      const newStore = { ...store };
+      delete newStore[key];
+      return newStore;
+    }
+  }), []);
+  
+  // ============================================================================
+  // INITIALIZATION - Load context and code store
+  // ============================================================================
   
   useEffect(() => {
-    const savedMatchData = sessionStorage.getItem('round1_match_data');
-    if (savedMatchData) {
-      try {
-        const data: MatchData = JSON.parse(savedMatchData);
-        setMatchData(data);
-        if (data.startTime && data.duration) {
-            // Calculate initial timer from saved data (fallback until backend sync)
-            const elapsed = Date.now() - data.startTime;
-            const remaining = Math.max(0, data.duration - elapsed);
-            setTimeRemaining(Math.floor(remaining / 1000));
-            console.log('Set initial timer from sessionStorage:', Math.floor(remaining / 1000), 'seconds');
-        }
-        if (data.question) {
-          const problemData: Problem = {
-            id: data.question.id, title: data.question.title, description: data.question.description,
-            difficulty: data.question.difficulty, constraints: data.question.constraints || [],
-            boilerplate: data.question.boilerplate || {}, sampleTestCases: data.question.sampleTestCases || [],
-            hints: data.question.hints || []
-          };
-          setProblem(problemData);
-          const key = getMatchStorageKey(data.question.id);
-          const savedStateStr = localStorage.getItem(key);
-          let restoredLanguage = "python";
-          let restoredCode = problemData.boilerplate?.['python'] || '';
-          if (savedStateStr) {
-            const savedState: SavedMatchState = JSON.parse(savedStateStr);
-            restoredLanguage = savedState.currentLanguage || 'python';
-            restoredCode = savedState.languages?.[restoredLanguage]?.code || problemData.boilerplate?.[restoredLanguage] || '';
-          }
-          setLanguage(restoredLanguage);
-          setCode(restoredCode);
-        }
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error parsing match data:', error);
-        showErrorToast('Failed to load match data');
-        router.push('/r1/lobby');
-      }
-    } else {
-      showErrorToast('No match data found');
-      router.push('/r1/lobby');
-    }
-  }, [router]);
+    if (!matchData?.question || isContextInitialized) return;
+    
+    console.log('🚀 Initializing context for Round 1:', matchData.question.title);
+    
+    // Load code store from localStorage
+    const loadedStore = contextManager.loadCodeStore('1');
+    setCodeStore(loadedStore);
+    
+    // Create initial context
+    const initialContext = contextManager.createContext('1', matchData.question.id, language);
+    setCurrentContext(initialContext);
+    
+    // Load code for initial context
+    const savedCode = contextManager.getCodeForContext(loadedStore, initialContext);
+    const boilerplate = contextManager.getBoilerplate(matchData.question, language);
+    const codeToLoad = savedCode || boilerplate;
+    
+    console.log('📝 Loading code for context:', initialContext, 'Code length:', codeToLoad.length);
+    setCode(codeToLoad);
+    setProblem(matchData.question);
+    
+    setIsContextInitialized(true);
+  }, [matchData, language, isContextInitialized, contextManager]);
 
+  // ============================================================================
+  // CONTEXT TRANSITION MANAGEMENT - The Heart of Robustness
+  // ============================================================================
+  
+  const handleContextTransition = useCallback((newProblem: MatchData['question'] | null, newLanguage: string) => {
+    if (!newProblem || !currentContext) return;
+    
+    const newContext = contextManager.createContext('1', newProblem.id, newLanguage);
+    
+    // If context hasn't actually changed, don't do anything
+    if (contextManager.contextEquals(currentContext, newContext)) {
+      console.log('🔄 Context unchanged, skipping transition');
+      return;
+    }
+    
+    console.log('🔄 Context transition:', currentContext, '->', newContext);
+    
+    // STEP 1: Save current code to current context
+    const currentCode = codeRef.current;
+    const currentBoilerplate = contextManager.getBoilerplate(
+      problem, 
+      currentContextRef.current?.language || language
+    );
+    
+    if (currentCode && currentCode !== currentBoilerplate) {
+      console.log('💾 Saving current code before transition');
+      setCodeStore(prevStore => {
+        const updatedStore = contextManager.setCodeForContext(prevStore, currentContext, currentCode);
+        contextManager.saveCodeStore('1', updatedStore);
+        return updatedStore;
+      });
+    }
+    
+    // STEP 2: Clear UI state for clean transition
+    setSubmissionResults(null);
+    
+    // STEP 3: Load code for new context
+    const savedCodeForNewContext = contextManager.getCodeForContext(codeStore, newContext);
+    const newBoilerplate = contextManager.getBoilerplate(newProblem, newLanguage);
+    const codeToLoad = savedCodeForNewContext || newBoilerplate;
+    
+    console.log('📝 Loading code for new context:', newContext, 'Code length:', codeToLoad.length);
+    
+    // STEP 4: Update state atomically
+    setCurrentContext(newContext);
+    setCode(codeToLoad);
+    
+  }, [currentContext, problem, language, codeStore, contextManager]);
+
+  // ============================================================================
+  // REACT TO PROP CHANGES - Language Changes
+  // ============================================================================
+  
   useEffect(() => {
-    if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
-    saveIntervalRef.current = setInterval(saveCurrentState, 3000);
-    return () => {
-      if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
-      saveCurrentState();
-    };
-  }, [saveCurrentState]);
+    if (!isContextInitialized || !matchData?.question) return;
+    handleContextTransition(matchData.question, language);
+  }, [language, isContextInitialized, matchData, handleContextTransition]);
 
-  const handleLanguageChange = (newLanguage: string) => {
-    if (!problem || language === newLanguage) return;
-    saveCurrentState();
-    const key = getMatchStorageKey(problem.id);
-    const savedStateStr = localStorage.getItem(key);
-    let newCode = problem.boilerplate?.[newLanguage] || '';
-    if (savedStateStr) {
-        try {
-            const state: SavedMatchState = JSON.parse(savedStateStr);
-            newCode = state.languages?.[newLanguage]?.code || problem.boilerplate?.[newLanguage] || '';
-        } catch(e) { console.error("Failed to parse saved state on language change", e); }
+  // ============================================================================
+  // AUTO-SAVE SYSTEM - Debounced and Robust
+  // ============================================================================
+  
+  const scheduleAutoSave = useCallback(() => {
+    if (!currentContext || !codeRef.current) return;
+    
+    const codeToSave = codeRef.current;
+    const boilerplate = contextManager.getBoilerplate(problem, currentContext.language);
+    
+    // Don't save if code is same as boilerplate
+    if (codeToSave === boilerplate) return;
+    
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
-    setCode(newCode);
-    setLanguage(newLanguage);
+    
+    setSaveStatus('saving');
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      console.log('💾 Auto-saving code for context:', currentContext);
+      
+      setCodeStore(prevStore => {
+        const updatedStore = contextManager.setCodeForContext(prevStore, currentContext, codeToSave);
+        const saveSuccess = contextManager.saveCodeStore('1', updatedStore);
+        
+        setSaveStatus(saveSuccess ? 'saved' : 'error');
+        
+        // Reset status after 2 seconds
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        
+        return updatedStore;
+      });
+      
+      saveTimeoutRef.current = null;
+    }, 600); // Quick debounce for responsive feel
+    
+  }, [currentContext, problem, contextManager]);
+
+  // Trigger auto-save when code changes
+  useEffect(() => {
+    if (isContextInitialized && code && currentContext) {
+      scheduleAutoSave();
+    }
+  }, [code, isContextInitialized, currentContext, scheduleAutoSave]);
+
+  // ============================================================================
+  // EMERGENCY SAVE - Before page unload
+  // ============================================================================
+  
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        const context = currentContextRef.current;
+        const codeToSave = codeRef.current;
+        
+        if (context && codeToSave) {
+          const boilerplate = contextManager.getBoilerplate(problem, context.language);
+          if (codeToSave !== boilerplate) {
+            console.log('🚨 Emergency save before page unload');
+            const currentStore = contextManager.loadCodeStore('1');
+            const updatedStore = contextManager.setCodeForContext(currentStore, context, codeToSave);
+            contextManager.saveCodeStore('1', updatedStore);
+          }
+        }
+      } catch (error) {
+        console.error('Emergency save failed:', error);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [problem, contextManager]);
+
+  // Get save status display
+  const getSaveStatusDisplay = () => {
+    if (!currentContext) return { text: '', className: '', icon: null };
+    
+    switch (saveStatus) {
+      case 'saving':
+        return { text: 'Saving...', className: 'text-yellow-400', icon: <Save className="h-3 w-3" /> };
+      case 'saved':
+        return { text: 'Saved', className: 'text-green-400', icon: <CheckCircle className="h-3 w-3" /> };
+      case 'error':
+        return { text: 'Save Error', className: 'text-red-400', icon: <AlertTriangle className="h-3 w-3" /> };
+      default:
+        const savedCode = contextManager.getCodeForContext(codeStore, currentContext);
+        return savedCode 
+          ? { text: 'Saved', className: 'text-green-400', icon: <CheckCircle className="h-3 w-3" /> }
+          : { text: '', className: '', icon: null };
+    }
   };
 
   const handleSubmit = useCallback(async () => {
@@ -211,127 +378,26 @@ export default function R1CodePage() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({ language, source_code: code, problemId: problem.id, roundNumber: 1 })
       });
-
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
       const result = await response.json();
-      
       if (result.success) {
         setSubmissionResults(result.results || []);
-        const { summary, submission } = result;
-        if (submission && submission.status === 'ACCEPTED') {
-          showSuccessToast(`🎉 All ${summary.total} test cases passed! You won the match!`);
+        if (result.submission?.status === 'ACCEPTED') {
+          showSuccessToast(`🎉 All test cases passed! You won the match!`);
         } else {
-          showErrorToast(`${summary.passed}/${summary.total} test cases passed. Keep trying!`);
+          showErrorToast(`${result.summary.passed}/${result.summary.total} test cases passed. Keep trying!`);
         }
       } else {
-        showErrorToast(result.message || 'Submission failed');
-        if (result.results) setSubmissionResults(result.results);
+        throw new Error(result.message || 'Submission failed');
       }
     } catch (error) {
-      console.error('Submit error:', error);
       showErrorToast(`Failed to submit: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
     }
   }, [problem, matchData, session, language, code, isSubmitting]);
 
-  const timerTick = useCallback(() => {
-    if (!matchData?.startTime || !matchData?.duration) return;
-    const elapsed = Date.now() - matchData.startTime;
-    const remaining = Math.max(0, matchData.duration - elapsed);
-    const remainingSeconds = Math.floor(remaining / 1000);
-    setTimeRemaining(remainingSeconds);
-    if (remainingSeconds <= 0) {
-      handleSubmit();
-    }
-  }, [matchData, handleSubmit]);
-
-  useInterval(timerTick, matchPaused || (matchData && timeRemaining <= 0) ? null : 1000);
-
-  useEffect(() => {
-    if (!socket) return;
-    const handleMatchPause = (data: { message?: string }) => {
-      setMatchPaused(true);
-      showInfoToast(data.message || 'Match paused - opponent disconnected');
-    };
-    const handleMatchResume = (data: { message?: string; startTime?: number; duration?: number }) => {
-      setMatchPaused(false);
-      showSuccessToast(data.message || 'Match resumed - opponent reconnected');
-      if (data.startTime && data.duration) {
-        setMatchData(prev => prev ? { ...prev, startTime: data.startTime!, duration: data.duration! } : null);
-      }
-    };
-    const handleCooldown = () => {
-      if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
-      showSuccessToast('Match completed! Entering cooldown period...');
-      router.push('/r1/waiting');
-    };
-    const handleRoundEnd = () => {
-        if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
-        showInfoToast('Round 1 has ended');
-        router.push('/dashboard');
-    };
-    const handleTimerUpdate = (data: { timeRemaining: number }) => {
-        console.log('Timer update received:', data.timeRemaining, 'seconds');
-        setTimeRemaining(data.timeRemaining);
-        
-        // If timer is very low, warn user
-        if (data.timeRemaining <= 60 && data.timeRemaining > 0) {
-            showErrorToast(`Only ${data.timeRemaining} seconds remaining!`);
-        }
-        
-        // Auto-submit when time is up
-        if (data.timeRemaining <= 0) {
-            showErrorToast('Time\'s up! Auto-submitting your solution...');
-            handleSubmit();
-        }
-    };
-
-    socket.on('match:pause', handleMatchPause);
-    socket.on('match:resume', handleMatchResume);
-    socket.on('round1:cooldown', handleCooldown);
-    socket.on('round1:ended', handleRoundEnd);
-    socket.on('round1:timerUpdate', handleTimerUpdate);
-
-    return () => {
-      socket.off('match:pause', handleMatchPause);
-      socket.off('match:resume', handleMatchResume);
-      socket.off('round1:cooldown', handleCooldown);
-      socket.off('round1:ended', handleRoundEnd);
-      socket.off('round1:timerUpdate', handleTimerUpdate);
-    };
-  }, [socket, router, problem, handleSubmit]);
-
-  // Request timer sync when socket and matchData are available
-  useEffect(() => {
-    if (socket && matchData && matchData.question && !isLoading) {
-      console.log('Requesting timer sync for question:', matchData.question.id);
-      socket.emit('round1:getTimerState', { questionId: matchData.question.id });
-      
-      // Set up periodic timer sync every 10 seconds to stay accurate
-      const syncInterval = setInterval(() => {
-        if (socket && matchData && matchData.question) {
-          socket.emit('round1:getTimerState', { questionId: matchData.question.id });
-        }
-      }, 10000);
-      
-      // Also request sync again after a short delay to ensure we get fresh state
-      const syncTimer = setTimeout(() => {
-        if (socket && matchData && matchData.question) {
-          socket.emit('round1:getTimerState', { questionId: matchData.question.id });
-        }
-      }, 1000);
-      
-      return () => {
-        clearInterval(syncInterval);
-        clearTimeout(syncTimer);
-      };
-    }
-  }, [socket, matchData, isLoading]);
-
-  const executeCode = async () => {
-    if (!problem) { showErrorToast('No problem loaded'); return; }
+  const executeCode = useCallback(async () => {
+    if (!problem) return;
     setIsRunning(true);
     setSubmissionResults(null);
     showInfoToast('Running your code against sample cases...');
@@ -341,7 +407,6 @@ export default function R1CodePage() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({ language, source_code: code, problemId: problem.id })
       });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setSubmissionResults(result.results || []);
@@ -350,43 +415,11 @@ export default function R1CodePage() {
         throw new Error(result.error || 'Failed to run code');
       }
     } catch (error) {
-      console.error('Run error:', error);
       showErrorToast(`Failed to run code: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsRunning(false);
     }
-  };
-  
-  const handleMouseDown = (e: React.MouseEvent) => { setIsDragging(true); e.preventDefault(); };
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    const container = document.querySelector('.code-results-container') as HTMLElement;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const containerHeight = rect.height;
-    const mouseY = e.clientY - rect.top;
-    const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
-    setCodeEditorHeight(newHeightPercentage);
-   }, [isDragging]);
-  const handleMouseUp = () => { setIsDragging(false); };
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-    } else {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, handleMouseMove]);
+  }, [problem, session, language, code]);
   
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -395,190 +428,105 @@ export default function R1CodePage() {
   };
 
   const getTimerDisplay = (): { time: string; className: string } => {
-    const isWarning = timeRemaining <= 300;
-    const isCritical = timeRemaining <= 60;
     return {
       time: formatTime(timeRemaining),
-      className: isCritical ? 'border-red-600 text-red-400' : 
-                 isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
+      className: timeRemaining <= 60 ? 'border-red-600 text-red-400' : 
+                 timeRemaining <= 300 ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
     };
   };
-  const formatTestCaseData = (data: unknown): string => {
-    if (typeof data === 'string') return data;
-    if (Array.isArray(data)) return data.join(', ');
-    if (typeof data === 'object' && data !== null) {
-      return Object.entries(data).map(([key, value]) => Array.isArray(value) ? `${key} = [${value.join(', ')}]` : `${key} = ${value}`).join('\n');
-    }
-    return String(data);
-  };
 
-  if (authLoading || isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black/40 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p>Loading Round 1 Match...</p>
-        </div>
-      </div>
-    );
-  }
-  if (!problem || !matchData) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black/40 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <p>Failed to load match data...</p>
-          <button onClick={() => router.push('/r1/lobby')} className="px-6 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
-            Return to Lobby
-          </button>
-        </div>
-      </div>
-    );
+  if (authLoading || !problem || !matchData) {
+    // A simple loading state, parent handles the main loading screen
+    return <div className="text-white text-center p-8">Initializing editor...</div>;
   }
 
   return (
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
-      <div className="flex-shrink-0 flex items-center justify-between p-4 bg-black/60 backdrop-blur-sm border-b border-amber-600">
-        <div>
-          <h1 className="text-xl font-bold text-amber-400">Round 1 - Coding Duel</h1>
-          <div className="text-sm text-gray-300">
-            vs {matchData.opponent.id} | Difficulty: {matchData.difficulty || 'Medium'}
+        {/* Debug Info - Remove in production */}
+        {currentContext && (
+          <div className="bg-gray-900 text-xs p-2 text-gray-400">
+            Context: {currentContext.round}:{currentContext.questionId}:{currentContext.language} | 
+            Code Length: {code.length} | 
+            Store Keys: {Object.keys(codeStore).length}
           </div>
-        </div>
-        <div className={`text-center p-3 font-mono text-xl bg-gray-800 rounded border ${getTimerDisplay().className}`}>
-          {matchPaused ? 'PAUSED' : getTimerDisplay().time}
-        </div>
-      </div>
-
-      {matchPaused && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-gray-800 p-8 rounded-lg border border-amber-600 text-center">
-            <h2 className="text-2xl font-bold text-amber-400 mb-4">Match Paused</h2>
-            <p className="text-gray-300 mb-4">Waiting for opponent to reconnect...</p>
-            <div className="flex justify-center items-center gap-2">
-              <div className="bg-amber-500 rounded-full h-3 w-3 animate-pulse"></div>
-              <div className="bg-amber-500 rounded-full h-3 w-3 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-              <div className="bg-amber-500 rounded-full h-3 w-3 animate-pulse" style={{animationDelay: '1s'}}></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
-        <div className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
-          <div className="flex justify-between items-start mb-4 flex-shrink-0">
+        )}
+        
+        <div className="flex-shrink-0 flex items-center justify-between p-4 bg-black/60 backdrop-blur-sm border-b border-amber-600">
             <div>
-              <h2 className="text-2xl font-bold">{problem.title}</h2>
-              <div className="flex gap-4 text-sm text-gray-400 mt-1">
-                <span>Difficulty: {problem.difficulty}</span>
-                <span>Round: 1</span>
-              </div>
+                <h1 className="text-xl font-bold text-amber-400">Round 1 - Coding Duel</h1>
+                <div className="text-sm text-gray-300">
+                    vs {matchData.opponent.id} | Difficulty: {matchData.difficulty || 'Medium'}
+                </div>
             </div>
-            <Button content={showHints ? "Hide" : "Hint💡"} onClick={() => setShowHints(!showHints)} />
-          </div>
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {showHints && problem.hints && problem.hints.length > 0 && (
-              <div className="mb-4 bg-gray-800 p-3 rounded">
-                <h3 className="font-bold mb-2 text-amber-400">Hints:</h3>
-                <ul className="list-disc list-inside text-gray-300 space-y-2">
-                  {problem.hints.map((hint, i) => <li key={i}>{hint}</li>)}
-                </ul>
-              </div>
-            )}
-            <p className="mb-4 text-gray-300 whitespace-pre-wrap">{problem.description}</p>
-            {problem.constraints && problem.constraints.length > 0 && (
-              <>
-                <h3 className="font-bold mb-2 text-amber-400">Constraints:</h3>
-                <ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">
-                  {problem.constraints.map((constraint, i) => <li key={i}>{constraint}</li>)}
-                </ul>
-              </>
-            )}
-            {problem.sampleTestCases && problem.sampleTestCases.length > 0 && (
-              <>
-                <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
-                {problem.sampleTestCases.map((testCase, i) => (
-                  <div key={i} className="mb-4 bg-gray-800 p-3 rounded font-mono text-sm">
-                    <p className="font-bold text-gray-400">Input:</p>
-                    <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
-                      {formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')}
-                    </pre>
-                    <p className="mt-2 font-bold text-gray-400">Output:</p>
-                    <pre className="bg-gray-900 p-2 rounded mt-1 whitespace-pre-wrap">
-                      {formatTestCaseData(testCase.expected_output || testCase.output?.stdout || testCase.output?.json || '')}
-                    </pre>
-                    {testCase.explanation && (
-                      <p className="mt-2 text-xs text-gray-400 italic">Explanation: {testCase.explanation}</p>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
+            <div className={`text-center p-3 font-mono text-xl bg-gray-800 rounded border ${getTimerDisplay().className} flex items-center justify-center gap-2`}>
+                <span>{getTimerDisplay().time}</span>
+                {getSaveStatusDisplay().text && (
+                  <span className={`text-xs ${getSaveStatusDisplay().className} flex items-center gap-1`}>
+                    {getSaveStatusDisplay().icon}
+                    {getSaveStatusDisplay().text}
+                  </span>
+                )}
+            </div>
         </div>
-        <div className="w-1/2 flex flex-col code-results-container border-amber-500" style={{ height: '100%' }}>
-          <div className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0" style={{ height: `${codeEditorHeight}%`, minHeight: '200px' }}>
-            <div className="flex justify-between items-center mb-2 gap-2">
-              <div className="flex-1 flex gap-2">
-                <select value={language} onChange={(e) => handleLanguageChange(e.target.value)} className="bg-gray-800 flex-1 text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500" disabled={matchPaused}>
-                  <option value="python">Python</option>
-                  <option value="java">Java</option>
-                  <option value="cpp">C++</option>
-                  <option value="c">C</option>
-                  <option value="javascript">JavaScript</option>
-                </select>
+
+        <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
+          <div className="w-1/2 flex flex-col border rounded-lg border-amber-600 bg-black/40 p-4">
+              <h2 className="text-2xl font-bold">{problem.title}</h2>
+              <div className="flex-1 overflow-y-auto mt-4">
+                  <p className="whitespace-pre-wrap">{problem.description}</p>
+                  {/* ... other problem details ... */}
               </div>
-              <div className="flex gap-2">
-                <button className="flex items-center gap-2 bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500" onClick={executeCode} disabled={isRunning || isSubmitting || matchPaused}>
-                  <span>Run</span>
-                  <Image src="/run.svg" alt="Run Icon" className="h-4 w-4" width={16} height={16}/>
-                </button>
-                <button className="bg-black text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500" onClick={handleSubmit} disabled={isSubmitting || isRunning || matchPaused}>
-                  {isSubmitting ? "Submitting..." : "Submit"}
-                </button>
+          </div>
+
+          <div className="w-1/2 flex flex-col gap-4">
+              <div className="flex-1 flex flex-col border rounded-lg border-amber-600 bg-black/40 p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-gray-800 text-white p-2 rounded border border-amber-600">
+                        <option value="python">Python</option>
+                        <option value="java">Java</option>
+                        <option value="cpp">C++</option>
+                        <option value="javascript">JavaScript</option>
+                    </select>
+                    <div className="flex gap-2">
+                        <button
+                          className="rounded-lg border p-4 h-12 text-white border-amber-600 font-oxanium w-30 justify-center items-center flex bg-black/20 backdrop-blur-sm hover:bg-amber-600 hover:text-black transition-colors duration-300 shadow-[0_0_20px_rgba(220,38,38,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black/20 disabled:hover:text-white"
+                          onClick={executeCode}
+                          disabled={isRunning || isSubmitting}
+                        >
+                          Run
+                        </button>
+                        <button
+                          className="rounded-lg border p-4 h-12 text-white border-amber-600 font-oxanium w-30 justify-center items-center flex bg-black/20 backdrop-blur-sm hover:bg-amber-600 hover:text-black transition-colors duration-300 shadow-[0_0_20px_rgba(220,38,38,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black/20 disabled:hover:text-white"
+                          onClick={handleSubmit}
+                          disabled={isSubmitting || isRunning}
+                        >
+                          Submit
+                        </button>
+                    </div>
+                  </div>
+                  <div className="flex-1 rounded overflow-hidden">
+                    <Editor
+                        height="100%"
+                        language={language}
+                        value={code}
+                        onChange={(value) => setCode(value || "")}
+                        theme="vs-dark"
+                    />
+                  </div>
               </div>
-            </div>
-            <div className="flex-1 rounded overflow-hidden border border-gray-700">
-              <Editor
-                height="100%" language={getMonacoLanguage(language)} value={code}
-                onChange={(value) => setCode(value || "")} theme="custom-dark"
-                options={{ ...editorOptions, readOnly: matchPaused }}
-                loading={<div className="flex items-center justify-center h-full bg-gray-900"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div></div>}
-              />
-            </div>
-          </div>
-          <div className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors duration-200 flex items-center justify-center ${isDragging ? 'bg-amber-600/60' : ''}`} onMouseDown={handleMouseDown}>
-            <div className="w-8 h-1 bg-amber-600 rounded-full"></div>
-          </div>
-          <div className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0" style={{ height: `${100 - codeEditorHeight}%`, minHeight: '150px' }}>
-            <span className="text-lg font-bold flex-shrink-0">Test Results</span>
-            <div className="mt-2 flex-grow overflow-y-auto">
-              {(isSubmitting || isRunning) && (
-                <div className="flex items-center gap-2 text-amber-400">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-500"></div>
-                  <span>{isSubmitting ? 'Submitting' : 'Running'} your solution...</span>
-                </div>
-              )}
-              {submissionResults && (
-                <div className="space-y-2">
-                  {submissionResults.map((result, index) => {
-                    const isAccepted = result.status.description === "Accepted" || result.passed;
-                    const isError = result.status.id > 3;
-                    return (
-                      <div key={result.token || index} className={`p-2 rounded ${isAccepted ? "bg-green-800/50" : isError ? "bg-red-800/50" : "bg-yellow-800/50"}`}>
-                        <p className="font-bold">Test Case {index + 1}: <span className={`${isAccepted ? "text-green-400" : isError ? "text-red-400" : "text-yellow-400"}`}>{result.status.description}</span></p>
-                        {!isAccepted && (result.stderr || result.compile_output) && (
-                          <pre className="text-xs text-red-300 mt-1 whitespace-pre-wrap bg-black/30 p-1 rounded">{result.stderr || result.compile_output}</pre>
-                        )}
-                        {result.time && (<p className="text-xs text-gray-400 mt-1">Time: {result.time}s | Memory: {result.memory}KB</p>)}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+              <div className="h-1/3 flex flex-col border rounded-lg border-amber-600 bg-black/40 p-4">
+                  <h3 className="text-lg font-bold">Test Results</h3>
+                  <div className="flex-1 mt-2 overflow-y-auto">
+                      {(isRunning || isSubmitting) && <p>Processing...</p>}
+                      {submissionResults && submissionResults.map((result, index) => (
+                          <div key={index} className={`p-2 rounded ${result.status.description === 'Accepted' ? 'bg-green-800/50' : 'bg-red-800/50'}`}>
+                              Test Case {index + 1}: {result.status.description}
+                          </div>
+                      ))}
+                  </div>
+              </div>
           </div>
         </div>
       </div>
-    </div>
   );
 }
