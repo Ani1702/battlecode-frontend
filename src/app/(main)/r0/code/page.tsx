@@ -87,6 +87,11 @@ export default function R0Code() {
     };
     const handleRoundEnd = (data: RoundEndData) => {
       if (!isMountedRef.current) return;
+
+      localStorage.removeItem(`battlecode-round-0-code-store`);
+      
+    
+  
       setIsRoundActive(false);
       showInfoToast(data.message || 'Round 0 has ended!');
       setTimeout(() => {
@@ -153,6 +158,7 @@ export default function R0Code() {
           const errorMessage = typeof response?.error === 'string' ? response.error : 
                               (response?.error?.message || 'No active round found.');
           showErrorToast(errorMessage);
+          localStorage.removeItem(`battlecode-round-0-code-store`);
           router.push('/r0/lobby');
         }
       } catch (error) {

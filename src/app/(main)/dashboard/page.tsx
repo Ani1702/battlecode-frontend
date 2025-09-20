@@ -224,6 +224,9 @@ export default function Dashboard() {
     if (!isAdmin || adminLoading) return;
 
     setAdminLoading(true);
+    if ((newStatus === 'COMPLETED' || newStatus === 'LOCKED') && roundNumber === 0) {
+      localStorage.removeItem(`battlecode-round-0-code-store`);
+    }
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/${roundNumber}/status`, {
         method: 'PATCH',

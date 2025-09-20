@@ -140,6 +140,27 @@ export default function CodePage({
   const contextManager = useMemo(() => ({
     // Generate storage key for localStorage
     getStorageKey: (round: string): string => `battlecode-round-${round}-code-store`,
+
+    getRoundStartFlagKey: (round: string): string => `battlecode-round-${round}-started`,
+
+    isFirstRoundAccess: (round: string): boolean => {
+    try {
+      const flag = localStorage.getItem(contextManager.getRoundStartFlagKey(round));
+      return flag === null; // Return true if flag doesn't exist
+    } catch (error) {
+      console.error('Failed to check round start flag:', error);
+      return false;
+    }
+  },
+  markRoundAsStarted: (round: string): boolean => {
+    try {
+      localStorage.setItem(contextManager.getRoundStartFlagKey(round), 'true');
+      return true;
+    } catch (error) {
+      console.error('Failed to mark round as started:', error);
+      return false;
+    }
+  },
     
     // Generate context key for current state
     generateContextKey: (round: string, questionId: string, language: string): string => 
@@ -151,6 +172,16 @@ export default function CodePage({
       if (parts.length !== 3) return null;
       return { round: parts[0], questionId: parts[1], language: parts[2] };
     },
+
+    clearRoundData: (round: string): boolean => {
+    try {
+      localStorage.removeItem(contextManager.getStorageKey(round));
+      return true;
+    } catch (error) {
+      console.error('Failed to clear round data:', error);
+      return false;
+    }
+  },
     
     // Load entire code store from localStorage
     loadCodeStore: (round: string): CodeStore => {
@@ -225,6 +256,10 @@ export default function CodePage({
       return cleanStore;
     }
   }), []);
+  
+  
+
+
 
   // ============================================================================
   // INITIALIZATION - Load context and code store
