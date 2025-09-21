@@ -2,7 +2,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from '@/contexts/SocketContext';
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
@@ -14,7 +14,7 @@ interface Participant {
   rank: number;
   status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
   cooldownEndTime?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface MatchFoundData {
@@ -30,7 +30,7 @@ interface MatchFoundData {
 export default function WaitingRoomR1() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
-  const { user, userId, userRole, isLoading: authLoading } = useAuth();
+  const { userId, userRole, isLoading: authLoading } = useAuth();
 
   // --- State Management ---
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
@@ -112,9 +112,9 @@ export default function WaitingRoomR1() {
   useEffect(() => {
     if (!socket || !isConnected || !userId) return;
 
-    socket.emit('round1:getState', {}, (response: any) => {
+    socket.emit('round1:getState', {}, (response: { success: boolean; isActive?: boolean; globalTimeRemaining?: number; allParticipants?: Participant[]; nextMatchmakingCycle?: number; participant?: Participant; error?: string }) => {
       if (response?.success) {
-        setIsRoundActive(response.isActive);
+        setIsRoundActive(response.isActive ?? false);
         setGlobalTimeRemaining(response.globalTimeRemaining || 0);
         setAllParticipants(response.allParticipants || []);
         setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
@@ -174,7 +174,7 @@ export default function WaitingRoomR1() {
 
   const handleStartRound = () => {
     if (!isAdmin || !socket) return;
-    socket.emit('round1:ready', {}, (response: any) => {
+    socket.emit('round1:ready', {}, (response: { success?: boolean; error?: string }) => {
       if (response?.success) {
         showSuccessToast('Round 1 started successfully!');
       } else {

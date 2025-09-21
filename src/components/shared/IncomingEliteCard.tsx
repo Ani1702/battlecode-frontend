@@ -1,3 +1,5 @@
+import Image from 'next/image';
+
 interface IncomingEliteCardProps {
   username: string;
   rank: number;
@@ -39,7 +41,7 @@ export default function IncomingEliteCard({
           className="w-8 h-8  relative  bottom-[5px] bg-green-500 hover:bg-green-600 rounded-sm flex items-center justify-center transition-colors duration-200 group-hover:scale-110"
           title="Accept Challenge"
         >
-          <img src="/tick.png" alt="Accept" className="w-4 h-4" />
+          <Image src="/tick.png" alt="Accept" width={16} height={16} />
         </button>
         <button
           onClick={onDeny}

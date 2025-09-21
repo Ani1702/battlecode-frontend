@@ -1,3 +1,5 @@
+import Image from 'next/image';
+
 interface ChallengerPlayerCardProps {
   username: string;
   rank: number;
@@ -37,7 +39,7 @@ export default function ChallengerPlayerCard({
           className="  text-white px-2 py-1 rounded-md text-xs font-medium transition-colors duration-200 group-hover:scale-110"
           title="Challenge Player"
         >
-          <img src="/sword.png" alt="Challenge" className="w-8 h-8 mx-auto" />
+          <Image src="/sword.png" alt="Challenge" width={32} height={32} className="mx-auto" />
         </button>
       </div>
       

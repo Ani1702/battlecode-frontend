@@ -8,26 +8,23 @@ import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
 
+// Defines the structure for a participant in the lobby
 interface Participant {
   id: string;
   username: string;
   rank: number;
   status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
-  [key: string]: any; // Allow other properties
+  [key: string]: unknown; // Allows for additional properties
 }
 
+// Defines the structure for lobby update data from the server
 interface LobbyData {
   participants?: Participant[];
   isActive?: boolean;
   [key: string]: unknown;
 }
 
-interface RoundStartData {
-  startTime?: number;
-  duration?: number;
-  [key: string]: unknown;
-}
-
+// Defines the structure for match found data from the server
 interface MatchFoundData {
   matchId?: string;
   opponent?: Participant;
@@ -36,12 +33,7 @@ interface MatchFoundData {
   [key: string]: unknown;
 }
 
-interface ErrorData {
-  message?: string;
-  [key: string]: unknown;
-}
-
-// Interfaces for typed socket responses
+// Interfaces for strongly-typed socket event responses
 interface SimpleSocketResponse {
     success: boolean;
     error?: string;
@@ -56,7 +48,7 @@ interface GetStateResponse extends SimpleSocketResponse {
 export default function Lobbyr1(){
     const router = useRouter();
     const { socket, isConnected } = useSocket();
-    const { user, userId, isLoading: authLoading } = useAuth();
+    const { userId, isLoading: authLoading } = useAuth();
     
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [isRoundActive, setIsRoundActive] = useState(false);
@@ -66,50 +58,52 @@ export default function Lobbyr1(){
     const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
     const [authenticationChecked, setAuthenticationChecked] = useState(false);
     
-    const isAdmin = true; // Placeholder for admin logic
+    const isAdmin = true; // Placeholder for admin role logic
 
+    // Effect to handle user authentication and redirection
     useEffect(() => {
         if (!authLoading) setAuthenticationChecked(true);
         if (!authLoading && !userId) router.push('/dashboard');
     }, [authLoading, userId, router]);
 
-    // useEffect to handle initial state and joining
+    // Effect to handle initial server state synchronization and joining the lobby
     useEffect(() => {
         if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin) return;
     
-        // 1. Ask the server for the current state first
+        // 1. Request the current round state from the server
         socket.emit('round1:getState', {}, (response: GetStateResponse) => {
             setIsLoading(false);
-            setHasAttemptedJoin(true); // Mark that we've synced with the server
+            setHasAttemptedJoin(true); // Ensures this logic runs only once
     
             if (!response.success) {
-                showErrorToast(response.error || "Could not sync with server.");
+                showErrorToast(response.error || "Could not sync with the server.");
                 return;
             }
     
             if (response.participant) {
-                // User is already in the round, handle their state
-                console.log("User already a participant:", response.participant.status);
+                // User is already a participant, handle their current status
+                console.log("User already a participant with status:", response.participant.status);
                 setIsRoundActive(response.isActive ?? false);
                 if (response.participant.status === 'in-match') {
-                    router.push('/r1/code'); // Redirect to their match
+                    router.push('/r1/code'); // Redirect to their ongoing match
                 } else if (response.participant.status !== 'lobby') {
-                    router.push('/r1/waiting'); // Redirect to waiting room
+                    router.push('/r1/waiting'); // Redirect to the waiting room
                 }
-                // If they are in 'lobby', they stay here.
+                // If status is 'lobby', they remain on this page.
             } else {
-                // 2. If not a participant, then join the lobby
+                // 2. If not a participant, join the lobby
                 socket.emit('round1:join', {}, (joinResponse: SimpleSocketResponse) => {
                     if (joinResponse.success) {
                         showSuccessToast('Successfully joined Round 1 lobby');
                     } else {
-                        showErrorToast(joinResponse.error || 'Failed to join lobby');
+                        showErrorToast(joinResponse.error || 'Failed to join the lobby');
                     }
                 });
             }
         });
     }, [socket, isConnected, authenticationChecked, hasAttemptedJoin, router]);
 
+    // Effect to set up and tear down all socket event listeners
     useEffect(() => {
         if (!socket) return;
 
@@ -119,7 +113,7 @@ export default function Lobbyr1(){
             if (data.isActive !== undefined) setIsRoundActive(data.isActive);
         };
 
-        const handleRoundStarted = (data: RoundStartData) => {
+        const handleRoundStarted = () => {
             setRoundStarted(true);
             setIsRoundActive(true);
             showSuccessToast('Round 1 has started! Entering matchmaking...');
@@ -137,12 +131,8 @@ export default function Lobbyr1(){
         };
 
         const handleRoundEnd = () => {
-            showSuccessToast('Round 1 has ended');
+            showSuccessToast('Round 1 has ended.');
             router.push('/dashboard');
-        };
-
-        const handleError = (error: ErrorData) => {
-            showErrorToast(error?.message || 'An error occurred');
         };
 
         socket.on('lobby:round1', handleLobbyUpdate);
@@ -151,6 +141,7 @@ export default function Lobbyr1(){
         socket.on('round1:globalTimer', handleGlobalTimer);
         socket.on('round1:ended', handleRoundEnd);
 
+        // Cleanup listeners on component unmount
         return () => {
             socket.off('lobby:round1', handleLobbyUpdate);
             socket.off('round1:started', handleRoundStarted);
@@ -160,29 +151,30 @@ export default function Lobbyr1(){
         };
     }, [socket, router]);
 
+    // Handler for admin to start the round
     const handleStartRound = () => {
         if (!socket || participants.length === 0) return;
         socket.emit('round1:ready', {}, (response: SimpleSocketResponse) => {
             if (response.success) {
                 showSuccessToast('Round 1 started successfully');
             } else {
-                showErrorToast(response.error || 'Failed to start round');
+                showErrorToast(response.error || 'Failed to start the round');
             }
         });
     };
 
-    const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 5);
+    // Utility to format seconds into MM:SS format
+    const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 19);
 
     if (authLoading || !authenticationChecked) {
-        return ( <div className="text-white">Loading Authentication...</div> );
+        return ( <div className="flex items-center justify-center h-screen text-white">Loading Authentication...</div> );
     }
 
     return (
-        <>
-            <div className = "flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
-            <div className = "flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
-                <p className='flex-1 flex items-end pt-8'> <span className = "text-white">ROUND</span> <span className="text-orange-500">&nbsp; 1</span></p>
-                <span className = "text-orange-500 text-2xl pb-4">LOBBY</span>
+        <div className="flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
+            <div className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
+                <p className='flex-1 flex items-end pt-8'> <span className="text-white">ROUND</span> <span className="text-orange-500">&nbsp; 1</span></p>
+                <span className="text-orange-500 text-2xl pb-4">LOBBY</span>
                 
                 {(roundStarted || isRoundActive) && (
                     <div className="mt-3 flex flex-col items-center gap-2">
@@ -213,11 +205,11 @@ export default function Lobbyr1(){
             <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
                 Participants: {participants.length}
             </div>
-            <div className = "flex-1 p-6 min-h-0">
+            <div className="flex-1 p-6 min-h-0">
                 <CustomScrollbar className="h-full overflow-y-auto">
                     <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
                         {isLoading ? (
-                            Array.from({ length: 10 }).map((_, index) => (
+                            Array.from({ length: 9 }).map((_, index) => (
                                 <div key={index} className="relative w-full h-[90px] mb-3">
                                     <div className="absolute inset-0 w-full h-full bg-gray-800/50 animate-pulse rounded-lg"></div>
                                 </div>
@@ -296,7 +288,5 @@ export default function Lobbyr1(){
                 </div>
             )}
         </div>
-        </>
     );
 }
-

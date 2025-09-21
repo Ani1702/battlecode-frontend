@@ -3,7 +3,6 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
-import Button from "@/components/shared/button";
 import Editor from '@monaco-editor/react';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import { Save, CheckCircle, AlertTriangle } from "lucide-react";
@@ -55,7 +54,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const [language, setLanguage] = useState(() => {
     try {
       return localStorage.getItem('battlecode-round-1-language') || "python";
-    } catch (error) {
+    } catch {
       return "python";
     }
   });
@@ -81,13 +80,13 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       try {
         const stored = localStorage.getItem(contextManager.getStorageKey(round));
         return stored ? JSON.parse(stored) : {};
-      } catch (e) { return {}; }
+      } catch { return {}; }
     },
     saveCodeStore: (round: string, store: CodeStore) => {
       try {
         localStorage.setItem(contextManager.getStorageKey(round), JSON.stringify(store));
         return true;
-      } catch (e) { return false; }
+      } catch { return false; }
     },
     getBoilerplate: (p: MatchData['question'] | null, lang: string) => p?.boilerplate?.[lang] || '',
     createContext: (round: string, qId: string, lang: string) => ({ round, questionId: qId, language: lang }),
@@ -166,7 +165,11 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
   const handleSubmit = useCallback(async (isFinalSubmission: boolean) => {
     if (!problem || !matchData || (isSubmitting || isRunning)) return;
-    isFinalSubmission ? setIsSubmitting(true) : setIsRunning(true);
+    if (isFinalSubmission) {
+      setIsSubmitting(true);
+    } else {
+      setIsRunning(true);
+    }
     setSubmissionResults(null);
     showInfoToast(isFinalSubmission ? 'Submitting for final judging...' : 'Running against sample cases...');
 
@@ -190,7 +193,11 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     } catch (error) {
       showErrorToast(`Failed to ${isFinalSubmission ? 'submit' : 'run'}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      isFinalSubmission ? setIsSubmitting(false) : setIsRunning(false);
+      if (isFinalSubmission) {
+        setIsSubmitting(false);
+      } else {
+        setIsRunning(false);
+      }
     }
   }, [problem, matchData, session, language, code, isSubmitting, isRunning]);
 
@@ -296,7 +303,7 @@ export default function R1CodePage() {
     
     const handleTimerUpdate = (data: { timeRemaining: number }) => setTimeRemaining(data.timeRemaining || 0);
     const handleMatchResumed = () => showSuccessToast("Opponent reconnected. Match resumed!");
-    const handleMatchPaused = (data: { disconnectedPlayerId: string }) => showInfoToast("Opponent disconnected. The timer has paused.");
+    const handleMatchPaused = () => showInfoToast("Opponent disconnected. The timer has paused.");
     
     const handleMatchEnd = (data: {type: 'win' | 'lose' | 'timeout'}) => {
       sessionStorage.removeItem('round1_match_data');
@@ -337,7 +344,7 @@ export default function R1CodePage() {
             setTimeRemaining(Math.max(0, Math.floor(data.duration / 1000 - elapsed)));
 
             // Re-sync with the server on every load/refresh
-            socket.emit('round1:getState', {}, (response: any) => {
+            socket.emit('round1:getState', {}, (response: { success: boolean; participant?: { status: string } }) => {
               if (response.success && response.participant?.status === 'in-match') {
                 console.log("Successfully re-synced with match room on server.");
               } else {
@@ -345,14 +352,14 @@ export default function R1CodePage() {
                 router.push('/r1/waiting');
               }
             });
-        } catch (e) {
+        } catch {
             showErrorToast("Invalid match data. Returning to waiting room.");
             router.push('/r1/waiting');
         }
     } else {
         showInfoToast("No active match data found. Checking server...");
         // Ask server for state if sessionStorage is empty
-        socket.emit('round1:getState', {}, (response: any) => {
+        socket.emit('round1:getState', {}, (response: { success: boolean; participant?: { status: string } }) => {
           if(response.success && response.participant?.status === 'in-match'){
             // This is a rare case, maybe user cleared session storage.
             // We don't have the match data to show, so we redirect.
