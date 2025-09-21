@@ -295,12 +295,8 @@ export default function Lobbyr1(){
                     )}
                 </div>
             )}
-
         </div>
-        
-        
         </>
-
     );
 }
 

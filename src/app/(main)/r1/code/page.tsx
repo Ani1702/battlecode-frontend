@@ -47,11 +47,6 @@ interface CodeStore {
   [contextKey: string]: string;
 }
 
-// ============================================================================
-// UI Component (CodePageComponent)
-// This component is responsible for rendering the UI and handling user interactions.
-// It receives all its state and logic via props from the main wrapper.
-// ============================================================================
 function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const { session } = useAuth();
   
