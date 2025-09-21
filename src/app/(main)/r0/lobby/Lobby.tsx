@@ -205,7 +205,7 @@ export default function Lobbyr0() {
           )}
         </div>
 
-        <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4'>
+        <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
           Participants: {participants.length}
         </div>
 

@@ -1083,6 +1083,15 @@ export default function CodePage({
                               </span>
                             </div>
                             
+                            {result.stdout && (
+                              <div className="mb-2">
+                                <p className="text-sm font-medium text-gray-300 mb-1">Output:</p>
+                                <pre className="text-xs text-green-300 whitespace-pre-wrap bg-black/50 p-2 rounded border border-gray-700 overflow-x-auto">
+                                  {result.stdout}
+                                </pre>
+                              </div>
+                            )}
+                            
                             {!isAccepted && (result.stderr || result.compile_output) && (
                               <div className="mb-2">
                                 <p className="text-sm font-medium text-gray-300 mb-1">Error:</p>

@@ -311,7 +311,7 @@ export default function Dashboard() {
         <div className="flex-shrink-0 h-20">
           <div className="h-full">
           <div className="flex-1 ml-3 orbitron flex justify-start items-start h-full">
-            <p className="flex-1 mt-2">{"<> BattleCode Arena"}</p>
+            <p className="flex-1 mt-2 orbitron text-white">{"<> Battlecode Arena"}</p>
             <div className="flex-1 flex justify-end mr-2 mt-2">
               <SignOut />
             </div>
@@ -339,7 +339,7 @@ export default function Dashboard() {
               </p> */}
               
             </div>
-            <div className = "flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron"> Challenger Rounds</div>
+            <div className = "flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron text-white"> <p className="text-orange-500">Competition</p> &nbsp;Rounds</div>
             <div className="flex-4 ">
               {[0, 1, 2, 3].map((i) => {
                 /*const isCurrentRound = currentRoundData?.currentRoundNumber === i;*/
@@ -384,13 +384,13 @@ export default function Dashboard() {
                         } m-1 items-center justify-center flex border-4`}>
                         <p className={`text-2xl lg:text-3xl oxanium ${currentStatus === 'LOCKED'
                           ? "text-gray-400/50"
-                          : ""
+                          : "text-white"
                           }`}>{i}</p>
                       </div>
                       <div className="flex-5 flex flex-col ml-5">
                         <div className={`flex-2  p-3 ${currentStatus === 'LOCKED'
                           ? "text-gray-400/50"
-                          : ""
+                          : "text-white"
                           }`}>
                           <p className="text-2xl lg:text-3xl font-medium">{titles[i]}</p>
                           <p>
@@ -408,7 +408,7 @@ export default function Dashboard() {
                         
                         <div className={`flex-1 ${currentStatus === 'LOCKED'
                           ? "text-gray-400/50"
-                          : ""
+                          : "text-white"
                           }`}>
                           
                         </div>
@@ -452,7 +452,7 @@ export default function Dashboard() {
                   <thead>
                     <tr className="border-b border-gray-700">
                       {leaderboard_titles.map((title, idx) => (
-                        <th key={idx} className="py-2 px-3 font-bold">{title}</th>
+                        <th key={idx} className="py-2 px-3 font-bold text-white">{title}</th>
                       ))}
                     </tr>
                   </thead>
@@ -461,8 +461,8 @@ export default function Dashboard() {
                       // Display real leaderboard data from socket or localStorage
                       leaderboard.map((entry, idx) => (
                         <tr key={entry.id || idx} className="border-gray-800 hover:bg-white/5 transition">
-                          <td className="py-2 px-3">{entry.rank}</td>
-                          <td className="py-2 px-3">
+                          <td className="py-2 px-3 text-white">{entry.rank}</td>
+                          <td className="py-2 px-3 text-white">
                             <div className="flex flex-col">
                               <span className="font-medium">{entry.username !== 'Not Set' ? entry.username : entry.name}</span>
                               {entry.username !== 'Not Set' && entry.name && (
@@ -470,8 +470,8 @@ export default function Dashboard() {
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-3">{entry.score}</td>
-                          <td className="py-2 px-3">{entry.trend}</td>
+                          <td className="py-2 px-3 text-white">{entry.score}</td>
+                          <td className="py-2 px-3 text-white">{entry.trend}</td>
                         </tr>
                       ))
                     ) : isInitialLoad ? (
@@ -489,7 +489,7 @@ export default function Dashboard() {
                       fallbackLeaderboard.map((row, idx) => (
                         <tr key={idx} className="border-gray-800 hover:bg-white/5 transition opacity-50">
                           {row.map((cell, cidx) => (
-                            <td key={cidx} className="py-2 px-3">{cell}</td>
+                            <td key={cidx} className="py-2 px-3 text-white">{cell}</td>
                           ))}
                         </tr>
                       ))
@@ -560,9 +560,9 @@ export default function Dashboard() {
             <div className="mt-6 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-4">
               <h4 className="text-orange-400 font-medium mb-2">Status Transitions:</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <p>• LOCKED → LOBBY: Open for joining</p>
-                <p>• LOBBY → IN_PROGRESS: Start round</p>
-                <p>• IN_PROGRESS → COMPLETED: End round</p>
+                <p className="text-white">• LOCKED → LOBBY: Open for joining</p>
+                <p className="text-white">• LOBBY → IN_PROGRESS: Start round</p>
+                <p className="text-white">• IN_PROGRESS → COMPLETED: End round</p>
               </div>
             </div>
           </div>

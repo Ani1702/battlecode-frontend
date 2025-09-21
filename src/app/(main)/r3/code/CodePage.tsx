@@ -3,7 +3,7 @@
 export default function CodePage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-2xl font-bold mb-4">Round 3 - Code Challenge</h1>
+      <h1 className="text-2xl font-bold mb-4 text-white">Round 3 - Code Challenge</h1>
       <p>Coming soon...</p>
     </div>
   );

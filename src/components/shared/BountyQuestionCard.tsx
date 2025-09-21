@@ -40,8 +40,8 @@ export default function BountyQuestionCard({ question }: BountyQuestionCardProps
       <div 
         className={`w-24 h-16 rounded-lg shadow-lg mt-2 ml-2 cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-110 ${
           question.isSolved 
-            ? 'bg-gradient-to-br from-green-400 to-green-600' 
-            : 'bg-gradient-to-br from-orange-400 to-orange-600'
+            ? 'bg-green-500' 
+            : 'bg-orange-500'
         } border-2 border-white border-opacity-30 mb-2 mr-2 inline-block transform hover:z-10 relative`}
         onClick={() => setIsModalOpen(true)}
       >
@@ -64,7 +64,7 @@ export default function BountyQuestionCard({ question }: BountyQuestionCardProps
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/55 bg-opacity-50 flex items-center justify-center z-50" onClick={() => setIsModalOpen(false)}>
           <div 
-            className="bg-gradient-to-br from-orange-300 to-orange-600 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl transform transition-all duration-300 scale-100"
+            className={`${question.isSolved ? 'bg-green-500' : 'bg-orange-500'} rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl transform transition-all duration-300 scale-100`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close Button */}
@@ -125,18 +125,14 @@ export default function BountyQuestionCard({ question }: BountyQuestionCardProps
               {/* Action Button */}
               <div className="mt-6">
                 <button 
-                  className={`w-full py-3 px-4 rounded-lg font-semibold transition-colors duration-200 ${
-                    question.isSolved
-                      ? 'bg-green-500 hover:bg-green-600 text-white'
-                      : 'bg-blue-500 hover:bg-blue-600 text-white'
-                  }`}
+                  className="w-full py-3 px-4 rounded-lg font-semibold transition-colors duration-200 bg-red-500 hover:bg-red-600 text-white"
                   onClick={() => {
                     // Add your navigation logic here
-                    console.log(`${question.isSolved ? 'View Solution' : 'Start Challenge'} for question: ${question.id}`);
+                    console.log(`Solve question: ${question.id}`);
                     setIsModalOpen(false);
                   }}
                 >
-                  {question.isSolved ? 'View Solution' : 'Start Challenge'}
+                  Solve
                 </button>
               </div>
             </div>

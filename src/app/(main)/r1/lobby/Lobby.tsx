@@ -174,7 +174,7 @@ export default function Lobbyr1(){
     const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 5);
 
     if (authLoading || !authenticationChecked) {
-        return ( <div>Loading Authentication...</div> );
+        return ( <div className="text-white">Loading Authentication...</div> );
     }
 
     return (
@@ -210,7 +210,7 @@ export default function Lobbyr1(){
                     </div>
                 )}
             </div>
-            <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4'>
+            <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
                 Participants: {participants.length}
             </div>
             <div className = "flex-1 p-6 min-h-0">

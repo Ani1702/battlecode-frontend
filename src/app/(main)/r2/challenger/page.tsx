@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import CustomScrollbar from '../../../../components/shared/CustomScrollbar';
-import EliteCard from '../../../../components/shared/EliteCard';
+import ChallengerPlayerCard from '../../../../components/shared/ChallengerPlayerCard';
 import BountyQuestionCard from '../../../../components/shared/BountyQuestionCard';
 import { BountyQuestion } from '../../../../types/types';
 
@@ -90,28 +90,29 @@ export default function ChallengerLobby() {
 
   return (
     <>
-      <div className="flex bg-[url('/elite_bg2.svg')] bg-[length:1200px_800px] bg-center bg-no-repeat h-screen flex-col overflow-hidden orbitron">
-        <div className="flex-1 flex items-center justify-center text-6xl oxanium white-glow"><Image src="/b-2.svg" alt="Battlecode Logo" className="h-20" width={80} height={80}/>CHALLENGER DASHBOARD</div>
+      <div className="flex bg-[url('/elite_bg.svg')] bg-center bg-no-repeat h-screen w-full flex-col overflow-hidden opacity-100 orbitron">
+        <div className="flex-1 flex items-center justify-center text-6xl orbitron white-glow"><Image src="/b-2.svg" alt="Battlecode Logo" className="h-20" width={80} height={80}/>CHALLENGER DASHBOARD</div>
         <div className="flex-4 flex flex-row">
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
-              <h2 className="text-2xl font-bold text-white mb-4 font-orbitron">
-                Elites
+              <h2 className="text-2xl font-bold text-white mb-4 ml-4 orbitron">
+                Challenge Elites
               </h2>
               
-              <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto pr-2">
+              <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto overflow-x-hidden pr-2">
                 {elites.length > 0 ? (
                   elites.map((player) => (
-                    <EliteCard
+                    <ChallengerPlayerCard
                       key={player.id}
-                      player={player}
-                      onChallenge={handleChallengeElite}
+                      username={player.username}
+                      rank={player.rank}
+                      onChallenge={() => handleChallengeElite(player.id)}
                     />
                   ))
                 ) : (
                   <div className="text-center text-gray-500 mt-8">
-                    <p className="text-lg">No elites available</p>
-                    <p className="text-sm">Check back later for elite players!</p>
+                    <p className="text-lg text-white">No elites available</p>
+                    <p className="text-sm text-white">Check back later for elite players!</p>
                   </div>
                 )}
               </CustomScrollbar>
@@ -120,11 +121,11 @@ export default function ChallengerLobby() {
           
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
-              <h2 className="text-2xl font-bold text-white mb-4 font-orbitron">
+              <h2 className="text-2xl font-bold text-white mb-4 orbitron">
                 Bounty Questions
               </h2>
               
-              <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto pr-2 ">
+              <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto overflow-x-hidden pr-2 ">
                 {bountyQuestions.length > 0 ? (
                   bountyQuestions.map((question) => (
                     <BountyQuestionCard
@@ -134,8 +135,8 @@ export default function ChallengerLobby() {
                   ))
                 ) : (
                   <div className="text-center text-gray-500 mt-8">
-                    <p className="text-lg">No bounty questions available</p>
-                    <p className="text-sm">Check back later for new challenges!</p>
+                    <p className="text-lg text-white">No bounty questions available</p>
+                    <p className="text-sm text-white">Check back later for new challenges!</p>
                   </div>
                 )}
               </CustomScrollbar>

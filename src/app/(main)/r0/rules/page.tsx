@@ -12,7 +12,7 @@ export default function Rules() {
     ];
     return (
         <>
-            <RulesPage rules={rules} round={round} />;
+            <RulesPage rules={rules} round={round} />
         </>
     );
 }
