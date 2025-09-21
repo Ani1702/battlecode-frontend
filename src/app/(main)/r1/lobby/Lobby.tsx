@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { /* FlaskConical, */ Rocket } from "lucide-react";
+import { Rocket } from "lucide-react";
 import PlayerCard from '@/components/shared/PlayerCard';
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import { useSocket } from '@/contexts/SocketContext';
@@ -13,9 +13,7 @@ interface Participant {
   username: string;
   rank: number;
   status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
-  joinedAt: string;
-  socketId?: string;
-  waitingSince?: number;
+  [key: string]: any; // Allow other properties
 }
 
 interface LobbyData {
@@ -25,7 +23,6 @@ interface LobbyData {
 }
 
 interface RoundStartData {
-  problems?: unknown[];
   startTime?: number;
   duration?: number;
   [key: string]: unknown;
@@ -44,6 +41,18 @@ interface ErrorData {
   [key: string]: unknown;
 }
 
+// Interfaces for typed socket responses
+interface SimpleSocketResponse {
+    success: boolean;
+    error?: string;
+}
+
+interface GetStateResponse extends SimpleSocketResponse {
+    participant?: Participant | null;
+    isActive?: boolean;
+}
+
+
 export default function Lobbyr1(){
     const router = useRouter();
     const { socket, isConnected } = useSocket();
@@ -51,95 +60,80 @@ export default function Lobbyr1(){
     
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [isRoundActive, setIsRoundActive] = useState(false);
-    const [timeRemaining, /*setTimeRemaining*/] = useState(0);
+    const [timeRemaining, setTimeRemaining] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [roundStarted, setRoundStarted] = useState(false);
-    const [hasJoinedLobby, setHasJoinedLobby] = useState(false);
+    const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
     const [authenticationChecked, setAuthenticationChecked] = useState(false);
     
-    // For now, all users can start rounds (will be moved to admin panel later)
-    const isAdmin = true; // user?.role === 'ADMIN';
-    // Authentication check
-    useEffect(() => {
-        if (authLoading) return;
-        setAuthenticationChecked(true);
-        if (!userId || !user) {
-            router.push('/dashboard');
-        }
-    }, [authLoading, userId, user, router]);
+    const isAdmin = true; // Placeholder for admin logic
 
-    // Join lobby when authenticated and connected
     useEffect(() => {
-        if (!authenticationChecked || authLoading || !userId || !user || !socket || !isConnected || hasJoinedLobby) {
-            return;
-        }
-        socket.emit('round1:join', { userId, username: user?.user_metadata?.full_name || user?.id }, (response: { success?: boolean; error?: string }) => {
-            if (response?.success) {
-                showSuccessToast('Successfully joined Round 1 lobby');
+        if (!authLoading) setAuthenticationChecked(true);
+        if (!authLoading && !userId) router.push('/dashboard');
+    }, [authLoading, userId, router]);
+
+    // useEffect to handle initial state and joining
+    useEffect(() => {
+        if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin) return;
+    
+        // 1. Ask the server for the current state first
+        socket.emit('round1:getState', {}, (response: GetStateResponse) => {
+            setIsLoading(false);
+            setHasAttemptedJoin(true); // Mark that we've synced with the server
+    
+            if (!response.success) {
+                showErrorToast(response.error || "Could not sync with server.");
+                return;
+            }
+    
+            if (response.participant) {
+                // User is already in the round, handle their state
+                console.log("User already a participant:", response.participant.status);
+                setIsRoundActive(response.isActive ?? false);
+                if (response.participant.status === 'in-match') {
+                    router.push('/r1/code'); // Redirect to their match
+                } else if (response.participant.status !== 'lobby') {
+                    router.push('/r1/waiting'); // Redirect to waiting room
+                }
+                // If they are in 'lobby', they stay here.
             } else {
-                showErrorToast(response?.error || 'Failed to join lobby');
+                // 2. If not a participant, then join the lobby
+                socket.emit('round1:join', {}, (joinResponse: SimpleSocketResponse) => {
+                    if (joinResponse.success) {
+                        showSuccessToast('Successfully joined Round 1 lobby');
+                    } else {
+                        showErrorToast(joinResponse.error || 'Failed to join lobby');
+                    }
+                });
             }
         });
-        setHasJoinedLobby(true);
-    }, [socket, isConnected, authenticationChecked, hasJoinedLobby, userId, user, authLoading]);
+    }, [socket, isConnected, authenticationChecked, hasAttemptedJoin, router]);
 
-    // Socket event listeners
     useEffect(() => {
         if (!socket) return;
 
-        const handleLobbyUpdate = (lobbyData: LobbyData) => {
+        const handleLobbyUpdate = (data: LobbyData) => {
             setIsLoading(false);
-            if (lobbyData.participants) {
-                setParticipants(lobbyData.participants);
-            }
-            if (lobbyData.isActive !== undefined) {
-                setIsRoundActive(lobbyData.isActive);
-            }
+            if (data.participants) setParticipants(data.participants);
+            if (data.isActive !== undefined) setIsRoundActive(data.isActive);
         };
 
         const handleRoundStarted = (data: RoundStartData) => {
-            console.log('Round 1 started! Data received:', data);
             setRoundStarted(true);
             setIsRoundActive(true);
             showSuccessToast('Round 1 has started! Entering matchmaking...');
-            
-            // Store round data if needed
-            if (data && typeof data === 'object') {
-                try {
-                    const dataToStore = {
-                        startTime: data.startTime,
-                        duration: (data.duration || 5400) * 1000 // Ensure duration is in ms
-                    };
-                    sessionStorage.setItem('round1_data', JSON.stringify(dataToStore));
-                } catch (error) {
-                    console.error("Failed to save round data to sessionStorage:", error);
-                }
-            }
-            
-            // Redirect to waiting room after round starts
-            setTimeout(() => {
-                router.push('/r1/waiting');
-            }, 2000); // Give user 2 seconds to see the success message
+            setTimeout(() => router.push('/r1/waiting'), 2000);
         };
 
         const handleMatchFound = (data: MatchFoundData) => {
-            console.log('Match found! Data:', data);
-            
-            // FIX: Store the complete match data, including the new startTime and duration
-            if (data) {
-                try {
-                    sessionStorage.setItem('round1_match_data', JSON.stringify(data));
-                } catch (error) {
-                    console.error("Failed to save match data:", error);
-                }
-            }
-            
-            showSuccessToast('Match found! Redirecting to code room...');
-            
-            // Immediate redirect to code room since this means a match was found
-            setTimeout(() => {
-                router.push('/r1/code');
-            }, 1500);
+            sessionStorage.setItem('round1_match_data', JSON.stringify(data));
+            showSuccessToast('Match found! Redirecting...');
+            setTimeout(() => router.push('/r1/code'), 1500);
+        };
+        
+        const handleGlobalTimer = (data: { timeRemaining: number }) => {
+            setTimeRemaining(data.timeRemaining);
         };
 
         const handleRoundEnd = () => {
@@ -148,37 +142,36 @@ export default function Lobbyr1(){
         };
 
         const handleError = (error: ErrorData) => {
-            const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
-            showErrorToast(errorMessage);
+            showErrorToast(error?.message || 'An error occurred');
         };
 
         socket.on('lobby:round1', handleLobbyUpdate);
         socket.on('round1:started', handleRoundStarted);
         socket.on('round1:matchFound', handleMatchFound);
+        socket.on('round1:globalTimer', handleGlobalTimer);
         socket.on('round1:ended', handleRoundEnd);
-        socket.on('round1:error', handleError);
 
         return () => {
             socket.off('lobby:round1', handleLobbyUpdate);
             socket.off('round1:started', handleRoundStarted);
             socket.off('round1:matchFound', handleMatchFound);
+            socket.off('round1:globalTimer', handleGlobalTimer);
             socket.off('round1:ended', handleRoundEnd);
-            socket.off('round1:error', handleError);
         };
     }, [socket, router]);
 
     const handleStartRound = () => {
         if (!socket || participants.length === 0) return;
-        socket.emit('round1:ready', {}, (response: { success?: boolean; error?: string }) => {
-            if (response?.success) {
+        socket.emit('round1:ready', {}, (response: SimpleSocketResponse) => {
+            if (response.success) {
                 showSuccessToast('Round 1 started successfully');
             } else {
-                showErrorToast(response?.error || 'Failed to start round');
+                showErrorToast(response.error || 'Failed to start round');
             }
         });
     };
 
-    const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substr(14, 5);
+    const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 5);
 
     if (authLoading || !authenticationChecked) {
         return ( <div>Loading Authentication...</div> );
@@ -186,7 +179,7 @@ export default function Lobbyr1(){
 
     return (
         <>
-        <div className = "flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
+            <div className = "flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
             <div className = "flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
                 <p className='flex-1 flex items-end pt-8'> <span className = "text-white">ROUND</span> <span className="text-orange-500">&nbsp; 1</span></p>
                 <span className = "text-orange-500 text-2xl pb-4">LOBBY</span>
@@ -221,9 +214,7 @@ export default function Lobbyr1(){
                 Participants: {participants.length}
             </div>
             <div className = "flex-1 p-6 min-h-0">
-                {/* Custom scrollbar container for overflow handling */}
                 <CustomScrollbar className="h-full overflow-y-auto">
-                    {/* 3-column grid of player cards */}
                     <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
                         {isLoading ? (
                             Array.from({ length: 10 }).map((_, index) => (
@@ -312,3 +303,4 @@ export default function Lobbyr1(){
 
     );
 }
+
