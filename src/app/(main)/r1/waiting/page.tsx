@@ -26,7 +26,6 @@ interface MatchFoundData {
 
 // ============================================================================
 // Main Waiting Room Component
-// This single component manages all state, socket logic, and UI rendering.
 // ============================================================================
 export default function WaitingRoomR1() {
   const router = useRouter();
@@ -39,6 +38,7 @@ export default function WaitingRoomR1() {
   const [isRoundActive, setIsRoundActive] = useState(false);
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
   const [cooldownTimeRemaining, setCooldownTimeRemaining] = useState(0);
+  const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const isAdmin = useMemo(() => userRole === 'ADMIN', [userRole]);
@@ -82,6 +82,11 @@ export default function WaitingRoomR1() {
       router.push('/dashboard');
     };
 
+    // This listener can be kept to ensure sync, but the primary timer is now client-side
+    const handleMatchmakingCycle = (data: { nextCycle: number }) => {
+        setNextMatchmakingCycle(data.nextCycle);
+    };
+
     socket.on('round1:matchFound', handleMatchFound);
     socket.on('round1:started', handleRoundStarted);
     socket.on('round1:cooldown', handleCooldownStart);
@@ -89,6 +94,7 @@ export default function WaitingRoomR1() {
     socket.on('round1:ended', handleRoundEnd);
     socket.on('round1:participantsUpdate', handleParticipantsUpdate);
     socket.on('round1:globalTimer', handleGlobalTimer);
+    socket.on('round1:matchmakingCycle', handleMatchmakingCycle);
 
     return () => {
       socket.off('round1:matchFound', handleMatchFound);
@@ -98,10 +104,11 @@ export default function WaitingRoomR1() {
       socket.off('round1:ended', handleRoundEnd);
       socket.off('round1:participantsUpdate', handleParticipantsUpdate);
       socket.off('round1:globalTimer', handleGlobalTimer);
+      socket.off('round1:matchmakingCycle', handleMatchmakingCycle);
     };
   }, [socket, isConnected, router, userId]);
 
-  // --- Initial State Fetch and Cooldown Timer ---
+  // --- Initial State Fetch ---
   useEffect(() => {
     if (!socket || !isConnected || !userId) return;
 
@@ -109,6 +116,8 @@ export default function WaitingRoomR1() {
       if (response?.success) {
         setIsRoundActive(response.isActive);
         setGlobalTimeRemaining(response.globalTimeRemaining || 0);
+        setAllParticipants(response.allParticipants || []);
+        setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
 
         const me = response.participant;
         if (me) {
@@ -127,9 +136,10 @@ export default function WaitingRoomR1() {
     });
   }, [socket, isConnected, userId, router]);
 
-  // Client-side timer for smooth countdown display
+  // --- Client-Side Timers for Smooth UI ---
   useEffect(() => {
-    const interval = setInterval(() => {
+    // Cooldown Timer
+    const cooldownInterval = setInterval(() => {
       if (currentUser?.status === 'cooldown' && currentUser.cooldownEndTime) {
         const remaining = Math.max(0, Math.ceil((currentUser.cooldownEndTime - Date.now()) / 1000));
         setCooldownTimeRemaining(remaining);
@@ -137,8 +147,30 @@ export default function WaitingRoomR1() {
         setCooldownTimeRemaining(0);
       }
     }, 1000);
-    return () => clearInterval(interval);
+
+    return () => {
+        clearInterval(cooldownInterval);
+    };
   }, [currentUser]);
+  
+  // FIX: Calculate matchmaking timer based on the global round timer for perfect sync
+  useEffect(() => {
+    if (!isRoundActive) {
+      setNextMatchmakingCycle(null);
+      return;
+    }
+
+    const ROUND_DURATION_SECONDS = 90 * 60;
+    const MATCHMAKING_INTERVAL_SECONDS = 3 * 60;
+
+    const elapsedSeconds = ROUND_DURATION_SECONDS - globalTimeRemaining;
+    const timeIntoCycle = elapsedSeconds % MATCHMAKING_INTERVAL_SECONDS;
+    const nextCycle = MATCHMAKING_INTERVAL_SECONDS - timeIntoCycle;
+
+    setNextMatchmakingCycle(Math.floor(nextCycle));
+
+  }, [globalTimeRemaining, isRoundActive]);
+
 
   const handleStartRound = () => {
     if (!isAdmin || !socket) return;
@@ -161,7 +193,11 @@ export default function WaitingRoomR1() {
   const getStatusText = (participant: Participant): string => {
     switch (participant.status) {
       case 'lobby': return 'In Lobby';
-      case 'waiting': return 'Waiting for Match';
+      case 'waiting':
+        if (nextMatchmakingCycle !== null && isRoundActive) {
+            return `Next Match: ${formatTime(nextMatchmakingCycle)}`;
+        }
+        return 'Waiting for Match';
       case 'in-match': return 'In Match';
       case 'cooldown':
         const remaining = participant.cooldownEndTime ? Math.max(0, Math.ceil((participant.cooldownEndTime - Date.now()) / 1000)) : 0;
@@ -222,7 +258,7 @@ export default function WaitingRoomR1() {
                 </div>
                 <div className="bg-black/40 rounded-lg p-4 border border-blue-600">
                   <p className="text-blue-400 font-bold">
-                    🔄 Matchmaking in Progress...
+                    {nextMatchmakingCycle !== null ? `🔄 Next Match In: ${formatTime(nextMatchmakingCycle)}` : '🔄 Matchmaking in Progress...'}
                   </p>
                   <p className="text-gray-400 text-sm">
                     New matches are formed every 3 minutes.
