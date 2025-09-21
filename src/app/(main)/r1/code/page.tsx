@@ -208,7 +208,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
     const endpoint = isFinalSubmission ? '/submit' : '/run';
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/submit${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({ language, source_code: code, problemId: problem.id, roundNumber: 1 })
