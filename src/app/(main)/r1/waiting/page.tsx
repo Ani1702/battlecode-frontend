@@ -82,7 +82,6 @@ export default function WaitingRoomR1() {
       router.push('/dashboard');
     };
 
-    // This listener can be kept to ensure sync, but the primary timer is now client-side
     const handleMatchmakingCycle = (data: { nextCycle: number }) => {
         setNextMatchmakingCycle(data.nextCycle);
     };
@@ -138,39 +137,20 @@ export default function WaitingRoomR1() {
 
   // --- Client-Side Timers for Smooth UI ---
   useEffect(() => {
-    // Cooldown Timer
     const cooldownInterval = setInterval(() => {
       if (currentUser?.status === 'cooldown' && currentUser.cooldownEndTime) {
         const remaining = Math.max(0, Math.ceil((currentUser.cooldownEndTime - Date.now()) / 1000));
         setCooldownTimeRemaining(remaining);
+        // FIX: Automatically transition out of cooldown on the frontend
+        if (remaining === 0) {
+            setCurrentUser(prev => prev ? { ...prev, status: 'waiting', cooldownEndTime: undefined } : null);
+        }
       } else {
         setCooldownTimeRemaining(0);
       }
     }, 1000);
-
-    return () => {
-        clearInterval(cooldownInterval);
-    };
+    return () => clearInterval(cooldownInterval);
   }, [currentUser]);
-  
-  // FIX: Calculate matchmaking timer based on the global round timer for perfect sync
-  useEffect(() => {
-    if (!isRoundActive) {
-      setNextMatchmakingCycle(null);
-      return;
-    }
-
-    const ROUND_DURATION_SECONDS = 90 * 60;
-    const MATCHMAKING_INTERVAL_SECONDS = 3 * 60;
-
-    const elapsedSeconds = ROUND_DURATION_SECONDS - globalTimeRemaining;
-    const timeIntoCycle = elapsedSeconds % MATCHMAKING_INTERVAL_SECONDS;
-    const nextCycle = MATCHMAKING_INTERVAL_SECONDS - timeIntoCycle;
-
-    setNextMatchmakingCycle(Math.floor(nextCycle));
-
-  }, [globalTimeRemaining, isRoundActive]);
-
 
   const handleStartRound = () => {
     if (!isAdmin || !socket) return;

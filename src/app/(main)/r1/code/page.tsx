@@ -53,6 +53,7 @@ interface GetStateResponse {
   participant?: {
     status: string;
   };
+  error?: string;
 }
 
 
@@ -88,9 +89,6 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   useEffect(() => { codeRef.current = code; }, [code]);
   useEffect(() => { localStorage.setItem('battlecode-round-1-language', language); }, [language]);
 
-  // ============================================================================
-  // CONTEXT MANAGEMENT SYSTEM (Robust and self-contained)
-  // ============================================================================
   const contextManager = useMemo(() => ({
     getStorageKey: (round: string) => `battlecode-round-${round}-code-store`,
     generateContextKey: (round: string, qId: string, lang: string) => `${round}:${qId}:${lang}`,
@@ -118,9 +116,6 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     },
   }), []);
   
-  // ============================================================================
-  // AUTO-SAVE & CONTEXT TRANSITION LOGIC (Improved)
-  // ============================================================================
   const scheduleAutoSave = useCallback(() => {
     if (!currentContext || !codeRef.current) return;
     const codeToSave = codeRef.current;
@@ -188,19 +183,11 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     }
   }, [language, isContextInitialized, matchData, handleContextTransition]);
 
-  // ============================================================================
-  // CODE EXECUTION
-  // ============================================================================
   const executeCode = useCallback(async (isFinalSubmission: boolean) => {
     if (!problem || !matchData || (isSubmitting || isRunning)) return;
     const action = isFinalSubmission ? 'Submitting' : 'Running';
 
-    // --- [FIX] Replaced ternary with if/else to fix linter error ---
-    if (isFinalSubmission) {
-      setIsSubmitting(true);
-    } else {
-      setIsRunning(true);
-    }
+    if (isFinalSubmission) setIsSubmitting(true); else setIsRunning(true);
 
     setSubmissionResults(null);
     setActiveTab('results');
@@ -230,18 +217,10 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     } catch (error) {
       showErrorToast(`Failed to ${action.toLowerCase()}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      // --- [FIX] Replaced ternary with if/else to fix linter error ---
-      if (isFinalSubmission) {
-        setIsSubmitting(false);
-      } else {
-        setIsRunning(false);
-      }
+      if (isFinalSubmission) setIsSubmitting(false); else setIsRunning(false);
     }
   }, [problem, matchData, isSubmitting, isRunning, session?.access_token, language, code]);
 
-  // ============================================================================
-  // MONACO EDITOR & UI LOGIC
-  // ============================================================================
   const monaco = useMonaco();
   useEffect(() => {
     if (monaco) {
@@ -334,13 +313,9 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const saveStatusDisplay = getSaveStatusDisplay();
   const timerDisplay = getTimerDisplay();
 
-  // ============================================================================
-  // RENDER METHOD
-  // ============================================================================
   return (
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
         <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
-          {/* Left Panel: Question */}
           <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
               <div className="flex justify-between items-start mb-4 flex-shrink-0">
                   <div>
@@ -373,9 +348,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                   <>
                     <h3 className="font-bold mb-2 text-amber-400">Constraints:</h3>
                     <ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">
-                      {problem.constraints.map((constraint, i) => (
-                        <li key={i}>{constraint}</li>
-                      ))}
+                      {problem.constraints.map((c, i) => <li key={i}>{c}</li>)}
                     </ul>
                   </>
                 )}
@@ -383,31 +356,20 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                 {problem.sampleTestCases && problem.sampleTestCases.length > 0 && (
                   <>
                     <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
-                    {problem.sampleTestCases.map((testCase, i) => (
+                    {problem.sampleTestCases.map((tc, i) => (
                       <div key={i} className="mb-4 bg-black/20 border-amber-600/50 mr-2 border-2 p-3 rounded font-mono text-sm">
                         <p className="font-bold text-gray-400">Input:</p>
-                        <pre className="bg-gray-800/60 p-2 rounded mt-1 whitespace-pre-wrap">
-                          {formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')}
-                        </pre>
+                        <pre className="bg-gray-800/60 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(tc.stdin || tc.input?.stdin || tc.input?.json || '')}</pre>
                         <p className="mt-2 font-bold text-gray-400">Output:</p>
-                        <pre className="bg-gray-800/60 p-2 rounded mt-1 whitespace-pre-wrap">
-                          {formatTestCaseData(testCase.expected_output || testCase.output?.stdout || testCase.output?.json || '')}
-                        </pre>
-                        {testCase.explanation && (
-                          <p className="mt-2 text-xs text-gray-400 italic">
-                            Explanation: {testCase.explanation}
-                          </p>
-                        )}
+                        <pre className="bg-gray-800/60 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(tc.expected_output || tc.output?.stdout || tc.output?.json || '')}</pre>
+                        {tc.explanation && <p className="mt-2 text-xs text-gray-400 italic">Explanation: {tc.explanation}</p>}
                       </div>
                     ))}
                   </>
                 )}
               </div>
           </CustomScrollbar>
-
-          {/* Right Panel: Code & Results */}
           <div className="w-1/2 flex flex-col code-results-container gap-1">
-              {/* Code Editor */}
               <div className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0 glass-box" style={{ height: `${codeEditorHeight}%`}}>
                   <div className="flex justify-between items-center mb-2 gap-2">
                       <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500">
@@ -429,10 +391,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                   </div>
               </div>
 
-              {/* Resizable Divider */}
               <div onMouseDown={handleMouseDown} className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors flex items-center justify-center ${isDragging ? 'bg-amber-600/60' : ''}`}><div className="w-8 h-1 bg-amber-600 rounded-full"></div></div>
-
-              {/* Test Cases & Results Panel */}
               <div className="border border-amber-600 rounded-lg p-4 flex flex-col glass-box" style={{ height: `${100 - codeEditorHeight}%` }}>
                   <div className="flex border-b border-amber-600/30 mb-3 flex-shrink-0">
                       <button onClick={() => setActiveTab('testcases')} className={`px-4 py-2 font-medium ${activeTab === 'testcases' ? 'border-b-2 border-amber-500 text-amber-400' : 'text-gray-400'}`}>Test Cases</button>
@@ -442,26 +401,20 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                       <CustomScrollbar className="h-full overflow-y-auto">
                           {activeTab === 'testcases' && (
                               <div className="space-y-3 pr-2">
-                                  {problem.sampleTestCases && problem.sampleTestCases.length > 0 ? (
-                                      problem.sampleTestCases.map((tc, i) => (
-                                          <div key={i} className="border border-gray-600 rounded-lg p-3 bg-black/20">
-                                              <h4 className="font-semibold text-amber-400">Case {i + 1}</h4>
-                                              <div className="space-y-2 mt-2">
-                                                  <div><p className="text-sm font-medium text-gray-300 mb-1">Input:</p><pre className="bg-gray-800/60 p-2 rounded text-sm font-mono overflow-x-auto border border-gray-700">{formatTestCaseData(tc.stdin || tc.input?.stdin || tc.input?.json || '')}</pre></div>
-                                                  <div><p className="text-sm font-medium text-gray-300 mb-1">Expected Output:</p><pre className="bg-gray-800/60 p-2 rounded text-sm font-mono overflow-x-auto border border-gray-700">{formatTestCaseData(tc.expected_output || tc.output?.stdout || tc.output?.json || '')}</pre></div>
-                                              </div>
+                                  {problem.sampleTestCases?.length ? problem.sampleTestCases.map((tc, i) => (
+                                      <div key={i} className="border border-gray-600 rounded-lg p-3 bg-black/20">
+                                          <h4 className="font-semibold text-amber-400">Case {i + 1}</h4>
+                                          <div className="space-y-2 mt-2">
+                                              <div><p className="text-sm font-medium text-gray-300 mb-1">Input:</p><pre className="bg-gray-800/60 p-2 rounded text-sm font-mono overflow-x-auto border border-gray-700">{formatTestCaseData(tc.stdin || tc.input?.stdin || tc.input?.json || '')}</pre></div>
+                                              <div><p className="text-sm font-medium text-gray-300 mb-1">Expected Output:</p><pre className="bg-gray-800/60 p-2 rounded text-sm font-mono overflow-x-auto border border-gray-700">{formatTestCaseData(tc.expected_output || tc.output?.stdout || tc.output?.json || '')}</pre></div>
                                           </div>
-                                      ))
-                                  ) : (
-                                      <div className="text-center text-gray-400 py-8">
-                                          <p>No sample test cases available for this problem.</p>
                                       </div>
-                                  )}
+                                  )) : <div className="text-center text-gray-400 py-8"><p>No sample test cases.</p></div>}
                               </div>
                           )}
                           {activeTab === 'results' && (
                               <div className="pr-2">
-                                  {(isRunning || isSubmitting) && <div className="flex items-center gap-2 text-amber-400"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-500"></div><span>Processing your solution...</span></div>}
+                                  {(isRunning || isSubmitting) && <div className="flex items-center gap-2 text-amber-400"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-500"></div><span>Processing...</span></div>}
                                   {submissionResults?.length ? (
                                       <div className="space-y-2">
                                           {submissionResults.map((res, i) => {
@@ -475,7 +428,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                                               );
                                           })}
                                       </div>
-                                  ) : !isRunning && !isSubmitting && (<div className="text-center text-gray-400 py-8"><p>Run or submit your code to see results</p></div>)}
+                                  ) : !isRunning && !isSubmitting && (<div className="text-center text-gray-400 py-8"><p>Run or submit code to see results</p></div>)}
                               </div>
                           )}
                       </CustomScrollbar>
@@ -487,9 +440,6 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   );
 }
 
-// ============================================================================
-// Main Wrapper Component (Default Export)
-// ============================================================================
 export default function R1CodePage() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -555,7 +505,7 @@ export default function R1CodePage() {
         }
     } else {
         showInfoToast("No active match data found. Checking server...");
-        socket.emit('round1:getState', {}, (response: GetStateResponse) => {
+        socket.emit('round1:getState', {}, (response: any) => {
             if (response.success && response.participant?.status === 'in-match') {
                 showErrorToast("You are in a match but local data is missing.");
             }
@@ -612,3 +562,4 @@ export default function R1CodePage() {
     </>
   );
 }
+
