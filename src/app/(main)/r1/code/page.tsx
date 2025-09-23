@@ -53,6 +53,7 @@ interface GetStateResponse {
   participant?: {
     status: string;
   };
+  matchData?: MatchData;
   error?: string;
 }
 
@@ -143,15 +144,17 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
   const handleContextTransition = useCallback((newProblem: MatchData['question'], newLanguage: string) => {
     const newContext = contextManager.createContext('1', newProblem.id, newLanguage);
-    if (!currentContext || contextManager.contextEquals(currentContext, newContext)) return;
+    if (currentContext && contextManager.contextEquals(currentContext, newContext)) return;
 
     let updatedStore = { ...codeStore };
     
-    const currentCode = codeRef.current;
-    const boilerplate = contextManager.getBoilerplate(problem, currentContext.language);
-    if (currentCode && currentCode !== boilerplate) {
-      updatedStore = contextManager.setCodeForContext(updatedStore, currentContext, currentCode);
-      contextManager.saveCodeStore('1', updatedStore);
+    if (currentContext) {
+        const currentCode = codeRef.current;
+        const boilerplate = contextManager.getBoilerplate(problem, currentContext.language);
+        if (currentCode && currentCode !== boilerplate) {
+          updatedStore = contextManager.setCodeForContext(updatedStore, currentContext, currentCode);
+          contextManager.saveCodeStore('1', updatedStore);
+        }
     }
 
     const savedCode = contextManager.getCodeForContext(updatedStore, newContext);
@@ -204,12 +207,11 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       if (result.success) {
         setSubmissionResults(result.results || []);
         const summary = result.summary || { passed: 0, total: (result.results || []).length };
+        
         if (isFinalSubmission) {
-            if (result.submission?.status === 'ACCEPTED') {
-                showSuccessToast(`🎉 All ${summary.total} test cases passed!`);
-            } else {
-                showErrorToast(`${summary.passed}/${summary.total} test cases passed.`);
-            }
+          if (result.submission?.status !== 'ACCEPTED') {
+              showErrorToast(`${summary.passed}/${summary.total} test cases passed.`);
+          }
         } else {
             showInfoToast(`Test run completed: ${summary.passed}/${summary.total} passed`);
         }
@@ -440,6 +442,9 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   );
 }
 
+// ============================================================================
+// Main Page Component
+// ============================================================================
 export default function R1CodePage() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -486,6 +491,7 @@ export default function R1CodePage() {
 
   useEffect(() => {
     if (isAuthLoading || !isConnected || !socket) return;
+
     const storedDataRaw = sessionStorage.getItem('round1_match_data');
     if (storedDataRaw) {
         try {
@@ -493,32 +499,57 @@ export default function R1CodePage() {
             setMatchData(data);
             const elapsed = (Date.now() - data.startTime) / 1000;
             setTimeRemaining(Math.max(0, Math.floor(data.duration / 1000 - elapsed)));
-            socket.emit('round1:getState', {}, (response: GetStateResponse) => {
-              if (!response.success || response.participant?.status !== 'in-match') {
-                showErrorToast("Could not re-sync with match. It may have ended.");
-                router.push('/r1/waiting');
-              }
-            });
+            setPageIsLoading(false);
         } catch {
             showErrorToast("Invalid match data. Returning to waiting room.");
             router.push('/r1/waiting');
         }
     } else {
-        showInfoToast("No active match data found. Checking server...");
-        socket.emit('round1:getState', {}, (response: any) => {
-            if (response.success && response.participant?.status === 'in-match') {
-                showErrorToast("You are in a match but local data is missing.");
+        showInfoToast("Re-syncing with server...");
+        socket.emit('round1:getState', {}, (response: GetStateResponse) => {
+            if (response.success && response.participant?.status === 'in-match' && response.matchData) {
+                showSuccessToast("Successfully re-synced match!");
+                const data = response.matchData;
+                sessionStorage.setItem('round1_match_data', JSON.stringify(data));
+                setMatchData(data);
+                const elapsed = (Date.now() - data.startTime) / 1000;
+                setTimeRemaining(Math.max(0, Math.floor(data.duration / 1000 - elapsed)));
+            } else {
+                showErrorToast("No active match found on server.");
+                router.push('/r1/waiting');
             }
-            router.push('/r1/waiting');
+            setPageIsLoading(false);
         });
     }
-    setPageIsLoading(false);
   }, [isAuthLoading, user, socket, isConnected, router]);
 
   const handleMatchEndClose = () => {
     setShowMatchEndPopup(false);
     showInfoToast('Returning to the waiting room for your next match...');
     router.push('/r1/waiting');
+  };
+
+  const getPopupContent = (type: 'win' | 'lose' | 'timeout') => {
+    switch (type) {
+      case 'win':
+        return {
+          title: '🎉 Victory!',
+          message: 'You won the duel! You will enter a cooldown before the next match.',
+          className: 'text-green-400',
+        };
+      case 'lose':
+        return {
+          title: '😔 Defeat',
+          message: 'You lost this duel. You will enter a cooldown before the next match.',
+          className: 'text-red-400',
+        };
+      case 'timeout':
+        return {
+          title: "⏰ Time's Up!",
+          message: 'The match ended in a draw. You will enter a cooldown before the next match.',
+          className: 'text-yellow-400',
+        };
+    }
   };
 
   if (pageIsLoading || isAuthLoading) {
@@ -532,23 +563,22 @@ export default function R1CodePage() {
     );
   }
 
+  const popupContent = matchEndData ? getPopupContent(matchEndData.type) : null;
+
   return (
     <>
       <CodePageComponent 
         matchData={matchData}
         timeRemaining={timeRemaining}
       />
-      {showMatchEndPopup && matchEndData && (
+      {showMatchEndPopup && popupContent && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-800 p-8 rounded-lg border-2 border-orange-500 text-center max-w-md">
-            <h2 className={`text-3xl font-bold mb-4 ${
-              matchEndData.type === 'win' ? 'text-green-400' : 'text-red-400'
-            }`}>
-              {matchEndData.type === 'win' ? '🎉 Victory!' : '😔 Defeat'}
+            <h2 className={`text-3xl font-bold mb-4 ${popupContent.className}`}>
+              {popupContent.title}
             </h2>
             <p className="text-white text-lg mb-6">
-              {matchEndData.type === 'win' ? 'You won the duel! You will enter a cooldown before the next match.' :
-               'You lost this duel. You will enter a cooldown before the next match.'}
+              {popupContent.message}
             </p>
             <button
               onClick={handleMatchEndClose}
@@ -562,4 +592,3 @@ export default function R1CodePage() {
     </>
   );
 }
-

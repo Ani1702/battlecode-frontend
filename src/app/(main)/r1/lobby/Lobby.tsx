@@ -116,6 +116,7 @@ export default function Lobbyr1(){
         const handleRoundStarted = () => {
             setRoundStarted(true);
             setIsRoundActive(true);
+            localStorage.removeItem('battlecode-round-1-code-store');
             showSuccessToast('Round 1 has started! Entering matchmaking...');
             setTimeout(() => router.push('/r1/waiting'), 2000);
         };

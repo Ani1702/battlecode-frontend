@@ -50,6 +50,7 @@ export default function WaitingRoomR1() {
 
     const handleMatchFound = (data: MatchFoundData) => {
       showSuccessToast('Match found! Redirecting...');
+      localStorage.removeItem('battlecode-round-1-code-store');
       sessionStorage.setItem('round1_match_data', JSON.stringify(data));
       router.push('/r1/code');
     };
