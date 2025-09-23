@@ -12,6 +12,7 @@ interface Participant {
   id: string;
   username: string;
   rank: number;
+  eventScore?: number; // <-- ADDED: To hold the player's score
   status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
   cooldownEndTime?: number;
   [key: string]: unknown;
@@ -272,16 +273,20 @@ export default function WaitingRoomR1() {
                     <tr className="border-b border-gray-700">
                       <th className="py-2 px-3 font-bold">#</th>
                       <th className="py-2 px-3 font-bold">Player</th>
+                      <th className="py-2 px-3 font-bold">Score</th>
                       <th className="py-2 px-3 font-bold">Status / Timer</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {allParticipants.map((p, idx) => (
+                    {allParticipants.map((p) => (
                       <tr key={p.id} className="border-gray-800 hover:bg-white/5 transition">
-                        <td className="py-2 px-3">{p.rank || idx + 1}</td>
-                        <td className="py-2 px-3 max-w-[120px] truncate">
+                        <td className="py-2 px-3">{p.rank}</td>
+                        <td className="py-2 px-3 max-w-[100px] truncate">
                           {p.username}
                           {p.id === userId && <span className="ml-2 text-orange-400 text-xs">(You)</span>}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-cyan-400">
+                          {p.eventScore ?? '...'}
                         </td>
                         <td className={`py-2 px-3 ${getStatusColor(p.status)} text-sm`}>
                           {getStatusText(p)}
@@ -302,4 +307,3 @@ export default function WaitingRoomR1() {
     </div>
   )
 }
-
