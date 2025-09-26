@@ -1,322 +1,251 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { /* FlaskConical, */ Rocket } from "lucide-react";
+import { Rocket } from "lucide-react";
 import PlayerCard from '@/components/shared/PlayerCard';
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 
-interface Participant {
+// --- Interfaces ---
+
+/** Represents a participant in the Round 2 lobby. */
+interface R2Participant {
   id: string;
   username: string;
-  rank: number;
-  status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
-  joinedAt: string;
-  socketId?: string;
-  waitingSince?: number;
+  status: 'lobby' | 'elite:idle' | 'challenger:idle' | 'in-match';
+  role?: 'elite' | 'challenger';
 }
 
+/** Data structure for the 'round2:lobbyUpdate' socket event. */
 interface LobbyUpdateData {
-  participants?: Participant[];
-  isActive?: boolean;
-  [key: string]: unknown;
+  participants: R2Participant[];
+  isRoundActive: boolean;
 }
 
-interface RoundStartData {
-  [key: string]: unknown;
+/** A generic successful/failed response from a socket emission. */
+interface SimpleSocketResponse {
+    success: boolean;
+    message?: string;
 }
 
-interface MatchFoundData {
-  [key: string]: unknown;
+/** Data for the 'round2:rolesAssigned' event. */
+interface RoleAssignedData {
+    role: 'elite' | 'challenger';
 }
 
-interface ErrorData {
+/** Data for a generic 'round2:error' event. */
+interface SocketErrorData {
+    message: string;
+}
+
+/** The state object received from the 'round2:getState' emission. */
+interface Round2State {
+  roundIsActive: boolean;
+  shouldBeInGame: boolean;
+  userRole: 'elite' | 'challenger' | null;
+}
+
+/** The full response from the 'round2:getState' emission. */
+interface Round2StateResponse {
+  success: boolean;
   message?: string;
-  [key: string]: unknown;
+  state?: Round2State;
 }
 
-export default function Lobbyr1(){
+
+// --- Component ---
+
+export default function LobbyR2() {
     const router = useRouter();
     const { socket, isConnected } = useSocket();
-    const { user, userId, isLoading: authLoading } = useAuth();
+    const { userId, userRole, isLoading: authLoading } = useAuth();
     
-    const [participants, setParticipants] = useState<Participant[]>([]);
+    const [lobbyParticipants, setLobbyParticipants] = useState<R2Participant[]>([]);
     const [isRoundActive, setIsRoundActive] = useState(false);
-    const [timeRemaining, /*setTimeRemaining*/] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
-    const [roundStarted, setRoundStarted] = useState(false);
-    const [hasJoinedLobby, setHasJoinedLobby] = useState(false);
-    const [authenticationChecked, setAuthenticationChecked] = useState(false);
-    const [matchFound, setMatchFound] = useState(false);
-    const [matchCountdown, setMatchCountdown] = useState(5);
-    
-    const isAdmin = user?.role === 'ADMIN';
-    // Authentication check
+    const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
+
+    const isAdmin = useMemo(() => userRole === 'ADMIN', [userRole]);
+
+    // Effect 1: Auth Guard
+    // Redirects unauthenticated users after auth status is confirmed.
     useEffect(() => {
-        if (authLoading) return;
-        setAuthenticationChecked(true);
-        if (!userId || !user) {
+        if (!authLoading && !userId) {
             router.push('/dashboard');
         }
-    }, [authLoading, userId, user, router]);
+    }, [authLoading, userId, router]);
 
-    // Join lobby when authenticated and connected
+    // Effect 2: Initial State Sync & Lobby Join
+    // Runs once to sync with the server state and join the lobby if appropriate.
     useEffect(() => {
-        if (!authenticationChecked || authLoading || !userId || !user || !socket || !isConnected || hasJoinedLobby) {
+        if (!socket || !isConnected || authLoading || !userId || hasAttemptedJoin) {
             return;
         }
-        socket.emit('round1:join', { userId, username: user?.user_metadata?.full_name || user?.id }, (response: { success?: boolean; error?: string }) => {
-            if (response?.success) {
-                showSuccessToast('Successfully joined Round 1 lobby');
+    
+        setHasAttemptedJoin(true); 
+    
+        // First, get the server state to see if we should even be on this page.
+        socket.emit('round2:getState', (response: Round2StateResponse) => {
+            if (response.success && response.state) {
+                setIsRoundActive(response.state.roundIsActive);
+                
+                // If user is already in a match, redirect them immediately.
+                if (response.state.shouldBeInGame) {
+                    if (response.state.userRole) {
+                        showInfoToast("Rejoining your session...");
+                        router.push(`/r2/${response.state.userRole}`);
+                    } else {
+                        // Defensive check: Should have a role but doesn't.
+                        showErrorToast("Session is invalid. Redirecting to dashboard.");
+                        router.push('/dashboard');
+                    }
+                    return;
+                }
+
+                // If the round is active but the user has no role, they can't join.
+                if (response.state.roundIsActive) {
+                    showErrorToast("Round 2 is already in progress.");
+                    router.push('/dashboard');
+                    return;
+                }
+
+                // If all checks pass, attempt to join the lobby.
+                socket.emit('round2:join', (joinResponse: SimpleSocketResponse) => {
+                    if (joinResponse.success) {
+                        showSuccessToast('Joined Round 2 Lobby!');
+                    } else {
+                        showErrorToast(joinResponse.message || 'Failed to join lobby.');
+                        router.push('/dashboard');
+                    }
+                    setIsLoading(false);
+                });
             } else {
-                showErrorToast(response?.error || 'Failed to join lobby');
+                showErrorToast(response.message || 'Failed to sync with server.');
+                router.push('/dashboard');
+                setIsLoading(false);
             }
         });
-        setHasJoinedLobby(true);
-    }, [socket, isConnected, authenticationChecked, hasJoinedLobby, userId, user, authLoading]);
+    }, [socket, isConnected, authLoading, userId, hasAttemptedJoin, router]);
 
-    // Socket event listeners
+    // Effect 3: Main Socket Event Listeners
+    // Sets up and tears down listeners for real-time lobby updates.
     useEffect(() => {
         if (!socket) return;
 
-        const handleLobbyUpdate = (lobbyData: LobbyUpdateData) => {
+        const handleLobbyUpdate = (data: LobbyUpdateData) => {
+            setLobbyParticipants(data.participants.filter(p => p.status === 'lobby'));
+            setIsRoundActive(data.isRoundActive);
             setIsLoading(false);
-            if (lobbyData.participants) {
-                setParticipants(lobbyData.participants);
-            }
-            if (lobbyData.isActive !== undefined) {
-                setIsRoundActive(lobbyData.isActive);
-            }
         };
-
-        const handleRoundStarted = (data: RoundStartData) => {
-            console.log('Round 1 started! Data received:', data);
-            setRoundStarted(true);
-            setIsRoundActive(true);
-            showSuccessToast('Round 1 has started! Entering matchmaking...');
-            
-            // Store round data if needed
-            if (data && typeof data === 'object') {
-                try {
-                    const dataToStore = {
-                        startTime: data.startTime,
-                        duration: data.duration || 5400 // 90 minutes default
-                    };
-                    sessionStorage.setItem('round1_data', JSON.stringify(dataToStore));
-                } catch (error) {
-                    console.error("Failed to save round data to sessionStorage:", error);
-                }
+        
+        const handleRoleAssigned = (data: RoleAssignedData) => {
+            if (data.role) {
+                showInfoToast(`You have been assigned the role of: ${data.role.toUpperCase()}!`);
+                setTimeout(() => {
+                    router.push(`/r2/${data.role}`);
+                }, 2000);
             }
         };
 
-        const handleMatchFound = (data: MatchFoundData) => {
-            console.log('Match found! Data:', data);
-            setMatchFound(true);
-            setMatchCountdown(5);
-            
-            // Store match data
-            if (data) {
-                try {
-                    sessionStorage.setItem('round1_match_data', JSON.stringify(data));
-                } catch (error) {
-                    console.error("Failed to save match data:", error);
-                }
-            }
-            
-            showSuccessToast('Match found! Redirecting to code room...');
+        const handleError = (error: SocketErrorData) => {
+            showErrorToast(error.message || "An unknown server error occurred.");
         };
 
-        const handleRoundEnd = () => {
-            showSuccessToast('Round 1 has ended');
-            router.push('/dashboard');
-        };
-
-        const handleError = (error: ErrorData) => {
-            const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
-            showErrorToast(errorMessage);
-        };
-
-        socket.on('lobby:round1', handleLobbyUpdate);
-        socket.on('round1:started', handleRoundStarted);
-        socket.on('round1:matchFound', handleMatchFound);
-        socket.on('round1:ended', handleRoundEnd);
-        socket.on('round1:error', handleError);
+        socket.on('round2:lobbyUpdate', handleLobbyUpdate);
+        socket.on('round2:rolesAssigned', handleRoleAssigned);
+        socket.on('round2:error', handleError);
 
         return () => {
-            socket.off('lobby:round1', handleLobbyUpdate);
-            socket.off('round1:started', handleRoundStarted);
-            socket.off('round1:matchFound', handleMatchFound);
-            socket.off('round1:ended', handleRoundEnd);
-            socket.off('round1:error', handleError);
+            socket.off('round2:lobbyUpdate', handleLobbyUpdate);
+            socket.off('round2:rolesAssigned', handleRoleAssigned);
+            socket.off('round2:error', handleError);
         };
     }, [socket, router]);
 
-    // Match countdown timer
-    useEffect(() => {
-        if (matchFound && matchCountdown > 0) {
-            const timer = setTimeout(() => {
-                setMatchCountdown(matchCountdown - 1);
-            }, 1000);
-            return () => clearTimeout(timer);
-        } else if (matchFound && matchCountdown === 0) {
-            // Redirect to r1 code room
-            console.log("Redirecting to code room...");
-            router.push('/r1/code');
-        }
-    }, [matchFound, matchCountdown, router]);
-
     const handleStartRound = () => {
-        if (!socket || participants.length === 0) return;
-        socket.emit('round1:ready', {}, (response: { success?: boolean; error?: string }) => {
-            if (response?.success) {
-                showSuccessToast('Round 1 started successfully');
-            } else {
-                showErrorToast(response?.error || 'Failed to start round');
-            }
-        });
+        if (isAdmin && socket) {
+            socket.emit('round2:start', (response: SimpleSocketResponse) => {
+                if (response.success) {
+                    showSuccessToast('Round 2 is starting!');
+                } else {
+                    showErrorToast(response.message || 'Failed to start round.');
+                }
+            });
+        }
     };
 
-    const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substr(14, 5);
-
-    if (authLoading || !authenticationChecked) {
-        return ( <div>Loading Authentication...</div> );
+    if (authLoading || isLoading) {
+        return <div className="flex items-center justify-center h-screen text-white bg-gray-900">Syncing with server...</div>;
     }
 
     return (
-        <>
-        <div className = "flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
-            <div className = "flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
-                <p className='flex-1 flex items-end pt-8'> <span className = "text-white">ROUND</span> <span className="text-orange-500">&nbsp; 1</span></p>
-                <span className = "text-orange-500 text-2xl pb-4">LOBBY</span>
+        <div className="flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
+            {/* Header */}
+            <header className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(8, 145, 178, 1)' }}>
+                <h1 className='flex-1 flex items-end pt-8'>
+                    <span className="text-white">ROUND</span>
+                    <span className="text-cyan-400">&nbsp; 2</span>
+                </h1>
+                <h2 className="text-cyan-400 text-2xl pb-4">LOBBY</h2>
                 
-                {(roundStarted || isRoundActive) && (
+                {isRoundActive && (
                     <div className="mt-3 flex flex-col items-center gap-2">
-                        {roundStarted ? (
-                            <>
-                                <div className="text-base text-center text-green-400">Round 1 Started!</div>
-                                <div className="text-gray-200 text-center text-sm">
-                                    <p>Entering matchmaking queue...</p>
-                                    <div className="flex justify-center items-center gap-2 mt-2">
-                                        <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                                        <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                                        <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
-                                    </div>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="text-base text-center text-green-400">Round 1 Active</div>
-                                <div className="text-gray-200 text-center text-sm">
-                                    <p>Round is currently in progress</p>
-                                    <p className="text-orange-400 font-bold mt-1">Time Remaining: {formatTime(timeRemaining)}</p>
-                                </div>
-                            </>
-                        )}
+                        <div className="text-base text-center text-green-400 animate-pulse">Round 2 is Active!</div>
+                        <p className="text-gray-200 text-center text-sm">Assigning roles to participants...</p>
                     </div>
                 )}
+            </header>
+
+            {/* Participants Count */}
+            <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
+                Participants: {lobbyParticipants.length}
             </div>
-            <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4'>
-                Participants: {participants.length}
-            </div>
-            <div className = "flex-1 p-6 min-h-0">
-                {/* Custom scrollbar container for overflow handling */}
+
+            {/* Participants Grid */}
+            <main className="flex-1 p-6 min-h-0">
                 <CustomScrollbar className="h-full overflow-y-auto">
-                    {/* 3-column grid of player cards */}
-                    <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
-                        {isLoading ? (
-                            Array.from({ length: 10 }).map((_, index) => (
-                                <div key={index} className="relative w-full h-[90px] mb-3">
-                                    <div className="absolute inset-0 w-full h-full bg-gray-800/50 animate-pulse rounded-lg"></div>
-                                </div>
-                            ))
-                        ) : participants.length > 0 ? (
-                            participants.map((participant) => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
+                         {lobbyParticipants.length > 0 ? (
+                            lobbyParticipants.map((p) => (
                                 <PlayerCard 
-                                    key={participant.id}
-                                    username={participant.username}
-                                    avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=ea580c&color=fff`}
+                                    key={p.id}
+                                    username={p.username}
+                                    avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(p.username)}&background=0e7490&color=fff`}
                                 />
                             ))
                         ) : (
-                            <div className="col-span-3 flex items-center justify-center text-gray-400 text-base py-12">
-                                No participants yet. Waiting for players to join...
+                            <div className="col-span-full flex items-center justify-center text-gray-400 text-base py-12">
+                                {isRoundActive ? 'Starting round...' : 'Waiting for players to join...'}
                             </div>
                         )}
                     </div>
                 </CustomScrollbar>
-            </div>
+            </main>
 
-            {matchFound && (
-                <div className="flex-shrink-0 h-12 flex items-start justify-center text-2xl orbitron">
-                    Match starting in.. {matchCountdown}
-                </div>
-            )}
-
-            {!isRoundActive && !roundStarted && !matchFound && (
-                <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
+            {/* Footer and Admin Controls */}
+            {!isRoundActive && (
+                <footer className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
                     <div className="text-sm text-gray-200 text-center">
                         {!isConnected ? (
-                            <div>
-                                <p className="text-red-400">Connecting to server...</p>
-                                <div className="flex justify-center items-center gap-2 mt-2">
-                                    <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse"></div>
-                                    <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                                    <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
-                                </div>
-                            </div>
-                        ) : participants.length > 0 ? (
-                            <div>
-                                <p className="text-green-400">Connected to lobby. Waiting for more participants...</p>
-                                {!isLoading && (
-                                    <div className="flex justify-center items-center gap-2 mt-2">
-                                        <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                                        <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                                        <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
-                                    </div>
-                                )}
-                            </div>
-                        ) : isLoading ? (
-                            <div>
-                                <p className="text-blue-400">Joining lobby...</p>
-                                <div className="flex justify-center items-center gap-2 mt-2">
-                                    <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"></div>
-                                    <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                                    <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
-                                </div>
-                            </div>
+                             <p className="text-red-400">Connecting to server...</p>
                         ) : (
-                            <div>
-                                <p className="text-green-400">Connected. Waiting for participants to join...</p>
-                                <div className="flex justify-center items-center gap-2 mt-2">
-                                    <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse"></div>
-                                    <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                                    <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
-                                </div>
-                            </div>
+                             <p className="text-green-400">Connected. Waiting for admin to start the round.</p>
                         )}
                     </div>
-
-                    {isAdmin && !isLoading && participants.length > 0 && (
+                    {isAdmin && (
                         <button
                             onClick={handleStartRound}
-                            className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm flex items-center gap-2"
-                            disabled={isLoading}
+                            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-sky-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={lobbyParticipants.length < 2 || !isConnected}
                         >
                             <Rocket className="h-4 w-4" />
-                            Start Round 1
+                            Start Round 2
                         </button>
                     )}
-                </div>
+                </footer>
             )}
-
         </div>
-        
-        
-        </>
-
     );
 }
-
-

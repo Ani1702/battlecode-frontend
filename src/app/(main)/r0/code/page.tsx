@@ -95,7 +95,7 @@ export default function R0Code() {
       setIsRoundActive(false);
       showInfoToast(data.message || 'Round 0 has ended!');
       setTimeout(() => {
-        if (isMountedRef.current) router.push('/r0/lobby');
+        if (isMountedRef.current) router.push('/dashboard');
       }, 3000);
     };
     

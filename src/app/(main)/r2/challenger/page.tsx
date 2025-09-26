@@ -1,149 +1,236 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import CustomScrollbar from '../../../../components/shared/CustomScrollbar';
-import ChallengerPlayerCard from '../../../../components/shared/ChallengerPlayerCard';
-import BountyQuestionCard from '../../../../components/shared/BountyQuestionCard';
-import { BountyQuestion } from '../../../../types/types';
+import { useRouter } from 'next/navigation';
+import { useSocket } from '@/contexts/SocketContext';
+import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
+import CustomScrollbar from '@/components/shared/CustomScrollbar';
+import ChallengerPlayerCard from '@/components/shared/ChallengerPlayerCard';
+import BountyQuestionCard, { BountyQuestion } from '@/components/shared/BountyQuestionCard';
 
-interface Player {
+// --- Interfaces ---
+interface Participant {
   id: string;
   username: string;
-  rank: number;
+  status: string;
+  role?: 'elite' | 'challenger';
 }
 
-export default function ChallengerLobby() {
-  // Mock data for elites - replace with actual data source
-  const [elites, /*setElites*/] = useState<Player[]>([
-    { id: '1', username: 'CodeMaster2024', rank: 15 },
-    { id: '2', username: 'AlgorithmNinja', rank: 8 },
-    { id: '3', username: 'ByteWarrior', rank: 23 },
-    { id: '4', username: 'DataStructureGod', rank: 5 },
-    { id: '5', username: 'CompetitiveCoder', rank: 12 },
-    { id: '6', username: 'LogicLegend', rank: 19 },
-  ]);
+interface SimpleSocketResponse {
+    success: boolean;
+    message?: string;
+}
 
-  // Mock data for bounty questions - replace with actual data source
-  const [bountyQuestions, /*setBountyQuestions*/] = useState<BountyQuestion[]>([
-    {
-      id: '1',
-      name: 'Binary Tree Maximum Path Sum',
-      difficulty: 'Hard',
-      description: 'Given a non-empty binary tree, find the maximum path sum. A path is defined as any sequence of nodes from some starting node to any node in the tree along the parent-child connections.',
-      isSolved: true,
-      points: 500
-    },
-    {
-      id: '2',
-      name: 'Longest Palindromic Substring',
-      difficulty: 'Medium',
-      description: 'Given a string s, return the longest palindromic substring in s. A palindrome reads the same backward as forward.',
-      isSolved: false,
-      points: 300
-    },
-    {
-      id: '3',
-      name: 'Merge K Sorted Lists',
-      difficulty: 'Hard',
-      description: 'You are given an array of k linked-lists lists, each linked-list is sorted in ascending order. Merge all the linked-lists into one sorted linked-list.',
-      isSolved: false,
-      points: 450
-    },
-    {
-      id: '4',
-      name: 'Two Sum',
-      difficulty: 'Easy',
-      description: 'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.',
-      isSolved: true,
-      points: 100
-    },
-    {
-      id: '5',
-      name: 'Valid Parentheses',
-      difficulty: 'Easy',
-      description: 'Given a string s containing just the characters "(", ")", "{", "}", "[" and "]", determine if the input string is valid.',
-      isSolved: true,
-      points: 150
-    },
-    {
-      id: '6',
-      name: 'Sliding Window Maximum',
-      difficulty: 'Hard',
-      description: 'You are given an array of integers nums, there is a sliding window of size k which is moving from the very left of the array to the very right.',
-      isSolved: false,
-      points: 400
-    },
-    {
-      id: '7',
-      name: 'Best Time to Buy and Sell Stock',
-      difficulty: 'Easy',
-      description: 'You are given an array prices where prices[i] is the price of a given stock on the ith day. You want to maximize your profit by choosing a single day to buy one stock.',
-      isSolved: false,
-      points: 120
-    }
-  ]);
+interface SocketStateResponse {
+    success: boolean;
+    state: {
+        userRole?: 'challenger' | 'elite' | null;
+    };
+}
 
-  const handleChallengeElite = (playerId: string) => {
-    console.log(`Challenging elite player: ${playerId}`);
-    // Add your challenge logic here
+interface ServerBountyQuestion extends Omit<BountyQuestion, 'name'> {
+    title: string;
+}
+
+interface DashboardResponse {
+    success: boolean;
+    message?: string;
+    dashboard: {
+        roundEndTime: number;
+        bountyQuestions: ServerBountyQuestion[];
+        allParticipants: Participant[];
+    };
+}
+
+
+const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${minutes}:${seconds}`;
+};
+
+export default function ChallengerDashboard() {
+  const router = useRouter();
+  const { socket, isConnected } = useSocket();
+
+  const [availableElites, setAvailableElites] = useState<Participant[]>([]);
+  const [bountyQuestions, setBountyQuestions] = useState<BountyQuestion[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    socket.emit('round2:getState', (stateResponse: SocketStateResponse) => {
+        if (stateResponse.success && stateResponse.state.userRole === 'challenger') {
+            socket.emit('round2:getDashboardState', (dashResponse: DashboardResponse) => {
+                if (dashResponse.success) {
+                    setRoundEndTime(dashResponse.dashboard.roundEndTime);
+                    const transformedBounties = dashResponse.dashboard.bountyQuestions.map((q) => ({
+                        ...q,
+                        name: q.title,
+                    }));
+                    setBountyQuestions(transformedBounties);
+                    const allParticipants = dashResponse.dashboard.allParticipants;
+                    setAvailableElites(allParticipants.filter((p: Participant) => p.role === 'elite' && p.status === 'elite:idle'));
+                } else {
+                    showErrorToast(dashResponse.message || "Failed to load dashboard.");
+                    router.push('/dashboard');
+                }
+                setIsLoading(false);
+            });
+        } else {
+            showErrorToast("Access denied. Redirecting...");
+            router.push(stateResponse.state.userRole ? `/r2/${stateResponse.state.userRole}` : '/dashboard');
+        }
+    });
+  }, [socket, isConnected, router]);
+
+  useEffect(() => {
+    if (!roundEndTime) return;
+
+    setTimeRemaining(Math.max(0, roundEndTime - Date.now()));
+
+    const interval = setInterval(() => {
+        const remaining = Math.max(0, roundEndTime - Date.now());
+        setTimeRemaining(remaining);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [roundEndTime]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRoundStateUpdate = (data: { participants: Participant[] }) => {
+        setAvailableElites(data.participants.filter(p => p.role === 'elite' && p.status === 'elite:idle'));
+    };
+
+    const handleChallengeRejected = (data: { eliteId: string }) => {
+        showErrorToast(`Your challenge was rejected.`);
+        setPendingRequests(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(data.eliteId);
+            return newSet;
+        });
+    };
+
+    const handleMatchStarted = (data: { matchId: string }) => {
+        showSuccessToast("Match starting! Redirecting...");
+        try {
+            sessionStorage.setItem('r2_session_type', 'match');
+            sessionStorage.setItem('r2_context_id', data.matchId);
+            sessionStorage.setItem('r2_user_role', 'challenger');
+            router.push(`/r2/code`);
+        } catch (error) {
+            console.error("Session storage is unavailable.", error);
+            showErrorToast("Could not save session. Please enable cookies/storage.");
+        }
+    };
+
+    socket.on('round2:lobbyUpdate', handleRoundStateUpdate);
+    socket.on('round2:challengeRejected', handleChallengeRejected);
+    socket.on('round2:matchStarted', handleMatchStarted);
+
+    return () => {
+      socket.off('round2:lobbyUpdate', handleRoundStateUpdate);
+      socket.off('round2:challengeRejected', handleChallengeRejected);
+      socket.off('round2:matchStarted', handleMatchStarted);
+    };
+  }, [socket, router]);
+  
+  const handleStartBounty = (questionId: string) => {
+    if (!socket) return;
+    
+    socket.emit('round2:bountyBeginQuestion', { questionId }, (response: SimpleSocketResponse) => {
+        if (response.success) {
+            showSuccessToast("Starting bounty... good luck!");
+            try {
+                sessionStorage.setItem('r2_session_type', 'bounty');
+                sessionStorage.setItem('r2_context_id', questionId);
+                sessionStorage.setItem('r2_user_role', 'challenger');
+                router.push(`/r2/code`);
+            } catch (error) {
+                console.error("Session storage is unavailable.", error);
+                showErrorToast("Could not save session. Please enable cookies/storage.");
+            }
+        } else {
+            showErrorToast(response.message || "Could not start bounty.");
+        }
+    });
   };
 
+  const handleChallengeElite = (eliteId: string) => {
+    if (!socket) return;
+    setPendingRequests(prev => new Set(prev).add(eliteId));
+    socket.emit('round2:challengeRequest', { eliteId }, (response: SimpleSocketResponse) => {
+        if (response.success) {
+            showSuccessToast("Challenge request sent!");
+        } else {
+            showErrorToast(response.message || "Failed to send challenge.");
+            setPendingRequests(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(eliteId);
+                return newSet;
+            });
+        }
+    });
+  };
+  
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen text-white bg-gray-900">Loading Challenger Dashboard...</div>;
+  }
+
   return (
-    <>
-      <div className="flex bg-[url('/elite_bg.svg')] bg-center bg-no-repeat h-screen w-full flex-col overflow-hidden opacity-100 orbitron">
-        <div className="flex-1 flex items-center justify-center text-6xl orbitron white-glow"><Image src="/b-2.svg" alt="Battlecode Logo" className="h-20" width={80} height={80}/>CHALLENGER DASHBOARD</div>
-        <div className="flex-4 flex flex-row">
+    <div className="flex bg-[url('/elite_bg.svg')] bg-center bg-no-repeat h-screen w-full flex-col overflow-hidden orbitron">
+        <div className="flex-1 flex items-center justify-center text-6xl orbitron white-glow relative">
+            <Image src="/b-2.svg" alt="Battlecode Logo" className="h-20" width={80} height={80}/>
+            CHALLENGER DASHBOARD
+            <div className="absolute top-4 right-4 bg-black/50 text-white text-2xl p-2 px-4 rounded-lg font-mono">
+                {formatTime(timeRemaining)}
+            </div>
+        </div>
+        <div className="flex-[4] flex flex-row">
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
-              <h2 className="text-2xl font-bold text-white mb-4 ml-4 orbitron">
-                Challenge Elites
-              </h2>
-              
+              <h2 className="text-2xl font-bold text-white mb-4 ml-4 orbitron">Challenge Elites</h2>
               <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto overflow-x-hidden pr-2">
-                {elites.length > 0 ? (
-                  elites.map((player) => (
+                {availableElites.length > 0 ? (
+                  availableElites.map((player) => (
                     <ChallengerPlayerCard
                       key={player.id}
                       username={player.username}
-                      rank={player.rank}
                       onChallenge={() => handleChallengeElite(player.id)}
+                      isPending={pendingRequests.has(player.id)}
                     />
                   ))
                 ) : (
-                  <div className="text-center text-gray-500 mt-8">
-                    <p className="text-lg text-white">No elites available</p>
-                    <p className="text-sm text-white">Check back later for elite players!</p>
+                  <div className="text-center text-gray-400 mt-8">
+                    <p className="text-lg">No elites are available</p>
+                    <p className="text-sm">All elites are currently in a match. Check back soon!</p>
                   </div>
                 )}
               </CustomScrollbar>
             </div>
           </div>
-          
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
-              <h2 className="text-2xl font-bold text-white mb-4 orbitron">
-                Bounty Questions
-              </h2>
-              
-              <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto overflow-x-hidden pr-2 ">
-                {bountyQuestions.length > 0 ? (
-                  bountyQuestions.map((question) => (
+              <h2 className="text-2xl font-bold text-white mb-4 orbitron">Bounty Questions</h2>
+              <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto pr-2">
+                {bountyQuestions.map((question) => (
                     <BountyQuestionCard
                       key={question.id}
                       question={question}
+                      onSolve={handleStartBounty}
                     />
-                  ))
-                ) : (
-                  <div className="text-center text-gray-500 mt-8">
-                    <p className="text-lg text-white">No bounty questions available</p>
-                    <p className="text-sm text-white">Check back later for new challenges!</p>
-                  </div>
-                )}
+                  ))}
               </CustomScrollbar>
             </div>
           </div>
         </div>
       </div>
-    </>
   );
 }

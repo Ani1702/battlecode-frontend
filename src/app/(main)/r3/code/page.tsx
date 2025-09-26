@@ -4,13 +4,13 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import { useSocket } from "@/contexts/SocketContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth} from "@/contexts/AuthContext"; 
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import HackModal from "@/components/shared/HackModal";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
 import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play, ChevronLeft, ChevronRight, Lock, Swords, Clock, MemoryStick } from "lucide-react";
 
-// --- Interfaces (Combined) ---
+// --- Interfaces ---
 interface Problem {
   id: string;
   title: string;
@@ -20,7 +20,7 @@ interface Problem {
   boilerplate: { [key: string]: string };
   sampleTestCases: TestCase[];
   hints: string[];
-  duration?: number; // Added to handle round start payload
+  duration?: number;
 }
 
 interface HackableSubmission {
@@ -30,16 +30,22 @@ interface HackableSubmission {
 }
 
 interface TestCase {
-  stdin?: string; expected_output?: string;
+  stdin?: string;
+  expected_output?: string;
   input?: { stdin?: string; json?: unknown; };
   output?: { stdout?: string; json?: unknown; };
   explanation?: string;
 }
 
 interface SubmissionResult {
-  token: string; status: { id: number; description: string; };
-  stdout: string | null; stderr: string | null; compile_output: string | null;
-  time: string | null; memory: string | null; passed?: boolean;
+  token: string;
+  status: { id: number; description: string; };
+  stdout: string | null;
+  stderr: string | null;
+  compile_output: string | null;
+  time: string | null;
+  memory: string | null;
+  passed?: boolean;
 }
 
 interface ViewSubmissionsData {
@@ -66,6 +72,23 @@ interface CodeStore {
   [contextKey: string]: string;
 }
 
+interface SubmissionPayload {
+    language: string;
+    source_code: string;
+    problemId: string;
+    roundNumber: number;
+    stdin?: string;
+}
+
+interface SubmissionApiResponse {
+    success: boolean;
+    results?: SubmissionResult[];
+    summary?: { passed: number; total: number };
+    submission?: { status: string };
+    message?: string;
+}
+
+
 // ============================================================================
 // --- MAIN COMPONENT ---
 // ============================================================================
@@ -88,7 +111,6 @@ export default function Round3Page() {
     try { return localStorage.getItem('battlecode-round-3-language') || "python"; }
     catch { return "python"; }
   });
-  const [hasSubmittedCurrent, setHasSubmittedCurrent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
@@ -108,7 +130,7 @@ export default function Round3Page() {
   const hasInitialized = useRef(false);
   const isMountedRef = useRef(true);
   const codeRef = useRef(code);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // --- Core Hooks & Memos ---
   useEffect(() => {
@@ -117,7 +139,9 @@ export default function Round3Page() {
   }, []);
 
   useEffect(() => { codeRef.current = code; }, [code]);
-  useEffect(() => { localStorage.setItem('battlecode-round-3-language', language); }, [language]);
+  useEffect(() => {
+      try { localStorage.setItem('battlecode-round-3-language', language); } catch (e) { console.error("Could not save language to localStorage", e); }
+  }, [language]);
 
   useEffect(() => {
     setActiveTestCaseTab(0);
@@ -138,8 +162,8 @@ export default function Round3Page() {
       try { localStorage.setItem(contextManager.getStorageKey(r), JSON.stringify(store)); return true; } catch { return false; }
     },
     getBoilerplate: (p: Problem | null, lang: string) => p?.boilerplate?.[lang] || '',
-    createContext: (r: string, qId: string, lang: string) => ({ round: r, questionId: qId, language: lang }),
-    contextEquals: (a: CodeContext | null, b: CodeContext | null) => a && b && a.round === b.round && a.questionId === b.questionId && a.language === b.language,
+    createContext: (r: string, qId: string, lang: string): CodeContext => ({ round: r, questionId: qId, language: lang }),
+    contextEquals: (a: CodeContext | null, b: CodeContext | null): boolean => !!(a && b && a.round === b.round && a.questionId === b.questionId && a.language === b.language),
     getCodeForContext: (store: CodeStore, context: CodeContext) => store[contextManager.generateContextKey(context.round, context.questionId, context.language)] || '',
     setCodeForContext: (store: CodeStore, context: CodeContext, newCode: string) => ({ ...store, [contextManager.generateContextKey(context.round, context.questionId, context.language)]: newCode }),
     removeCodeForContext: (store: CodeStore, context: CodeContext): CodeStore => {
@@ -160,6 +184,7 @@ export default function Round3Page() {
 
     setSaveStatus('saving');
     saveTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
       setCodeStore(prev => {
         const updatedStore = contextManager.setCodeForContext(prev, currentContext, codeToSave);
         const success = contextManager.saveCodeStore(round, updatedStore);
@@ -179,7 +204,7 @@ export default function Round3Page() {
   // --- Code Context Transition Logic ---
   const handleContextTransition = useCallback((newProblem: Problem, newLanguage: string) => {
     const newContext = contextManager.createContext(round, newProblem.id, newLanguage);
-    if (currentContext && contextManager.contextEquals(currentContext, newContext)) return;
+    if (contextManager.contextEquals(currentContext, newContext)) return;
 
     let updatedStore = { ...codeStore };
     if (currentContext && !isLocked) {
@@ -198,7 +223,6 @@ export default function Round3Page() {
     setCode(savedCode || newBoilerplate);
     setCurrentContext(newContext);
     setSubmissionResults(null);
-    setHasSubmittedCurrent(false);
     setActiveTab('testcases');
   }, [currentContext, currentProblem, codeStore, contextManager, round, isLocked]);
 
@@ -223,18 +247,14 @@ export default function Round3Page() {
   // --- Function to Clear All Match Context ---
   const clearMatchContext = useCallback((roundToClear: string) => {
     try {
-      const codeStoreKey = `battlecode-round-${roundToClear}-code-store`;
-      const languageKey = `battlecode-round-${roundToClear}-language`;
-
-      localStorage.removeItem(codeStoreKey);
-      localStorage.removeItem(languageKey);
+      localStorage.removeItem(`battlecode-round-${roundToClear}-code-store`);
+      localStorage.removeItem(`battlecode-round-${roundToClear}-language`);
 
       setCodeStore({});
       setLanguage("python");
       setCurrentContext(null);
       setIsContextInitialized(false);
       setSubmissionResults(null);
-      setHasSubmittedCurrent(false);
       setLockedQuestionIds([]);
       setHackableSubmissions({});
       setIsHackingPhase(false);
@@ -255,15 +275,11 @@ export default function Round3Page() {
     };
     
     const handleRoundEnd = (data: { message?: string }) => {
-      console.log("Round end event received:", data);
-    if (!isMountedRef.current) return;
-    // Clear local state first
-    clearMatchContext(round);
-    // Show a blocking popup message
-    window.alert(data.message || "Round Finished!");
-    // Redirect to the dashboard after the user dismisses the alert
-    router.push('/dashboard');
-};
+      if (!isMountedRef.current) return;
+      clearMatchContext(round);
+      alert(data.message || "Round Finished!");
+      router.push('/dashboard');
+    };
 
     const handleHackingPhaseStart = () => {
       if (isMountedRef.current) {
@@ -278,41 +294,35 @@ export default function Round3Page() {
       }
     };
 
-    // NEW LOGIC: Handle the start of a new round
     const handleRoundStart = (data: { questions: Problem[], duration: number }) => {
       if (!isMountedRef.current) return;
-      
       showInfoToast("A new round has been started by the admin!");
-      // 1. Clear all state from the previous round
       clearMatchContext(round);
-
-      // 2. Set up the new round's state
       setProblems(data.questions || []);
       setCurrentProblem(data.questions?.[0] || null);
       setCurrentProblemIndex(0);
       setTimeRemaining(data.duration || 0);
-      setPageIsLoading(false); // Ensure page is not in loading state
+      setPageIsLoading(false);
     };
 
     socket.on('round3:timer', handleTimerUpdate);
     socket.on('round3:ended', handleRoundEnd);
     socket.on('round3:hackingPhaseStart', handleHackingPhaseStart);
     socket.on('round3:viewSubmissions', handleViewSubmissions);
-    socket.on('round3:start', handleRoundStart); // NEW LOGIC: Listen for start event
+    socket.on('round3:start', handleRoundStart);
 
     return () => {
       socket.off('round3:timer', handleTimerUpdate);
       socket.off('round3:ended', handleRoundEnd);
       socket.off('round3:hackingPhaseStart', handleHackingPhaseStart);
       socket.off('round3:viewSubmissions', handleViewSubmissions);
-      socket.off('round3:start', handleRoundStart); // NEW LOGIC: Clean up listener
+      socket.off('round3:start', handleRoundStart);
     };
   }, [socket, isConnected, router, round, clearMatchContext]);
 
   // --- Initial State Fetch ---
   useEffect(() => {
-    const isAppReady = !isAuthLoading && !isSocketLoading && user && socket && isConnected;
-    if (!isAppReady || hasInitialized.current) return;
+    if (isAuthLoading || isSocketLoading || !user || !socket || !isConnected || hasInitialized.current) return;
     hasInitialized.current = true;
 
     socket.emit('round3:getState', {}, (response: StateResponse) => {
@@ -325,7 +335,8 @@ export default function Round3Page() {
         setIsHackingPhase(response.isHackingPhase || false);
         setLockedQuestionIds(response.lockedQuestionIds || []);
       } else {
-        showErrorToast(typeof response?.error === 'string' ? response.error : 'No active round found.');
+        const errorMessage = typeof response?.error === 'string' ? response.error : response?.error?.message || 'No active round found.';
+        showErrorToast(errorMessage);
         router.push('/r3/lobby');
       }
       setPageIsLoading(false);
@@ -335,24 +346,17 @@ export default function Round3Page() {
   // --- Editor and Resizing Logic ---
   const monaco = useMonaco();
   useEffect(() => {
-    if (monaco) {
-      monaco.editor.defineTheme('custom-dark', {
-        base: 'vs-dark', inherit: true, rules: [],
-        colors: {
-          'editor.background': '#0a0a0a', 'editor.foreground': '#ffffff',
-          'editor.lineHighlightBackground': '#1a1a1a', 'editor.selectionBackground': '#264f78',
-          'editorCursor.foreground': '#f97316', 'editorLineNumber.foreground': '#858585',
-          'editorLineNumber.activeForeground': '#f97316',
-        },
-      });
-      monaco.editor.setTheme('custom-dark');
-    }
+    monaco?.editor.defineTheme('custom-dark', {
+      base: 'vs-dark', inherit: true, rules: [],
+      colors: { 'editor.background': '#0a0a0a', 'editor.foreground': '#ffffff', 'editor.lineHighlightBackground': '#1a1a1a', 'editor.selectionBackground': '#264f78', 'editorCursor.foreground': '#f97316', 'editorLineNumber.foreground': '#858585', 'editorLineNumber.activeForeground': '#f97316' },
+    });
+    monaco?.editor.setTheme('custom-dark');
   }, [monaco]);
 
   const editorOptions = { minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false, automaticLayout: true, wordWrap: 'on' as const, readOnly: isLocked };
 
   const handleMouseDown = (e: React.MouseEvent) => { setIsDragging(true); e.preventDefault(); };
-  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseUp = useCallback(() => setIsDragging(false), []);
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     const container = document.querySelector('.code-results-container') as HTMLElement;
@@ -376,20 +380,20 @@ export default function Round3Page() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, handleMouseMove]);
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // --- Core Action Handlers ---
   const executeCode = useCallback(async (isFinalSubmission: boolean, customStdin?: string) => {
     if (!currentProblem || (isSubmitting || isRunning)) return;
     const action = isFinalSubmission ? 'Submitting' : 'Running';
-    if (isFinalSubmission) { setIsSubmitting(true); setHasSubmittedCurrent(true); } else { setIsRunning(true); }
+    if (isFinalSubmission) { setIsSubmitting(true); } else { setIsRunning(true); }
 
     setSubmissionResults(null);
     setActiveTab('results');
     showInfoToast(`${action} for judging...`);
 
     const endpoint = isFinalSubmission ? '/submit' : '/run';
-    const body: { [key: string]: any } = { language, source_code: code, problemId: currentProblem.id, roundNumber: parseInt(round) };
+    const body: SubmissionPayload = { language, source_code: code, problemId: currentProblem.id, roundNumber: parseInt(round) };
     if (!isFinalSubmission && customStdin !== undefined) { body.stdin = customStdin; }
 
     try {
@@ -398,7 +402,7 @@ export default function Round3Page() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify(body)
       });
-      const result = await response.json();
+      const result: SubmissionApiResponse = await response.json();
       if (result.success) {
         setSubmissionResults(result.results || []);
         const summary = result.summary || { passed: 0, total: (result.results || []).length };
@@ -430,22 +434,16 @@ export default function Round3Page() {
   }, [socket]);
 
   const handleHackAttempt = useCallback((testCase: string, targetSubmission: HackableSubmission) => {
-    if (!socket) return showErrorToast("Not connected to server.");
-    if (!currentProblem) return showErrorToast("Cannot submit hack, no problem selected.");
+    if (!socket || !currentProblem) return showErrorToast("Cannot submit hack, connection or problem invalid.");
 
-    const questionId = currentProblem.id;
     showInfoToast(`Submitting hack against user...`);
-
     socket.emit('round3:hackAttempt', {
-      questionId,
+      questionId: currentProblem.id,
       customTestCase: testCase,
       targetUserId: targetSubmission.userId,
     }, (response: { success: boolean, message?: string }) => {
-      if (response.success) {
-        showSuccessToast(response.message || "Hack successful!");
-      } else {
-        showErrorToast(response.message || "Hack attempt failed.");
-      }
+      if (response.success) showSuccessToast(response.message || "Hack successful!");
+      else showErrorToast(response.message || "Hack attempt failed.");
     });
   }, [socket, currentProblem]);
 
@@ -486,13 +484,13 @@ export default function Round3Page() {
 
   const saveStatusDisplay = getSaveStatusDisplay();
   const timerDisplay = { time: formatTime(timeRemaining), className: timeRemaining <= 60 ? 'text-red-400' : timeRemaining <= 300 ? 'text-yellow-400' : '' };
-
+  
   return (
     <>
       <HackModal
         isOpen={isHackModalOpen}
         onClose={() => setIsHackModalOpen(false)}
-        submissions={hackableSubmissions[currentProblem?.id] || []}
+        submissions={hackableSubmissions[currentProblem.id] || []}
         onSubmitHack={handleHackAttempt}
       />
       <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
@@ -505,11 +503,11 @@ export default function Round3Page() {
                   <span>Difficulty: {currentProblem.difficulty}</span>
                   <span>Round: {round.toUpperCase()}</span>
                   <div className="flex items-center gap-2 border border-gray-600 rounded-md p-1">
-                    <button onClick={() => handleQuestionSelect(currentProblemIndex - 1)} disabled={currentProblemIndex === 0} className="p-1 rounded-md hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">
+                    <button onClick={() => handleQuestionSelect(currentProblemIndex - 1)} disabled={currentProblemIndex === 0} aria-label="Previous question" className="p-1 rounded-md hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">
                       <ChevronLeft className="h-4 w-4" />
                     </button>
                     <span className="font-mono text-xs">{currentProblemIndex + 1} / {problems.length}</span>
-                    <button onClick={() => handleQuestionSelect(currentProblemIndex + 1)} disabled={currentProblemIndex >= problems.length - 1} className="p-1 rounded-md hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">
+                    <button onClick={() => handleQuestionSelect(currentProblemIndex + 1)} disabled={currentProblemIndex >= problems.length - 1} aria-label="Next question" className="p-1 rounded-md hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
@@ -522,7 +520,7 @@ export default function Round3Page() {
               )}
             </div>
             <div className="flex-1 overflow-y-auto min-h-0 pr-2">
-              {showHints && currentProblem.hints && <div className="mb-4 bg-black p-3 rounded"><h3 className="font-bold mb-2 text-amber-400">Hints:</h3><ul className="list-disc list-inside text-gray-300 space-y-2">{currentProblem.hints.map((hint, i) => <li key={i}>{hint}</li>)}</ul></div>}
+              {showHints && <div className="mb-4 bg-black p-3 rounded"><h3 className="font-bold mb-2 text-amber-400">Hints:</h3><ul className="list-disc list-inside text-gray-300 space-y-2">{currentProblem.hints.map((hint, i) => <li key={i}>{hint}</li>)}</ul></div>}
               <p className="mb-4 text-gray-300 whitespace-pre-wrap">{currentProblem.description}</p>
               {currentProblem.constraints && <><h3 className="font-bold mb-2 text-amber-400">Constraints:</h3><ul className="list-disc list-inside mb-4 text-gray-300 font-mono text-sm">{currentProblem.constraints.map((c, i) => <li key={i}>{c}</li>)}</ul></>}
               {currentProblem.sampleTestCases && <><h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>{currentProblem.sampleTestCases.map((tc, i) => <div key={i} className="mb-4 bg-black/20 border-amber-600/50 mr-2 border-2 p-3 rounded font-mono text-sm"><p className="font-bold text-gray-400">Input:</p><pre className="bg-gray-800/60 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(tc.stdin || tc.input?.stdin || tc.input?.json || '')}</pre><p className="mt-2 font-bold text-gray-400">Output:</p><pre className="bg-gray-800/60 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(tc.expected_output || tc.output?.stdout || tc.output?.json || '')}</pre>{tc.explanation && <p className="mt-2 text-xs text-gray-400 italic">Explanation: {tc.explanation}</p>}</div>)}</>}
@@ -543,7 +541,7 @@ export default function Round3Page() {
                       <Swords size={16} />Hack
                     </button>
                   ) : (
-                    <button onClick={() => handleLockQuestion(currentProblem.id)} disabled={!hasSubmittedCurrent || !isHackingPhase} title={!isHackingPhase ? "Locking is only available in the hacking phase" : !hasSubmittedCurrent ? "You must submit your code at least once" : "Lock this question to view others' code"} className="flex items-center gap-2 bg-red-800/50 text-white p-2 rounded border border-red-600 hover:bg-red-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-800/50">
+                    <button onClick={() => handleLockQuestion(currentProblem.id)} title={!isHackingPhase ? "Locking is only available in the hacking phase" : "Lock this question to view others' code"} className="flex items-center gap-2 bg-red-800/50 text-white p-2 rounded border border-red-600 hover:bg-red-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-800/50">
                       <Lock className="h-4 w-4" />Lock
                     </button>
                   )}
@@ -572,7 +570,7 @@ export default function Round3Page() {
                       <button onClick={() => setActiveTestCaseTab('custom')} className={`px-3 py-2 text-sm ${activeTestCaseTab === 'custom' ? 'bg-amber-600/20 text-amber-400' : 'text-gray-400 hover:bg-gray-800'}`}>Custom Input</button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 font-mono text-sm">
-                      {activeTestCaseTab !== 'custom' ? (
+                      {activeTestCaseTab !== 'custom' && typeof activeTestCaseTab === 'number' ? (
                         <div>
                           <label className="text-gray-400 font-sans font-bold">Input:</label>
                           <pre className="bg-black/40 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(currentProblem.sampleTestCases[activeTestCaseTab]?.stdin || currentProblem.sampleTestCases[activeTestCaseTab]?.input?.stdin || '')}</pre>
@@ -591,7 +589,7 @@ export default function Round3Page() {
                   <CustomScrollbar className="h-full">
                     <div className="p-1">
                       {(isRunning || isSubmitting) && !submissionResults && (<div className="flex items-center justify-center h-full text-gray-400">Judging...</div>)}
-                        {!isRunning && !isSubmitting && !submissionResults && (<div className="flex items-center justify-center h-full text-gray-400">Run code or submit a solution to see results.</div>)}
+                      {!isRunning && !isSubmitting && !submissionResults && (<div className="flex items-center justify-center h-full text-gray-400">Run code or submit a solution to see results.</div>)}
                       {submissionResults && submissionResults.map((result, i) => {
                         const isAccepted = result.status.description === 'Accepted';
                         const bgColor = isAccepted ? 'bg-green-800/20 border-green-500/50' : 'bg-red-800/20 border-red-500/50';
@@ -611,7 +609,7 @@ export default function Round3Page() {
                               </details>
                             )}
                           </div>
-                        )
+                        );
                       })}
                     </div>
                   </CustomScrollbar>
