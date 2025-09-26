@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import CustomScrollbar from './CustomScrollbar';
-import IncomingChallengeCard from './IncomingChallengeCard';
+import IncomingEliteCard from './IncomingEliteCard';
 import BountyQuestionCard from './BountyQuestionCard';
 import { BountyQuestion } from '../../types/types';
 
@@ -18,7 +18,7 @@ export default function EliteLobby() {
     { id: '1', username: 'CodeMaster2024', rank: 15 },
     { id: '2', username: 'AlgorithmNinja', rank: 8 },
     { id: '3', username: 'ByteWarrior', rank: 23 },
-    { id: '4', username: 'DataStructureGod', rank: 5 },
+    { id: '4', username: 'DataStructure', rank: 5 },
     { id: '5', username: 'CompetitiveCoder', rank: 12 },
     { id: '6', username: 'LogicLegend', rank: 19 },
   ]);
@@ -99,23 +99,24 @@ export default function EliteLobby() {
 
   return (
     <>
-      <div className="flex bg-[url('/elite_bg2.svg')] bg-[length:1200px_800px] bg-center bg-no-repeat h-screen flex-col overflow-hidden orbitron">
-        <div className="flex-1 flex items-center justify-center text-6xl oxanium white-glow"><Image src="/b-2.svg" alt="Battlecode Logo" className="h-20" width={80} height={80}/>ELITE DASHBOARD</div>
+      <div className="flex bg-[url('/elite_bg.svg')]  bg-center bg-no-repeat h-screen w-full flex-col overflow-hidden opacity-100 orbitron">
+        <div className="flex-1 flex items-center justify-center text-6xl orbitron white-glow"><Image src="/b-2.svg" alt="Battlecode Logo" className="h-20" width={80} height={80}/>ELITE DASHBOARD</div>
         <div className="flex-4 flex flex-row">
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
-              <h2 className="text-2xl font-bold text-white mb-4 font-orbitron">
+              <h2 className="text-2xl font-bold text-white mb-4 orbitron">
                 Incoming Challengers
               </h2>
               
-              <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto pr-2">
+              <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto overflow-x-hidden pr-2">
                 {incomingChallengers.length > 0 ? (
                   incomingChallengers.map((player) => (
-                    <IncomingChallengeCard
+                    <IncomingEliteCard
                       key={player.id}
-                      player={player}
-                      onAccept={handleAcceptChallenge}
-                      onDeny={handleDenyChallenge}
+                      username={player.username}
+                      rank={player.rank}
+                      onAccept={() => handleAcceptChallenge(player.id)}
+                      onDeny={() => handleDenyChallenge(player.id)}
                     />
                   ))
                 ) : (
@@ -130,7 +131,7 @@ export default function EliteLobby() {
           
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
-              <h2 className="text-2xl font-bold text-white mb-4 font-orbitron">
+              <h2 className="text-2xl font-bold text-white mb-4 orbitron">
                 Bounty Questions
               </h2>
               

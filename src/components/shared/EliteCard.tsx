@@ -17,10 +17,7 @@ export default function EliteCard({
 }: EliteCardProps) {
   return (
     <div 
-      className="rounded-lg p-4 mb-3 shadow-md"
-      style={{
-        background: 'linear-gradient(to right, #FB6528, #BF2201)'
-      }}
+      className="rounded-lg p-4 mb-3 shadow-md bg-orange-500"
     >
       <div className="flex items-center justify-between">
         {/* Player Info */}

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { FlaskConical, Rocket } from "lucide-react";
 import PlayerCard from '@/components/shared/PlayerCard';
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
@@ -43,7 +44,7 @@ export default function Lobbyr0() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
   const { user, userId, isLoading: authLoading } = useAuth();
-  
+
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isRoundActive, setIsRoundActive] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -51,7 +52,7 @@ export default function Lobbyr0() {
   const [roundStarted, setRoundStarted] = useState(false);
   const [hasJoinedLobby, setHasJoinedLobby] = useState(false);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
-  
+
   const isAdmin = true;
 
   // Authentication and Lobby Join useEffects remain the same...
@@ -84,7 +85,7 @@ export default function Lobbyr0() {
 
     const handleRoundStart = (data: RoundStartData) => {
       console.log('Round 0 started! Data received:', data);
-      
+
       // **** FIX: SAVE DATA TO sessionStorage WITH PROPER ERROR HANDLING ****
       if (data && typeof data === 'object' && data.problems && data.startTime) {
         try {
@@ -108,7 +109,7 @@ export default function Lobbyr0() {
       setRoundStarted(true);
       setIsRoundActive(true);
       showSuccessToast('Round 0 has started! Redirecting...');
-      
+
       setTimeout(() => {
         router.push('/r0/code');
       }, 1500); // Reduced delay slightly
@@ -145,7 +146,17 @@ export default function Lobbyr0() {
   const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substr(14, 5);
 
   if (authLoading || !authenticationChecked) {
-    return ( <div>Loading Authentication...</div> );
+    return (
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="text-center justify-center items-center">
+          <div className="mb-4 flex items-center justify-center">
+            <Image src="/battlecode_logo.png" alt="Loading..." className="flex h-50 w-fit animate-pulse" width={200} height={50} />
+          </div>
+          <p className="text-gray-400">
+            {isLoading ? "Loading..." : "Redirecting..."}
+          </p>
+        </div>
+      </div>);
   }
 
   // --- JSX ---
@@ -155,12 +166,12 @@ export default function Lobbyr0() {
         <div className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
           <p className='flex-1 flex items-end pt-8'> <span className="text-white">ROUND</span> <span className="text-orange-500">&nbsp; 0</span></p>
           <span className="text-orange-500 text-2xl pb-4">LOBBY</span>
-          
+
           <div className="mt-2 px-3 py-1 bg-blue-600/20 border border-blue-400 rounded text-blue-300 text-xs flex items-center gap-2">
             <FlaskConical className="h-3 w-3" />
             Testing Mode - All users have admin access
           </div>
-          
+
           {(roundStarted || isRoundActive) && (
             <div className="mt-3 flex flex-col items-center gap-2">
               {roundStarted ? (
@@ -170,8 +181,8 @@ export default function Lobbyr0() {
                     <p>Redirecting to coding environment...</p>
                     <div className="flex justify-center items-center gap-2 mt-2">
                       <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                      <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                      <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
+                      <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                      <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
                     </div>
                   </div>
                 </>
@@ -193,14 +204,14 @@ export default function Lobbyr0() {
             </div>
           )}
         </div>
-        
-        <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4'>
+
+        <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
           Participants: {participants.length}
         </div>
-        
+
         <div className="flex-1 p-6 min-h-0">
           <CustomScrollbar className="h-full overflow-y-auto">
-            <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
+            <div className="grid grid-cols-4 gap-12 max-w-6xl mx-auto pb-6">
               {isLoading ? (
                 Array.from({ length: 10 }).map((_, index) => (
                   <div key={index} className="relative w-full h-[90px] mb-3">
@@ -209,7 +220,7 @@ export default function Lobbyr0() {
                 ))
               ) : participants.length > 0 ? (
                 participants.map((participant) => (
-                  <PlayerCard 
+                  <PlayerCard
                     key={participant.userId}
                     username={participant.username}
                     avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=ea580c&color=fff`}
@@ -223,7 +234,7 @@ export default function Lobbyr0() {
             </div>
           </CustomScrollbar>
         </div>
-        
+
         {!isRoundActive && !roundStarted && (
           <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
             <div className="text-sm text-gray-200 text-center">
@@ -232,8 +243,8 @@ export default function Lobbyr0() {
                   <p className="text-red-400">Connecting to server...</p>
                   <div className="flex justify-center items-center gap-2 mt-2">
                     <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse"></div>
-                    <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                    <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
+                    <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                    <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
                   </div>
                 </div>
               ) : participants.length > 0 ? (
@@ -242,8 +253,8 @@ export default function Lobbyr0() {
                   {!isLoading && (
                     <div className="flex justify-center items-center gap-2 mt-2">
                       <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                      <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                      <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
+                      <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                      <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
                     </div>
                   )}
                 </div>
@@ -252,8 +263,8 @@ export default function Lobbyr0() {
                   <p className="text-blue-400">Joining lobby...</p>
                   <div className="flex justify-center items-center gap-2 mt-2">
                     <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"></div>
-                    <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                    <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
+                    <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                    <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
                   </div>
                 </div>
               ) : (
@@ -261,8 +272,8 @@ export default function Lobbyr0() {
                   <p className="text-green-400">Connected. Waiting for participants to join...</p>
                   <div className="flex justify-center items-center gap-2 mt-2">
                     <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse"></div>
-                    <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                    <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '1s'}}></div>
+                    <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                    <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
                   </div>
                 </div>
               )}

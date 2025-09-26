@@ -12,11 +12,7 @@ export default function Rules() {
     ];
     return (
         <>
-            <head>
-                <link rel="preload" as="image" href="/rule.svg" type="image/svg+xml" />
-
-            </head>
-            <RulesPage rules={rules} round={round} />;
+            <RulesPage rules={rules} round={round} />
         </>
     );
 }

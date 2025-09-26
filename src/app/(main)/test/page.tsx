@@ -368,7 +368,7 @@ export default function CodePage() {
         <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
           <div className="flex justify-between items-start mb-4 flex-shrink-0">
             <div>
-              <h2 className="text-2xl font-bold">{sampleProblem.title}</h2>
+              <h2 className="text-2xl font-bold text-white">{sampleProblem.title}</h2>
               <div className="flex gap-4 text-sm text-gray-400 mt-1">
                 <span>Difficulty: {sampleProblem.difficulty}</span>
                 <span>Round: Test</span>
@@ -529,7 +529,7 @@ export default function CodePage() {
             className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
             style={{ height: `${100 - codeEditorHeight}%`, minHeight: '150px' }}
           >
-            <span className="text-lg font-bold flex-shrink-0">Test Results</span>
+            <span className="text-lg font-bold flex-shrink-0 text-white">Test Results</span>
             <div className="mt-2 flex-grow overflow-y-auto">
               {(isSubmitting || isRunning) && (
                 <div className="flex items-center gap-2 text-amber-400">

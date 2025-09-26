@@ -224,6 +224,9 @@ export default function Dashboard() {
     if (!isAdmin || adminLoading) return;
 
     setAdminLoading(true);
+    if ((newStatus === 'COMPLETED' || newStatus === 'LOCKED') && roundNumber === 0) {
+      localStorage.removeItem(`battlecode-round-0-code-store`);
+    }
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/${roundNumber}/status`, {
         method: 'PATCH',
@@ -252,9 +255,9 @@ export default function Dashboard() {
   const getStatusButtonColor = (currentStatus: string, targetStatus: string) => {
     const statusColors: { [key: string]: string } = {
       'LOCKED': 'bg-gray-600 hover:bg-gray-500',
-      'LOBBY': 'bg-blue-600 hover:bg-blue-500',
+      'LOBBY': 'bg-orange-600 hover:bg-orange-500',
       'IN_PROGRESS': 'bg-green-600 hover:bg-green-500',
-      'COMPLETED': 'bg-purple-600 hover:bg-purple-500'
+      'COMPLETED': 'bg-purple-600'
     };
     
     if (currentStatus === targetStatus) {
@@ -291,7 +294,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="bg-[url('/bg-dashboard.svg')] min-h-screen bg-cover bg-center flex flex-col relative">
+      <div className="bg-[url('/bg-dashboard.svg')] h-screen bg-cover bg-center flex flex-col relative overflow-hidden">
         {/* Loading/Authentication Overlay */}
         {(isLoading || !user || !session) && (
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -305,17 +308,17 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-        <div className="flex-[2] ">
-          <div className = " h-15">
-          <div className="flex-1 ml-3  orbitron flex justify-start items-start">
-            <p className="flex-1 mt-2">{"<> BattleCode Arena"}</p>
-            <div className="flex-1 flex justify-end mr-8 mt-2">
+        <div className="flex-shrink-0 h-20">
+          <div className="h-full">
+          <div className="flex-1 ml-3 orbitron flex justify-start items-start h-full">
+            <p className="flex-1 mt-2 orbitron text-white">{"<> Battlecode Arena"}</p>
+            <div className="flex-1 flex justify-end mr-2 mt-2">
               <SignOut />
             </div>
           </div>
           </div>
         </div>
-        <div className="flex-6  flex flex-col lg:flex-row p-4 lg:p-0 gap-4 lg:gap-0">
+        <div className="flex-1 flex flex-col lg:flex-row p-4 lg:p-0 gap-4 lg:gap-0 min-h-0">
           <div className="flex-[1.5] flex flex-col ">
             <div className="flex-[0.5] flex flex-col lg:ml-5 justify-center">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl text-white flex-wrap flex-[0.2] flex justify-start items-center">
@@ -336,65 +339,87 @@ export default function Dashboard() {
               </p> */}
               
             </div>
-            <div className = "flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron"> Challenger Rounds</div>
+            <div className = "flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron text-white"> <p className="text-orange-500">Competition</p> &nbsp;Rounds</div>
             <div className="flex-4 ">
               {[0, 1, 2, 3].map((i) => {
                 /*const isCurrentRound = currentRoundData?.currentRoundNumber === i;*/
                 const roundStatus = currentRoundData?.rounds.find(r => r.roundNumber === i);
-                const isActive = roundStatus?.isActive || false;
                 const locked = islocked[i];
+                const currentStatus = roundStatus?.status || 'LOCKED';
+
+                // Determine border color based on status
+                const getBorderColor = (status: string) => {
+                  switch (status) {
+                    case 'COMPLETED':
+                      return '!border-green-500/50 !border-2';
+                    case 'IN_PROGRESS':
+                      return '!border-amber-600 !border-2';
+                    case 'LOBBY':
+                      return '!border-orange-500/80 !border-2';
+                    case 'LOCKED':
+                    default:
+                      return '!border-gray-400/50 !border-2';
+                  }
+                };
 
                 return (
                   <div className={`flex-[1.2] flex justify-center items-center pb-5 `} key={i}>
                     <div
-                      className={`w-full lg:w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${locked
-                        ? "!border-gray-400/50 !border-2"
-                        : "!border-amber-600 !border-2"
-                        } items-center pl-5 transition-transform duration-200 ${!locked ? ' hover:-translate-y-2 cursor-pointer ' : 'cursor-not-allowed opacity-60'
+                      className={`w-full lg:w-[95%] h-[90%] rounded-2xl flex glass-box justify-center ${getBorderColor(currentStatus)} items-center pl-5 transition-transform duration-200 ${!locked && currentStatus !== 'COMPLETED' ? ' hover:-translate-y-2 cursor-pointer ' : 'cursor-not-allowed opacity-60'
                         }`}
                       role="button"
                       tabIndex={0}
                       aria-disabled={locked}
                       onClick={() => {
-                        if (!locked) router.push(`r${i}/rules`);
+                        if (!locked && currentStatus !== 'COMPLETED') router.push(`r${i}/rules`);
                       }}
                     >
-                      <div className={`rounded-[50%] h-15 w-15 ml-1 ${locked
-                        ? "border-gray-400/50"
-                        : "border-amber-600"
+                      <div className={`rounded-[50%] h-15 w-15 ml-1 ${currentStatus === 'LOCKED' || currentStatus === 'COMPLETED'
+                        ? currentStatus === 'COMPLETED' 
+                          ? "border-green-500/50"
+                          : "border-gray-400/50"
+                        : currentStatus === 'IN_PROGRESS'
+                          ? "border-amber-600/80"
+                          : "border-amber-600/80"
                         } m-1 items-center justify-center flex border-4`}>
-                        <p className={`text-2xl lg:text-3xl oxanium ${locked
+                        <p className={`text-2xl lg:text-3xl oxanium ${currentStatus === 'LOCKED'
                           ? "text-gray-400/50"
-                          : ""
+                          : "text-white"
                           }`}>{i}</p>
                       </div>
                       <div className="flex-5 flex flex-col ml-5">
-                        <div className={`flex-2  p-3 ${locked
+                        <div className={`flex-2  p-3 ${currentStatus === 'LOCKED'
                           ? "text-gray-400/50"
-                          : ""
+                          : "text-white"
                           }`}>
                           <p className="text-2xl lg:text-3xl font-medium">{titles[i]}</p>
                           <p>
-                            {locked
+                            {currentStatus === 'LOCKED'
                               ? "Locked"
-                              : isActive
-                                ? "Active"
-                                : roundStatus?.status === "LOBBY"
-                                  ? "Starting Soon"
-                                  : "Available"}
+                              : currentStatus === 'COMPLETED'
+                                ? "Completed"
+                                : currentStatus === 'IN_PROGRESS'
+                                  ? "In Progress"
+                                  : currentStatus === 'LOBBY'
+                                    ? "Starting Soon"
+                                    : "Available"}
                           </p>
                         </div>
                         
-                        <div className={`flex-1 ${locked
+                        <div className={`flex-1 ${currentStatus === 'LOCKED'
                           ? "text-gray-400/50"
-                          : ""
+                          : "text-white"
                           }`}>
                           
                         </div>
                       </div>
                       <div className={`flex-[0.5] flex justify-center items-center`}>
-                        {locked ? (
+                        {currentStatus === 'LOCKED' ? (
                           <Image src="/lock.svg" alt="Locked" width={16} height={16} />
+                        ) : currentStatus === 'COMPLETED' ? (
+                          <Image src="/tick.png" alt="Completed" width={16} height={16} className = "opacity-80" />
+                        ) : currentStatus === 'IN_PROGRESS' ? (
+                          <div className="w-4 h-4 bg-orange-500 rounded-lg animate-pulse"></div>
                         ) : (
                           <div className="w-4 h-4 bg-orange-500 rounded-lg animate-pulse"></div>
                         )}
@@ -406,14 +431,9 @@ export default function Dashboard() {
             </div>
 
           </div>
-          <div className="flex-1 flex justify-center items-center">
-
-
-            <div className="w-full h-[95%] rounded-lg border-2 mb-4 flex flex-col glass-box">
-
-              <div className="flex-1  justify-center items-center flex">
-
-
+          <div className="flex-1 flex justify-center items-stretch overflow-hidden min-h-0 mb-5 mr-2">
+            <div className="w-full h-full rounded-lg border-2 mb-4 flex flex-col glass-box overflow-hidden max-h-full">
+              <div className="flex-shrink-0 border-b border-gray-700 justify-center items-center flex p-4">
                 <Image src="/leaderboard-img.svg" alt="Leaderboard" className="w-4 h-4 mr-2" width={16} height={16} /><span></span>
                 <p className="text-2xl text-orange-500">Live Leaderboard</p>
                 {!isConnected && !hasConnectedOnce && (
@@ -426,12 +446,13 @@ export default function Dashboard() {
                   <span className="ml-2 text-sm text-green-400">●</span>
                 )}
               </div>
-              <CustomScrollbar className="flex-7 overflow-y-auto px-4 pb-4">
+              <div className="flex-1 overflow-hidden">
+                <CustomScrollbar className="h-full overflow-y-auto px-4 pb-4">
                 <table className="min-w-full text-left text-sm  text-white">
                   <thead>
                     <tr className="border-b border-gray-700">
                       {leaderboard_titles.map((title, idx) => (
-                        <th key={idx} className="py-2 px-3 font-bold">{title}</th>
+                        <th key={idx} className="py-2 px-3 font-bold text-white">{title}</th>
                       ))}
                     </tr>
                   </thead>
@@ -440,8 +461,8 @@ export default function Dashboard() {
                       // Display real leaderboard data from socket or localStorage
                       leaderboard.map((entry, idx) => (
                         <tr key={entry.id || idx} className="border-gray-800 hover:bg-white/5 transition">
-                          <td className="py-2 px-3">{entry.rank}</td>
-                          <td className="py-2 px-3">
+                          <td className="py-2 px-3 text-white">{entry.rank}</td>
+                          <td className="py-2 px-3 text-white">
                             <div className="flex flex-col">
                               <span className="font-medium">{entry.username !== 'Not Set' ? entry.username : entry.name}</span>
                               {entry.username !== 'Not Set' && entry.name && (
@@ -449,8 +470,8 @@ export default function Dashboard() {
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-3">{entry.score}</td>
-                          <td className="py-2 px-3">{entry.trend}</td>
+                          <td className="py-2 px-3 text-white">{entry.score}</td>
+                          <td className="py-2 px-3 text-white">{entry.trend}</td>
                         </tr>
                       ))
                     ) : isInitialLoad ? (
@@ -468,22 +489,18 @@ export default function Dashboard() {
                       fallbackLeaderboard.map((row, idx) => (
                         <tr key={idx} className="border-gray-800 hover:bg-white/5 transition opacity-50">
                           {row.map((cell, cidx) => (
-                            <td key={cidx} className="py-2 px-3">{cell}</td>
+                            <td key={cidx} className="py-2 px-3 text-white">{cell}</td>
                           ))}
                         </tr>
                       ))
                     )}
                   </tbody>
                 </table>
-              </CustomScrollbar>
-
-
+                </CustomScrollbar>
+              </div>
             </div>
           </div>
-
         </div>
-
-
       </div>
 
       {/* Admin Controls - Positioned after 100vh */}
@@ -491,7 +508,7 @@ export default function Dashboard() {
         <div className="min-h-screen w-full bg-[url('/bg-dashboard.svg')] bg-cover bg-center flex items-center justify-center px-5">
           <div className="w-full max-w-6xl rounded-lg border-2 border-orange-500/50 glass-box p-6">
             <div className="flex items-center mb-6">
-              <div className="w-4 h-4 bg-orange-500 rounded-full mr-3"></div>
+              <div className="w-4 h-4 bg-orange-500 rounded-full mr-3 animate-pulse"></div>
               <h3 className="text-2xl font-bold text-orange-500">Admin Controls</h3>
               {adminLoading && (
                 <div className="ml-3 w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
@@ -543,9 +560,9 @@ export default function Dashboard() {
             <div className="mt-6 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-4">
               <h4 className="text-orange-400 font-medium mb-2">Status Transitions:</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <p>• LOCKED → LOBBY: Open for joining</p>
-                <p>• LOBBY → IN_PROGRESS: Start round</p>
-                <p>• IN_PROGRESS → COMPLETED: End round</p>
+                <p className="text-white">• LOCKED → LOBBY: Open for joining</p>
+                <p className="text-white">• LOBBY → IN_PROGRESS: Start round</p>
+                <p className="text-white">• IN_PROGRESS → COMPLETED: End round</p>
               </div>
             </div>
           </div>

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import Image from "next/image";
 // import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
@@ -8,8 +9,7 @@ import {
   Save, 
   AlertTriangle, 
   CheckCircle, 
-  Play, 
-  Send,
+  Play,
   // PartyPopper,
   // XCircle
 } from "lucide-react";
@@ -126,6 +126,7 @@ export default function CodePage({
   // UI State
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
+  const [activeTab, setActiveTab] = useState<'testcases' | 'results'>('testcases');
 
   // Update refs when state changes
   useEffect(() => { codeRef.current = code; }, [code]);
@@ -139,6 +140,27 @@ export default function CodePage({
   const contextManager = useMemo(() => ({
     // Generate storage key for localStorage
     getStorageKey: (round: string): string => `battlecode-round-${round}-code-store`,
+
+    getRoundStartFlagKey: (round: string): string => `battlecode-round-${round}-started`,
+
+    isFirstRoundAccess: (round: string): boolean => {
+    try {
+      const flag = localStorage.getItem(contextManager.getRoundStartFlagKey(round));
+      return flag === null; // Return true if flag doesn't exist
+    } catch (error) {
+      console.error('Failed to check round start flag:', error);
+      return false;
+    }
+  },
+  markRoundAsStarted: (round: string): boolean => {
+    try {
+      localStorage.setItem(contextManager.getRoundStartFlagKey(round), 'true');
+      return true;
+    } catch (error) {
+      console.error('Failed to mark round as started:', error);
+      return false;
+    }
+  },
     
     // Generate context key for current state
     generateContextKey: (round: string, questionId: string, language: string): string => 
@@ -150,6 +172,16 @@ export default function CodePage({
       if (parts.length !== 3) return null;
       return { round: parts[0], questionId: parts[1], language: parts[2] };
     },
+
+    clearRoundData: (round: string): boolean => {
+    try {
+      localStorage.removeItem(contextManager.getStorageKey(round));
+      return true;
+    } catch (error) {
+      console.error('Failed to clear round data:', error);
+      return false;
+    }
+  },
     
     // Load entire code store from localStorage
     loadCodeStore: (round: string): CodeStore => {
@@ -224,6 +256,10 @@ export default function CodePage({
       return cleanStore;
     }
   }), []);
+  
+  
+
+
 
   // ============================================================================
   // INITIALIZATION - Load context and code store
@@ -580,6 +616,9 @@ export default function CodePage({
       }));
 
       setSubmissionResults(formattedResults);
+      
+      // Switch to results tab when code is executed
+      setActiveTab('results');
 
       const summary = result.summary || {};
       const passedTests = summary.passed || 0;
@@ -710,13 +749,18 @@ export default function CodePage({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black/40 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p>Loading Round {round}...</p>
-        </div>
-      </div>
-    );
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
+              <div className="text-center justify-center items-center">
+                <div className="mb-4 flex items-center justify-center">
+                  <Image src="/battlecode_logo.png" alt="Loading..." className="flex h-50 w-fit animate-pulse" width={200} height={50} />
+                </div>
+                <p className="text-gray-400">
+                  {isLoading ? "Loading..." : "Redirecting..."}
+                </p>
+              </div>
+            </div>
+            );
+    
   }
 
   if (!currentProblem) {
@@ -761,7 +805,7 @@ export default function CodePage({
               <h2 className="text-2xl font-bold">{currentProblem.title}</h2>
               <div className="flex gap-4 text-sm text-gray-400 mt-1">
                 <span>Difficulty: {currentProblem.difficulty}</span>
-                <span>Round: {round}</span>
+                <span>Round: {round.toUpperCase()}</span>
                 <span>Question: {currentProblemIndex + 1}/{problems.length}</span>
               </div>
             </div>
@@ -809,13 +853,13 @@ export default function CodePage({
               <>
                 <h3 className="font-bold mb-4 text-amber-400">Sample Cases:</h3>
                 {currentProblem.sampleTestCases.map((testCase, i) => (
-                  <div key={i} className="mb-4 bg-black p-3 rounded font-mono text-sm">
+                  <div key={i} className="mb-4 bg-black/20 border-amber-600/50 mr-2 border-2 p-3 rounded font-mono text-sm">
                     <p className="font-bold text-gray-400">Input:</p>
-                    <pre className="bg-gray-800 p-2 rounded mt-1 whitespace-pre-wrap">
+                    <pre className="bg-gray-800/60 p-2 rounded mt-1 whitespace-pre-wrap">
                       {formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')}
                     </pre>
                     <p className="mt-2 font-bold text-gray-400">Output:</p>
-                    <pre className="bg-gray-800 p-2 rounded mt-1 whitespace-pre-wrap">
+                    <pre className="bg-gray-800/60 p-2 rounded mt-1 whitespace-pre-wrap">
                       {formatTestCaseData(testCase.expected_output || testCase.output?.stdout || testCase.output?.json || '')}
                     </pre>
                     {testCase.explanation && (
@@ -835,41 +879,54 @@ export default function CodePage({
           {/* Code Editor */}
           <div className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0" style={{ height: `${codeEditorHeight}%`, minHeight: '200px' }}>
             <div className="flex justify-between items-center mb-2 gap-2">
-              <div className="flex-1 flex gap-2">
-                <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-black flex-[0.3]  text-white p-2 rounded border w-20 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <div className="flex-1 flex gap-2 px-4">
+                <select 
+                  value={language} 
+                  onChange={(e) => setLanguage(e.target.value)} 
+                  className="bg-black flex-[0.3] text-white rounded border w-20 px-4 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none bg-no-repeat bg-right "
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23f59e0b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '1.5em 1.5em'
+                  }}
+                >
                   <option value="python">Python</option>
                   <option value="java">Java</option>
                   <option value="cpp">C++</option>
                   <option value="c">C</option>
-                  <option value="javascript">JavaScript</option>
+               
                 </select>
                 <div className={`bg-black flex-[0.2] text-white p-2 rounded border border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 text-center font-mono ${getTimerDisplay().className
                   }`}>
                   {getTimerDisplay().time}
-                  {saveStatusDisplay.text && (
+                  
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {saveStatusDisplay.text && (
                     <span className={`ml-2 text-xs ${saveStatusDisplay.className} flex items-center gap-1`}>
                       {saveStatusDisplay.icon}
                       {saveStatusDisplay.text}
                     </span>
                   )}
-                </div>
-              </div>
-              <div className="flex gap-2">
                 <button
-                  className="flex items-center gap-2 bg-black text-white p-2 rounded border border-amber-600 hover:bg-black focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="flex items-center bg-black text-white p-2 rounded border border-amber-600 hover:bg-black focus:outline-none focus:ring-2 focus:ring-amber-500"
                   onClick={() => executeCode(false)}
                   disabled={isRunning || isSubmitting}
                 >
-                  <Play className="h-4 w-4"/>
-                  <span>Run</span>
+                  
+                  <span className = "pl-2">Run</span>
+                  <Play className="ml-2 h-4 w-4"/>
                 </button>
                 <button 
-                  className="flex items-center gap-2 bg-gray-800 text-white p-2 rounded border border-amber-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="flex items-center gap-2  bg-black text-white p-2 rounded border border-amber-600 hover:bg-black focus:outline-none focus:ring-2 focus:ring-amber-500"
                   onClick={() => executeCode(true)}
                   disabled={isSubmitting || isRunning}
                 >
-                  <Send className="h-4 w-4"/>
-                  {isSubmitting ? "Submitting..." : "Submit"}
+                  {/* <Send className="ml-2 h-4 w-4"/> */}
+                  
+                  <p className = "pl-2">{isSubmitting ? "Submitting..." : "Submit"}</p>
+                  <Image src="/submit_2.png" alt="submit" width={16} height={16} className="mr-2"/>
                 </button>
                 <button
                   className="flex items-center gap-2 bg-black text-white p-2 rounded border border-amber-600  focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -908,47 +965,160 @@ export default function CodePage({
             <div className="w-8 h-1 bg-amber-600 rounded-full"></div>
           </div>
 
-          {/* Test Results & Actions */}
+          {/* Test Cases & Results Panel */}
           <div
-            className="border border-amber-600 rounded-lg p-4 flex flex-col min-h-0"
+            className="border border-amber-600 rounded-lg p-4 flex flex-col"
             style={{ height: `${100 - codeEditorHeight}%`, minHeight: '150px' }}
           >
-            <span className="text-lg font-bold flex-shrink-0">Test Results</span>
-            <div className="mt-2 flex-grow overflow-y-auto">
-              {(isSubmitting || isRunning) && (
-                <div className="flex items-center gap-2 text-amber-400">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-500"></div>
-                  <span>{isSubmitting ? 'Submitting' : 'Running'} your solution...</span>
-                </div>
-              )}
-              {submissionResults && (
-                <div className="space-y-2">
-                  {submissionResults.map((result, index) => {
-                    const isAccepted = result.status.description === "Accepted";
-                    const isError = result.status.id > 3;
-                    return (
-                      <div key={result.token || index} className={`p-2 rounded ${isAccepted ? "bg-green-800/50" : isError ? "bg-red-800/50" : "bg-yellow-800/50"}`}>
-                        <p className="font-bold">
-                          Test Case {index + 1}:{" "}
-                          <span className={`${isAccepted ? "text-green-400" : isError ? "text-red-400" : "text-yellow-400"}`}>
-                            {result.status.description}
-                          </span>
-                        </p>
-                        {!isAccepted && (result.stderr || result.compile_output) && (
-                          <pre className="text-xs text-red-300 mt-1 whitespace-pre-wrap bg-black/30 p-1 rounded">
-                            {result.stderr || result.compile_output}
-                          </pre>
-                        )}
-                        {result.time && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            Time: {result.time}s | Memory: {result.memory}KB
-                          </p>
-                        )}
+            {/* Tab Navigation */}
+            <div className="flex border-b border-amber-600/30 mb-3 flex-shrink-0">
+              <button
+                onClick={() => setActiveTab('testcases')}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  activeTab === 'testcases'
+                    ? 'border-b-2 border-amber-500 text-amber-400'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                Test Cases
+              </button>
+              <button
+                onClick={() => setActiveTab('results')}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  activeTab === 'results'
+                    ? 'border-b-2 border-amber-500 text-amber-400'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                Test Results
+                {submissionResults && (
+                  <span className="ml-2 text-xs bg-amber-600 text-black px-2 py-1 rounded-full">
+                    {submissionResults.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="flex-1 min-h-0">
+              <CustomScrollbar className="h-full overflow-y-auto">
+              {activeTab === 'testcases' && (
+                <div className="space-y-3 pr-2">
+                  {currentProblem?.sampleTestCases && currentProblem.sampleTestCases.length > 0 ? (
+                    currentProblem.sampleTestCases.map((testCase, index) => (
+                      <div
+                        key={index}
+                        className="border border-gray-600 rounded-lg p-3 bg-black/20 hover:bg-black/30 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-amber-400">Case {index + 1}</h4>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')
+                              );
+                              showInfoToast('Input copied to clipboard');
+                            }}
+                            className="text-xs text-gray-400 hover:text-gray-300 px-2 py-1 border border-gray-600 rounded"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-sm font-medium text-gray-300 mb-1">Input:</p>
+                            <pre className="bg-gray-800/60 p-2 rounded text-sm font-mono overflow-x-auto border border-gray-700">
+                              {formatTestCaseData(testCase.stdin || testCase.input?.stdin || testCase.input?.json || '')}
+                            </pre>
+                          </div>
+                          
+                          <div>
+                            <p className="text-sm font-medium text-gray-300 mb-1">Expected Output:</p>
+                            <pre className="bg-gray-800/60 p-2 rounded text-sm font-mono overflow-x-auto border border-gray-700">
+                              {formatTestCaseData(testCase.expected_output || testCase.output?.stdout || testCase.output?.json || '')}
+                            </pre>
+                          </div>
+                          
+                          {testCase.explanation && (
+                            <div>
+                              <p className="text-sm font-medium text-gray-300 mb-1">Explanation:</p>
+                              <p className="text-sm text-gray-400 italic bg-black/30 p-2 rounded border border-gray-700">
+                                {testCase.explanation}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    );
-                  })}
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-400 py-8">
+                      <p>No test cases available</p>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {activeTab === 'results' && (
+                <div className="pr-2">
+                  {(isSubmitting || isRunning) && (
+                    <div className="flex items-center gap-2 text-amber-400">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-500"></div>
+                      <span>{isSubmitting ? 'Submitting' : 'Running'} your solution...</span>
+                    </div>
+                  )}
+                  {submissionResults && submissionResults.length > 0 ? (
+                    <div className="space-y-2">
+                      {submissionResults.map((result, index) => {
+                        const isAccepted = result.status.description === "Accepted";
+                        const isError = result.status.id > 3;
+                        return (
+                          <div key={result.token || index} className={`p-3 rounded border ${isAccepted ? "bg-green-800/30 border-green-600/50" : isError ? "bg-red-800/30 border-red-600/50" : "bg-yellow-800/30 border-yellow-600/50"}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="font-bold">
+                                Test Case {index + 1}
+                              </p>
+                              <span className={`text-sm font-medium px-2 py-1 rounded ${isAccepted ? "text-green-400 bg-green-900/50" : isError ? "text-red-400 bg-red-900/50" : "text-yellow-400 bg-yellow-900/50"}`}>
+                                {result.status.description}
+                              </span>
+                            </div>
+                            
+                            {result.stdout && (
+                              <div className="mb-2">
+                                <p className="text-sm font-medium text-gray-300 mb-1">Output:</p>
+                                <pre className="text-xs text-green-300 whitespace-pre-wrap bg-black/50 p-2 rounded border border-gray-700 overflow-x-auto">
+                                  {result.stdout}
+                                </pre>
+                              </div>
+                            )}
+                            
+                            {!isAccepted && (result.stderr || result.compile_output) && (
+                              <div className="mb-2">
+                                <p className="text-sm font-medium text-gray-300 mb-1">Error:</p>
+                                <pre className="text-xs text-red-300 whitespace-pre-wrap bg-black/50 p-2 rounded border border-gray-700 overflow-x-auto">
+                                  {result.stderr || result.compile_output}
+                                </pre>
+                              </div>
+                            )}
+                            
+                            {result.time && (
+                              <div className="flex gap-4 text-xs text-gray-400">
+                                <span>Runtime: {result.time}s</span>
+                                <span>Memory: {result.memory}KB</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : !isSubmitting && !isRunning && (
+                    <div className="text-center text-gray-400 py-8">
+                      <p>Run your code to see test results</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              </CustomScrollbar>
             </div>
           </div>
         </div>
