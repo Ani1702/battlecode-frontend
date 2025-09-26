@@ -9,27 +9,30 @@ import { useAuth } from '@/contexts/AuthContext';
 import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
 
 interface Participant {
-  id: string;
+  userId: string;
   username: string;
-  rank: number;
-  status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
+  status: 'WAITING' | 'IN_MATCH' | 'DISCONNECTED' | 'FINISHED';
   joinedAt: string;
-  socketId?: string;
-  waitingSince?: number;
+  isReady: boolean;
+  disconnectedAt?: string;
+  reconnectedAt?: string;
+  finishedAt?: string;
 }
 
 interface LobbyUpdateData {
   participants?: Participant[];
-  isActive?: boolean;
+  isActive?: boolean; 
   [key: string]: unknown;
 }
 
 interface RoundStartData {
+  startTime?: number;
+  duration?: number;
   [key: string]: unknown;
 }
 
-interface MatchFoundData {
-  [key: string]: unknown;
+interface TimerData {
+  timeRemaining?: number;
 }
 
 interface ErrorData {
@@ -37,7 +40,7 @@ interface ErrorData {
   [key: string]: unknown;
 }
 
-export default function Lobbyr1(){
+export default function Lobbyr2(){
     const router = useRouter();
     const { socket, isConnected } = useSocket();
     const { user, userId, isLoading: authLoading } = useAuth();
@@ -49,10 +52,9 @@ export default function Lobbyr1(){
     const [roundStarted, setRoundStarted] = useState(false);
     const [hasJoinedLobby, setHasJoinedLobby] = useState(false);
     const [authenticationChecked, setAuthenticationChecked] = useState(false);
-    const [matchFound, setMatchFound] = useState(false);
-    const [matchCountdown, setMatchCountdown] = useState(5);
     
     const isAdmin = user?.role === 'ADMIN';
+
     // Authentication check
     useEffect(() => {
         if (authLoading) return;
@@ -67,9 +69,9 @@ export default function Lobbyr1(){
         if (!authenticationChecked || authLoading || !userId || !user || !socket || !isConnected || hasJoinedLobby) {
             return;
         }
-        socket.emit('round1:join', { userId, username: user?.user_metadata?.full_name || user?.id }, (response: { success?: boolean; error?: string }) => {
+        socket.emit('round2:Join', {}, (response: { success?: boolean; error?: string }) => {
             if (response?.success) {
-                showSuccessToast('Successfully joined Round 1 lobby');
+                showSuccessToast('Successfully joined Round 2 lobby');
             } else {
                 showErrorToast(response?.error || 'Failed to join lobby');
             }
@@ -92,10 +94,22 @@ export default function Lobbyr1(){
         };
 
         const handleRoundStarted = (data: RoundStartData) => {
-            console.log('Round 1 started! Data received:', data);
+            console.log('Round 2 started! Data received:', data);
             setRoundStarted(true);
             setIsRoundActive(true);
-            showSuccessToast('Round 1 has started! Entering matchmaking...');
+            showSuccessToast('Round 2 has started! Redirecting to dashboard...');
+            
+            const role = user?.role;
+            if (!role) {
+                console.error('User role not found! Cannot redirect.');
+                return;
+            }
+
+            if (role === "elite") {
+                router.push("/round2/elite");
+            } else {
+                router.push("/round2/challenger");
+            }
             
             // Store round data if needed
             if (data && typeof data === 'object') {
@@ -104,32 +118,15 @@ export default function Lobbyr1(){
                         startTime: data.startTime,
                         duration: data.duration || 5400 // 90 minutes default
                     };
-                    sessionStorage.setItem('round1_data', JSON.stringify(dataToStore));
+                    sessionStorage.setItem('round2_data', JSON.stringify(dataToStore));
                 } catch (error) {
                     console.error("Failed to save round data to sessionStorage:", error);
                 }
             }
         };
 
-        const handleMatchFound = (data: MatchFoundData) => {
-            console.log('Match found! Data:', data);
-            setMatchFound(true);
-            setMatchCountdown(5);
-            
-            // Store match data
-            if (data) {
-                try {
-                    sessionStorage.setItem('round1_match_data', JSON.stringify(data));
-                } catch (error) {
-                    console.error("Failed to save match data:", error);
-                }
-            }
-            
-            showSuccessToast('Match found! Redirecting to code room...');
-        };
-
         const handleRoundEnd = () => {
-            showSuccessToast('Round 1 has ended');
+            showSuccessToast('Round 2 has ended');
             router.push('/dashboard');
         };
 
@@ -138,40 +135,24 @@ export default function Lobbyr1(){
             showErrorToast(errorMessage);
         };
 
-        socket.on('lobby:round1', handleLobbyUpdate);
-        socket.on('round1:started', handleRoundStarted);
-        socket.on('round1:matchFound', handleMatchFound);
-        socket.on('round1:ended', handleRoundEnd);
-        socket.on('round1:error', handleError);
+        socket.on('lobby:round2', handleLobbyUpdate);
+        socket.on('round2:started', handleRoundStarted);
+        socket.on('round2:ended', handleRoundEnd);
+        socket.on('round2:error', handleError);
 
         return () => {
-            socket.off('lobby:round1', handleLobbyUpdate);
-            socket.off('round1:started', handleRoundStarted);
-            socket.off('round1:matchFound', handleMatchFound);
-            socket.off('round1:ended', handleRoundEnd);
-            socket.off('round1:error', handleError);
+            socket.off('lobby:round2', handleLobbyUpdate);
+            socket.off('round2:started', handleRoundStarted);
+            socket.off('round2:ended', handleRoundEnd);
+            socket.off('round2:error', handleError);
         };
     }, [socket, router]);
 
-    // Match countdown timer
-    useEffect(() => {
-        if (matchFound && matchCountdown > 0) {
-            const timer = setTimeout(() => {
-                setMatchCountdown(matchCountdown - 1);
-            }, 1000);
-            return () => clearTimeout(timer);
-        } else if (matchFound && matchCountdown === 0) {
-            // Redirect to r1 code room
-            console.log("Redirecting to code room...");
-            router.push('/r1/code');
-        }
-    }, [matchFound, matchCountdown, router]);
-
     const handleStartRound = () => {
         if (!socket || participants.length === 0) return;
-        socket.emit('round1:ready', {}, (response: { success?: boolean; error?: string }) => {
+        socket.emit('round2:Start', {}, (response: { success?: boolean; error?: string }) => {
             if (response?.success) {
-                showSuccessToast('Round 1 started successfully');
+                showSuccessToast('Round 2 started successfully');
             } else {
                 showErrorToast(response?.error || 'Failed to start round');
             }
@@ -188,16 +169,16 @@ export default function Lobbyr1(){
         <>
         <div className = "flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
             <div className = "flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
-                <p className='flex-1 flex items-end pt-8'> <span className = "text-white">ROUND</span> <span className="text-orange-500">&nbsp; 1</span></p>
+                <p className='flex-1 flex items-end pt-8'> <span className = "text-white">ROUND</span> <span className="text-orange-500">&nbsp; 2</span></p>
                 <span className = "text-orange-500 text-2xl pb-4">LOBBY</span>
                 
                 {(roundStarted || isRoundActive) && (
                     <div className="mt-3 flex flex-col items-center gap-2">
                         {roundStarted ? (
                             <>
-                                <div className="text-base text-center text-green-400">Round 1 Started!</div>
+                                <div className="text-base text-center text-green-400">Round 2 Started!</div>
                                 <div className="text-gray-200 text-center text-sm">
-                                    <p>Entering matchmaking queue...</p>
+                                    <p>Redirecting to role based dashboard</p>
                                     <div className="flex justify-center items-center gap-2 mt-2">
                                         <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
                                         <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{animationDelay: '0.5s'}}></div>
@@ -207,16 +188,24 @@ export default function Lobbyr1(){
                             </>
                         ) : (
                             <>
-                                <div className="text-base text-center text-green-400">Round 1 Active</div>
+                                <div className="text-base text-center text-green-400">Round 2 Active</div>
                                 <div className="text-gray-200 text-center text-sm">
                                     <p>Round is currently in progress</p>
-                                    <p className="text-orange-400 font-bold mt-1">Time Remaining: {formatTime(timeRemaining)}</p>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
+                                    {!isRoundActive && !roundStarted && isAdmin && participants.length > 0 && !isLoading && (
+                                <button
+                                    onClick={handleStartRound}
+                                    className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm flex items-center gap-2"
+                                >
+                                    <Rocket className="h-4 w-4" />
+                                    Start Round 2
+                                </button>
+                                )}
+                  </div>
+                </>
+              )}
             </div>
+          )}
+        </div>
             <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4'>
                 Participants: {participants.length}
             </div>
@@ -234,7 +223,7 @@ export default function Lobbyr1(){
                         ) : participants.length > 0 ? (
                             participants.map((participant) => (
                                 <PlayerCard 
-                                    key={participant.id}
+                                    key={participant.userId}
                                     username={participant.username}
                                     avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=ea580c&color=fff`}
                                 />
@@ -248,13 +237,7 @@ export default function Lobbyr1(){
                 </CustomScrollbar>
             </div>
 
-            {matchFound && (
-                <div className="flex-shrink-0 h-12 flex items-start justify-center text-2xl orbitron">
-                    Match starting in.. {matchCountdown}
-                </div>
-            )}
-
-            {!isRoundActive && !roundStarted && !matchFound && (
+            {!isRoundActive && !roundStarted && (
                 <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
                     <div className="text-sm text-gray-200 text-center">
                         {!isConnected ? (
@@ -305,7 +288,7 @@ export default function Lobbyr1(){
                             disabled={isLoading}
                         >
                             <Rocket className="h-4 w-4" />
-                            Start Round 1
+                            Start Round 2
                         </button>
                     )}
                 </div>

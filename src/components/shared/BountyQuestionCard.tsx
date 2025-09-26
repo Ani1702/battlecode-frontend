@@ -3,9 +3,10 @@ import { BountyQuestion } from '../../types/types';
 
 interface BountyQuestionCardProps {
   question: BountyQuestion;
+  onClick?: () => void; 
 }
 
-export default function BountyQuestionCard({ question }: BountyQuestionCardProps) {
+export default function BountyQuestionCard({ question, onClick }: BountyQuestionCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const getDifficultyColor = (difficulty: string) => {
@@ -43,7 +44,9 @@ export default function BountyQuestionCard({ question }: BountyQuestionCardProps
             ? 'bg-green-500' 
             : 'bg-orange-500'
         } border-2 border-white border-opacity-30 mb-2 mr-2 inline-block transform hover:z-10 relative`}
-        onClick={() => setIsModalOpen(true)}
+        onClick={() =>{setIsModalOpen(true);
+          if (onClick) onClick();
+        }}
       >
         <div className="w-full h-full flex flex-col items-center justify-center p-1">
           {question.isSolved ? (
