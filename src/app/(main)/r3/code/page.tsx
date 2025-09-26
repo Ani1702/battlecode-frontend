@@ -255,14 +255,12 @@ export default function Round3Page() {
     };
     
     const handleRoundEnd = (data: { message?: string }) => {
+      console.log("Round end event received:", data);
     if (!isMountedRef.current) return;
-  
     // Clear local state first
     clearMatchContext(round);
-  
     // Show a blocking popup message
     window.alert(data.message || "Round Finished!");
-  
     // Redirect to the dashboard after the user dismisses the alert
     router.push('/dashboard');
 };
@@ -297,14 +295,14 @@ export default function Round3Page() {
     };
 
     socket.on('round3:timer', handleTimerUpdate);
-    socket.on('round3:end', handleRoundEnd);
+    socket.on('round3:ended', handleRoundEnd);
     socket.on('round3:hackingPhaseStart', handleHackingPhaseStart);
     socket.on('round3:viewSubmissions', handleViewSubmissions);
     socket.on('round3:start', handleRoundStart); // NEW LOGIC: Listen for start event
 
     return () => {
       socket.off('round3:timer', handleTimerUpdate);
-      socket.off('round3:end', handleRoundEnd);
+      socket.off('round3:ended', handleRoundEnd);
       socket.off('round3:hackingPhaseStart', handleHackingPhaseStart);
       socket.off('round3:viewSubmissions', handleViewSubmissions);
       socket.off('round3:start', handleRoundStart); // NEW LOGIC: Clean up listener
