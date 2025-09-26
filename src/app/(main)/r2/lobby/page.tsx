@@ -1,7 +1,7 @@
 
 "use client"
-import Lobbyr1 from "./Lobby";
+import Lobbyr2 from "./Lobby";
 
-export default function R1Lobby() {
-  return (<Lobbyr1 />);
+export default function R2Lobby() {
+  return (<Lobbyr2 />);
 }
