@@ -49,13 +49,16 @@ interface GetCodePageStateResponse {
     message?: string;
 }
 
-interface GetStateResponse {
-    success: boolean;
-    state: { userRole?: 'challenger' | 'elite' | null };
+interface MatchResultData {
+    winnerId: string;
+    loserId: string;
+    reason: 'submission' | 'disconnect' | 'timeout';
+    newRole: 'elite' | 'challenger';
 }
 
 interface BountyEndedData {
-    reason: string;
+    reason: 'completed' | 'incorrect' | 'timeout';
+    newRole: 'elite' | 'challenger';
 }
 
 interface SubmissionApiResponse {
@@ -65,6 +68,12 @@ interface SubmissionApiResponse {
     submission?: { status: string };
     message?: string;
 }
+
+interface EndPopupData {
+  type: 'win' | 'lose' | 'timeout' | 'bounty-win' | 'bounty-fail' | 'bounty-timeout';
+  newRole: 'elite' | 'challenger';
+}
+
 
 // --- Helper Functions ---
 const formatTime = (ms: number) => {
@@ -103,6 +112,9 @@ export default function R2CodePage() {
   const [activeTab, setActiveTab] = useState<'testcases' | 'results'>('testcases');
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
+
+  const [showEndPopup, setShowEndPopup] = useState(false);
+  const [endPopupData, setEndPopupData] = useState<EndPopupData | null>(null);
 
   const [currentContext, setCurrentContext] = useState<CodeContext | null>(null);
   
@@ -253,29 +265,42 @@ export default function R2CodePage() {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
   
-  useEffect(() => {
-    if (!sessionData?.endTime) return;
+  // --- FIX: Wrapped triggerSessionEnd in useCallback ---
+  const triggerSessionEnd = useCallback((type: EndPopupData['type'], newRole: 'elite' | 'challenger') => {
+    if (!newRole) {
+        console.error("TriggerSessionEnd called without a new role. Aborting popup.");
+        showErrorToast("Could not determine next step. Redirecting to dashboard.");
+        router.push('/dashboard');
+        return;
+    }
+    sessionStorage.removeItem('r2_session_type');
+    sessionStorage.removeItem('r2_context_id');
+    sessionStorage.setItem('r2_user_role', newRole);
+    setEndPopupData({ type, newRole });
+    setShowEndPopup(true);
+  }, [router]);
 
-    const updateTimer = () => {
+  useEffect(() => {
+    if (!sessionData?.endTime || showEndPopup) return;
+
+    const timerInterval = setInterval(() => {
         const remaining = sessionData.endTime - Date.now();
         if (remaining <= 0) {
             setTimeRemaining(0);
-            clearInterval(timerInterval); // Stop the interval
-            const userRole = sessionStorage.getItem('r2_user_role') || '';
-            showInfoToast("Time is up!");
-            sessionStorage.removeItem('r2_session_type');
-            sessionStorage.removeItem('r2_context_id');
-            router.push(`/r2/${userRole}`);
+            clearInterval(timerInterval);
+            if (!showEndPopup) {
+                const userRole = (sessionStorage.getItem('r2_user_role') as 'elite' | 'challenger') || 'challenger';
+                const type = sessionData.type === 'bounty' ? 'bounty-timeout' : 'timeout';
+                triggerSessionEnd(type, userRole);
+            }
         } else {
             setTimeRemaining(remaining);
         }
-    };
-    
-    updateTimer(); 
-    const timerInterval = setInterval(updateTimer, 1000);
+    }, 1000);
 
     return () => clearInterval(timerInterval);
-  }, [sessionData, router]);
+  // --- FIX: Added triggerSessionEnd to dependency array ---
+  }, [sessionData, showEndPopup, triggerSessionEnd]);
 
   useEffect(() => {
     if (!socket || !isConnected) return;
@@ -302,41 +327,49 @@ export default function R2CodePage() {
   }, [socket, isConnected, router]);
   
   useEffect(() => {
-    if (!socket) return;
-    
-    const handleMatchResult = () => {
-        showInfoToast(`Match ended. Determining your new role...`);
-        sessionStorage.removeItem('r2_session_type');
-        sessionStorage.removeItem('r2_context_id');
-        socket.emit('round2:getState', (response: GetStateResponse) => {
-            if (response.success && response.state.userRole) {
-                const newRole = response.state.userRole;
-                showSuccessToast(`Your new role is ${newRole}. Redirecting...`);
-                sessionStorage.setItem('r2_user_role', newRole);
-                router.push(`/r2/${newRole}`);
-            } else {
-                showErrorToast("Could not determine new role. Returning to main dashboard.");
-                router.push('/dashboard');
-            }
-        });
+    if (!socket || !session?.user?.email) return;
+
+    const handleMatchResult = (data: MatchResultData) => {
+        const isWinner = data.winnerId === session.user.email;
+        const type = data.reason === 'timeout' ? 'timeout' : (isWinner ? 'win' : 'lose');
+        triggerSessionEnd(type, data.newRole);
     };
 
     const handleBountyEnded = (data: BountyEndedData) => {
-        const userRole = sessionStorage.getItem('r2_user_role') || '';
-        showInfoToast(`Bounty attempt finished: ${data.reason}`);
+        const type = data.reason === 'completed' ? 'bounty-win' : 'bounty-fail';
+        triggerSessionEnd(type, data.newRole);
+    };
+
+    const handleRoundEnd = () => {
+        showInfoToast("Round 2 has ended. You will be redirected to the dashboard.");
         sessionStorage.removeItem('r2_session_type');
         sessionStorage.removeItem('r2_context_id');
-        setTimeout(() => router.push(`/r2/${userRole}`), 3000);
+        setTimeout(() => {
+            router.push('/dashboard');
+        }, 3000);
     };
 
     socket.on('round2:matchResult', handleMatchResult);
     socket.on('round2:bountyEnded', handleBountyEnded);
+    socket.on('round2:ended', handleRoundEnd);
 
     return () => {
         socket.off('round2:matchResult', handleMatchResult);
         socket.off('round2:bountyEnded', handleBountyEnded);
+        socket.off('round2:ended', handleRoundEnd);
     };
-  }, [socket, router]);
+  // --- FIX: Added triggerSessionEnd to dependency array ---
+  }, [socket, router, session?.user?.email, triggerSessionEnd]);
+
+  useEffect(() => {
+    if (showEndPopup && endPopupData?.newRole) {
+      const timer = setTimeout(() => {
+        router.push(`/r2/${endPopupData.newRole}`);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showEndPopup, endPopupData, router]);
+
 
   if (pageIsLoading || !sessionData) {
     return <div className="flex items-center justify-center h-screen bg-gray-900 text-white">Loading Session...</div>;
@@ -344,7 +377,24 @@ export default function R2CodePage() {
 
   const { question, type, opponent } = sessionData;
 
+  const getPopupContent = (data: EndPopupData | null) => {
+    if (!data) return null;
+    switch (data.type) {
+        case 'win': return { title: '🎉 Victory!', message: `You defeated your opponent! Your new role is ${data.newRole}.`, className: 'text-green-400' };
+        case 'lose': return { title: '😔 Defeat', message: `You were defeated. Your new role is ${data.newRole}.`, className: 'text-red-400' };
+        case 'timeout': return { title: "⏰ Time's Up!", message: 'The match ended. You will now be redirected.', className: 'text-yellow-400' };
+        case 'bounty-win': return { title: '🏆 Bounty Claimed!', message: `You solved the bounty! Your new role is ${data.newRole}.`, className: 'text-green-400' };
+        case 'bounty-fail': return { title: '💡 Attempt Logged', message: 'Your solution was incorrect. You will be redirected.', className: 'text-yellow-400' };
+        case 'bounty-timeout': return { title: "⏳ Time's Up!", message: 'Your bounty attempt timed out. You will be redirected.', className: 'text-yellow-400' };
+        default: return null;
+    }
+  };
+
+  const popupContent = getPopupContent(endPopupData);
+
+
   return (
+    <>
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
         <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
           <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
@@ -448,5 +498,21 @@ export default function R2CodePage() {
           </div>
         </div>
     </div>
+    {showEndPopup && popupContent && (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-gray-800 p-8 rounded-lg border-2 border-orange-500 text-center max-w-md">
+          <h2 className={`text-3xl font-bold mb-4 ${popupContent.className}`}>
+            {popupContent.title}
+          </h2>
+          <p className="text-white text-lg mb-6">
+            {popupContent.message}
+          </p>
+          <p className="text-sm text-gray-400">
+            Redirecting in 5 seconds...
+          </p>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

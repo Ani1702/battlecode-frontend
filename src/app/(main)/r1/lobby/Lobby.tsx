@@ -42,6 +42,7 @@ interface SimpleSocketResponse {
 interface GetStateResponse extends SimpleSocketResponse {
     participant?: Participant | null;
     isActive?: boolean;
+    allParticipants?: Participant[]; // Added to correctly type the full list response
 }
 
 
@@ -78,11 +79,18 @@ export default function Lobbyr1(){
                 showErrorToast(response.error || "Could not sync with the server.");
                 return;
             }
+            
+            // --- FIX: Populate participant list and round status on initial load ---
+            // This ensures that on refresh, the lobby state is immediately restored.
+            if (response.allParticipants) {
+                setParticipants(response.allParticipants.filter(p => p.status === 'lobby'));
+            }
+            setIsRoundActive(response.isActive ?? false);
+            // --- END FIX ---
     
             if (response.participant) {
                 // User is already a participant, handle their current status
                 console.log("User already a participant with status:", response.participant.status);
-                setIsRoundActive(response.isActive ?? false);
                 if (response.participant.status === 'in-match') {
                     router.push('/r1/code'); // Redirect to their ongoing match
                 } else if (response.participant.status !== 'lobby') {
