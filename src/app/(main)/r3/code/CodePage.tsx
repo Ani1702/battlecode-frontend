@@ -105,6 +105,8 @@ export default function CodePage({
 
   const codeRef = useRef(code);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const editorRef = useRef<any>(null);
+  
 
   useEffect(() => { codeRef.current = code; }, [code]);
   useEffect(() => { localStorage.setItem(`battlecode-round-${round}-language`, language); }, [language, round]);
@@ -222,7 +224,48 @@ export default function CodePage({
       monaco.editor.setTheme('custom-dark');
     }
   }, [monaco]);
+
+  useEffect(() => {
+    if (monaco && editorRef.current) {
+      let internalClipboard = "";
+      const editor = editorRef.current;
+
+      // intercept copy
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+        const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+        if (selection) {
+          internalClipboard = selection;
+        }
+      });
+
+      // intercept cut
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+        const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+        if (selection) {
+          internalClipboard = selection;
+          editor.executeEdits("cut", [
+            { range: editor.getSelection(), text: "", forceMoveMarkers: true },
+          ]);
+        }
+      });
+
+      // intercept paste
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+        if (internalClipboard) {
+          editor.executeEdits("paste", [
+            { range: editor.getSelection(), text: internalClipboard, forceMoveMarkers: true },
+          ]);
+        }
+      });
+
+      // disable right-click menu
+      editor.updateOptions({ contextmenu: false });
+    }
+  }, [monaco, editorRef.current]);
+
   const editorOptions = { minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false, automaticLayout: true, wordWrap: 'on' as const, readOnly: isLocked };
+
+
 
   const handleMouseDown = (e: React.MouseEvent) => { setIsDragging(true); e.preventDefault(); };
   const handleMouseUp = () => setIsDragging(false);
@@ -389,7 +432,7 @@ export default function CodePage({
                 <div className="flex justify-between items-center mb-2 gap-2">
                   <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500" disabled={isLocked}>
                     <option value="python">Python</option><option value="java">Java</option>
-                    <option value="cpp">C++</option><option value="javascript">JavaScript</option>
+                    <option value="cpp">C++</option>
                   </select>
                   <div className={`text-center p-2 font-mono text-xl bg-gray-800 rounded border border-amber-600 ${timerDisplay.className}`}>{timerDisplay.time}</div>
                   <div className="flex-1 flex justify-end items-center gap-2">
@@ -421,7 +464,17 @@ export default function CodePage({
                   </div>
                 </div>
                 <div className={`flex-1 rounded overflow-hidden border border-gray-700 ${isLocked ? 'bg-gray-800/50' : ''}`}>
-                  <Editor height="100%" language={language} value={code} onChange={(v) => setCode(v || "")} theme="custom-dark" options={editorOptions} />
+                  <Editor 
+                        height="100%" 
+                        language={language} 
+                        value={code} 
+                        onChange={(v) => setCode(v || "")} 
+                        theme="custom-dark" 
+                        options={editorOptions}
+                        onMount={(editor) => {
+                          editorRef.current = editor;
+                        }}
+                      />
                 </div>
               </div>
 

@@ -217,7 +217,7 @@ export default function Dashboard() {
 
   // Constants (after all hooks)
   const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"];
-  const leaderboard_titles = ["Rank", "Player", "Score", "Trend"];
+  const leaderboard_titles = ["Rank", "Player", "Score"];
 
   // Admin functions
   const updateRoundStatus = async (roundNumber: number, newStatus: string) => {
@@ -471,7 +471,7 @@ export default function Dashboard() {
                             </div>
                           </td>
                           <td className="py-2 px-3 text-white">{entry.score}</td>
-                          <td className="py-2 px-3 text-white">{entry.trend}</td>
+                          
                         </tr>
                       ))
                     ) : isInitialLoad ? (

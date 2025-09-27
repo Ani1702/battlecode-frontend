@@ -80,6 +80,7 @@ export default function R1CodePage() {
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
   const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const editorRef = useRef<any>(null);
 
   const editorOptions = {
     minimap: { enabled: false }, fontSize: 14, lineNumbers: 'on' as const,
@@ -111,6 +112,47 @@ export default function R1CodePage() {
       monaco.editor.setTheme('custom-dark');
     }
   }, [monaco]);
+
+
+  useEffect(() => {
+    if (monaco && editorRef.current) {
+      let internalClipboard = "";
+      const editor = editorRef.current;
+
+      // intercept copy
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+        const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+        if (selection) {
+          internalClipboard = selection;
+        }
+      });
+
+      // intercept cut
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+        const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+        if (selection) {
+          internalClipboard = selection;
+          editor.executeEdits("cut", [
+            { range: editor.getSelection(), text: "", forceMoveMarkers: true },
+          ]);
+        }
+      });
+
+      // intercept paste
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+        if (internalClipboard) {
+          editor.executeEdits("paste", [
+            { range: editor.getSelection(), text: internalClipboard, forceMoveMarkers: true },
+          ]);
+        }
+      });
+
+      // disable right-click menu
+      editor.updateOptions({ contextmenu: false });
+    }
+  }, [monaco, editorRef.current]);
+
+  
 
   const getMatchStorageKey = (problemId: string) => `round1_match_state_${problemId}`;
 
@@ -524,7 +566,6 @@ export default function R1CodePage() {
                   <option value="java">Java</option>
                   <option value="cpp">C++</option>
                   <option value="c">C</option>
-                  <option value="javascript">JavaScript</option>
                 </select>
               </div>
               <div className="flex gap-2">
@@ -542,6 +583,9 @@ export default function R1CodePage() {
                 height="100%" language={getMonacoLanguage(language)} value={code}
                 onChange={(value) => setCode(value || "")} theme="custom-dark"
                 options={{ ...editorOptions, readOnly: matchPaused }}
+                onMount={(editor) => {
+                  editorRef.current = editor;
+                }}
                 loading={<div className="flex items-center justify-center h-full bg-gray-900"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div></div>}
               />
             </div>

@@ -84,6 +84,7 @@ interface CodeStore {
   [contextKey: string]: string; // "round:questionId:language" -> code
 }
 
+
 export default function CodePage({
   round,
   currentProblem,
@@ -98,6 +99,7 @@ export default function CodePage({
 }: CodePageProps) {
   /*const router = useRouter();*/
   const { session } = useAuth();
+  
 
   // ============================================================================
   // CORE STATE - Clean and Isolated
@@ -119,6 +121,7 @@ export default function CodePage({
   const [isContextInitialized, setIsContextInitialized] = useState(false);
   
   // Stable refs for race-free operations
+  const editorRef = useRef<any>(null);
   const codeRef = useRef(code);
   const currentContextRef = useRef(currentContext);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -133,6 +136,7 @@ export default function CodePage({
   useEffect(() => { codeRef.current = code; }, [code]);
   useEffect(() => { currentContextRef.current = currentContext; }, [currentContext]);
   useEffect(() => { languageRef.current = language; }, [language]);
+
 
   // ============================================================================
   // CONTEXT MANAGEMENT SYSTEM - Ultra Robust
@@ -289,6 +293,8 @@ export default function CodePage({
     
     setIsContextInitialized(true);
   }, [currentProblem, round, language, isContextInitialized, contextManager]);
+
+  
 
   // ============================================================================
   // CONTEXT TRANSITION MANAGEMENT - The Heart of Robustness
@@ -513,35 +519,74 @@ export default function CodePage({
 
   const monaco = useMonaco();
 
-  useEffect(() => {
-    if (monaco) {
-      monaco.editor.defineTheme('custom-dark', {
-        base: 'vs-dark',
-        inherit: true,
-        rules: [
-          { token: 'comment', foreground: '#6A9955' },
-          { token: 'keyword', foreground: '#569CD6' },
-          { token: 'string', foreground: '#CE9178' },
-          { token: 'number', foreground: '#B5CEA8' },
-        ],
-        colors: {
-          'editor.background': '#0a0a0a',
-          'editor.foreground': '#ffffff',
-          'editor.lineHighlightBackground': '#1a1a1a',
-          'editor.selectionBackground': '#264f78',
-          'editor.inactiveSelectionBackground': '#3a3d41',
-          'editorCursor.foreground': '#f97316',
-          'editorLineNumber.foreground': '#858585',
-          'editorLineNumber.activeForeground': '#f97316',
-          'editor.selectionHighlightBackground': '#ADD6FF26',
-          'editor.wordHighlightBackground': '#575757B8',
-          'editorBracketMatch.background': '#0064001a',
-          'editorBracketMatch.border': '#888888',
-        },
-      });
-      monaco.editor.setTheme('custom-dark');
-    }
-  }, [monaco]);
+ useEffect(() => {
+  if (monaco) {
+    monaco.editor.defineTheme('custom-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '#6A9955' },
+        { token: 'keyword', foreground: '#569CD6' },
+        { token: 'string', foreground: '#CE9178' },
+        { token: 'number', foreground: '#B5CEA8' },
+      ],
+      colors: {
+        'editor.background': '#0a0a0a',
+        'editor.foreground': '#ffffff',
+        'editor.lineHighlightBackground': '#1a1a1a',
+        'editor.selectionBackground': '#264f78',
+        'editor.inactiveSelectionBackground': '#3a3d41',
+        'editorCursor.foreground': '#f97316',
+        'editorLineNumber.foreground': '#858585',
+        'editorLineNumber.activeForeground': '#f97316',
+        'editor.selectionHighlightBackground': '#ADD6FF26',
+        'editor.wordHighlightBackground': '#575757B8',
+        'editorBracketMatch.background': '#0064001a',
+        'editorBracket.border': '#888888',
+      },
+    });
+    monaco.editor.setTheme('custom-dark');
+  }
+}, [monaco]);
+
+// Add this after the Monaco theme useEffect (around line 580)
+useEffect(() => {
+  if (monaco && editorRef.current) {
+    let internalClipboard = "";
+    const editor = editorRef.current;
+
+    // intercept copy
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+      const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+      if (selection) {
+        internalClipboard = selection;
+      }
+    });
+
+    // intercept cut
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+      const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+      if (selection) {
+        internalClipboard = selection;
+        editor.executeEdits("cut", [
+          { range: editor.getSelection(), text: "", forceMoveMarkers: true },
+        ]);
+      }
+    });
+
+    // intercept paste
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+      if (internalClipboard) {
+        editor.executeEdits("paste", [
+          { range: editor.getSelection(), text: internalClipboard, forceMoveMarkers: true },
+        ]);
+      }
+    });
+
+    // disable right-click menu
+    editor.updateOptions({ contextmenu: false });
+  }
+}, [monaco, editorRef.current]);
 
   // ============================================================================
   // CODE EXECUTION
@@ -977,18 +1022,21 @@ export default function CodePage({
             {/* Monaco Editor */}
             <div className="flex-1 rounded overflow-hidden border border-gray-700">
               <Editor
-                height="100%"
-                language={getMonacoLanguage(language)}
-                value={code}
-                onChange={(value) => setCode(value || "")}
-                theme="custom-dark"
-                options={editorOptions}
-                loading={
-                  <div className="flex items-center justify-center h-full bg-black">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
-                  </div>
-                }
-              />
+  height="100%"
+  language={getMonacoLanguage(language)}
+  value={code}
+  onChange={(value) => setCode(value || "")}
+  theme="custom-dark"
+  options={editorOptions}
+  onMount={(editor) => {
+    editorRef.current = editor;
+  }}
+  loading={
+    <div className="flex items-center justify-center h-full bg-black">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+    </div>
+  }
+/>
             </div>
           </div>
 

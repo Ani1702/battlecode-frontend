@@ -11,7 +11,9 @@ const rules = [
     "You’ll see a set of warm-up questions to solve in order.",
     "Your progress and time are tracked automatically.",
     "If you disconnect, you can rejoin and continue where you left off.",
-    "When the timer runs out, the round ends for everyone."
+    "When the timer runs out, the round ends for everyone.",
+    "You cannot go back to the previous question",
+    
 ];
 
     return (

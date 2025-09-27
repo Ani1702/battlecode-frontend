@@ -120,6 +120,7 @@ export default function R2CodePage() {
   
   const codeRef = useRef(code);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorRef = useRef<any>(null);
   
   useEffect(() => { codeRef.current = code; }, [code]);
   useEffect(() => { 
@@ -246,6 +247,46 @@ export default function R2CodePage() {
     const newHeight = Math.max(20, Math.min(80, ((e.clientY - rect.top) / rect.height) * 100));
     setCodeEditorHeight(newHeight);
   }, [isDragging]);
+
+    useEffect(() => {
+    if (monaco && editorRef.current) {
+      let internalClipboard = "";
+      const editor = editorRef.current;
+
+      // intercept copy
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+        const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+        if (selection) {
+          internalClipboard = selection;
+        }
+      });
+
+      // intercept cut
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+        const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+        if (selection) {
+          internalClipboard = selection;
+          editor.executeEdits("cut", [
+            { range: editor.getSelection(), text: "", forceMoveMarkers: true },
+          ]);
+        }
+      });
+
+      // intercept paste
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+        if (internalClipboard) {
+          editor.executeEdits("paste", [
+            { range: editor.getSelection(), text: internalClipboard, forceMoveMarkers: true },
+          ]);
+        }
+      });
+
+      // disable right-click menu
+      editor.updateOptions({ contextmenu: false });
+    }
+  }, [monaco, editorRef.current]);
+
+  
 
   useEffect(() => {
     if (isDragging) {
@@ -449,7 +490,17 @@ export default function R2CodePage() {
                       </div>
                   </div>
                   <div className="flex-1 rounded overflow-hidden border border-gray-700">
-                      <Editor height="100%" language={language} value={code} onChange={(v) => setCode(v || "")} theme="custom-dark" options={editorOptions} />
+                      <Editor 
+                        height="100%" 
+                        language={language} 
+                        value={code} 
+                        onChange={(v) => setCode(v || "")} 
+                        theme="custom-dark" 
+                        options={editorOptions}
+                        onMount={(editor) => {
+                          editorRef.current = editor;
+                        }}
+                      />
                   </div>
               </div>
               <div onMouseDown={handleMouseDown} className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors flex items-center justify-center ${isDragging ? 'bg-amber-600/60' : ''}`}><div className="w-8 h-1 bg-amber-600 rounded-full"></div></div>

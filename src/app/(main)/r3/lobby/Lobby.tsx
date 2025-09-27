@@ -139,6 +139,7 @@ export default function Lobbyr0() {
 
   // **** FIXED FUNCTION ****
   const handleStartRound = () => {
+<<<<<<< Updated upstream
     if (!socket || participants.length === 0) {
         showErrorToast("Cannot start round without participants.");
         return;
@@ -157,6 +158,22 @@ export default function Lobbyr0() {
       }
     });
   };
+=======
+  console.log("handleStartRound function called."); // Log 1
+
+  if (!socket || participants.length === 0) {
+    console.error("Condition failed:", { 
+      socketExists: !!socket, 
+      participantsCount: participants.length 
+    });
+    return;
+  }
+
+  console.log("✅ Conditions passed. Emitting 'round3:ready'..."); // Log 2
+  localStorage.removeItem('battlecode-round-3-code-store');
+  socket.emit('round3:ready');
+};
+>>>>>>> Stashed changes
  
 
   const handleJoinRound = () => router.push('/r3/code');
@@ -184,10 +201,8 @@ export default function Lobbyr0() {
           <p className='flex-1 flex items-end pt-8'> <span className="text-white">ROUND</span> <span className="text-orange-500">&nbsp; 3</span></p>
           <span className="text-orange-500 text-2xl pb-4">LOBBY</span>
 
-          <div className="mt-2 px-3 py-1 bg-blue-600/20 border border-blue-400 rounded text-blue-300 text-xs flex items-center gap-2">
-            <FlaskConical className="h-3 w-3" />
-            Testing Mode - All users have admin access
-          </div>
+          
+          
 
           {(roundStarted || isRoundActive) && (
             <div className="mt-3 flex flex-col items-center gap-2">

@@ -27,13 +27,13 @@ export default function IncomingEliteCard({
         </p>
       </div>
       
-      <div className="absolute right-[100px] top-1/2 transform -translate-y-1/2 z-10 flex flex-row gap-1">
+      <div className="absolute gap-2 right-[100px] top-1/2 transform -translate-y-1/2 z-10 flex flex-row">
         <button
           onClick={onAccept}
           className="w-8 h-8 relative bottom-[5px] bg-green-500 hover:bg-green-600 rounded-sm flex items-center justify-center transition-colors duration-200 group-hover:scale-110"
           title="Accept Challenge"
         >
-          <Image src="/tick.png" alt="Accept" width={16} height={16} />
+          <Image src="/tick_2.png" alt="Accept" width={16} height={16} />
         </button>
         <button
           onClick={onDeny}

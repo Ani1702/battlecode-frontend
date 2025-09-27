@@ -86,7 +86,7 @@ const RequestTimer = memo(({ expiresAt, onExpire }: { expiresAt: number | undefi
         return <span className="text-sm text-red-500 font-mono">Expired</span>;
     }
 
-    return <span className="text-sm text-yellow-400 font-mono">Expires in {timeLeft}s</span>;
+    return <span className="text-sm text-yellow-400 relative right-[248px] top-[20px] font-mono">Expires in {timeLeft}s</span>;
 });
 RequestTimer.displayName = 'RequestTimer';
 
