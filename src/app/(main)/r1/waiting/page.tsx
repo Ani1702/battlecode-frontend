@@ -235,12 +235,12 @@ export default function WaitingRoomR1() {
               <div className="text-gray-200 text-center space-y-3">
                 <div className="bg-black/40 rounded-lg p-4 border border-amber-600">
                   <p className="text-amber-400 font-bold text-xl">
-                    🕐 Round Time Remaining: {formatTime(globalTimeRemaining)}
+                    Round Time Remaining: {formatTime(globalTimeRemaining)}
                   </p>
                 </div>
                 <div className="bg-black/40 rounded-lg p-4 border border-blue-600">
                   <p className="text-blue-400 font-bold">
-                    {nextMatchmakingCycle !== null ? `🔄 Next Match In: ${formatTime(nextMatchmakingCycle)}` : '🔄 Matchmaking in Progress...'}
+                    {nextMatchmakingCycle !== null ? `Next Match In: ${formatTime(nextMatchmakingCycle)}` : 'Matchmaking in Progress...'}
                   </p>
                   <p className="text-gray-400 text-sm">
                     New matches are formed every 3 minutes.
