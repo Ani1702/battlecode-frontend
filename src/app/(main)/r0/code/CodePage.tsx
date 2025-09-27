@@ -552,6 +552,10 @@ export default function CodePage({
       showErrorToast('No problem loaded');
       return;
     }
+    if (code.trim() === '') {
+      showErrorToast('Source Code is empty');
+      return;
+    }
 
     const action = isSubmission ? 'submitting' : 'running';
     showInfoToast(`${action.charAt(0).toUpperCase() + action.slice(1)} your code...`);
@@ -567,7 +571,7 @@ export default function CodePage({
       if (!apiUrl) {
         throw new Error('API URL not configured');
       }
-
+      setActiveTab('results');
       const payload = {
         language: language,
         source_code: code,
@@ -628,9 +632,6 @@ export default function CodePage({
       }));
 
       setSubmissionResults(formattedResults);
-      
-      // Switch to results tab when code is executed
-      setActiveTab('results');
 
       const summary = result.summary || {};
       const passedTests = summary.passed || 0;
@@ -842,31 +843,24 @@ export default function CodePage({
       <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
         {/* Question Panel */}
         <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
-          <div className="flex justify-between items-start mb-4 flex-shrink-0">
-            <div>
-              <h2 className="text-2xl font-bold">{currentProblem.title}</h2>
-              <div className="flex gap-4 text-sm text-gray-400 mt-1">
-                <span>Difficulty: {currentProblem.difficulty}</span>
-                <span>Round: {round.toUpperCase()}</span>
-                <span>Question: {currentProblemIndex + 1}/{problems.length}</span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowHints(!showHints)}
-                className="rounded-lg border p-4 h-12 text-white border-amber-600 font-oxanium w-30 justify-center items-center flex bg-black/20 backdrop-blur-sm hover:bg-amber-600 hover:text-black transition-colors duration-300 shadow-[0_0_20px_rgba(220,38,38,0.3)] gap-2"
-              >
-                <Lightbulb className="h-4 w-4" />
-                {showHints ? "Hide" : "Hint"}
-              </button>
-              {currentProblemIndex < problems.length - 1 && onNextQuestion && (
-                <Button
-                  content="Next →"
-                  onClick={handleNextQuestionClick} // Changed this to open the modal
-                />
-              )}
-            </div>
-          </div>
+        <div className="flex justify-between items-start mb-4 flex-shrink-0">
+  <div>
+    <h2 className="text-2xl font-bold">{currentProblem.title}</h2>
+    <div className="flex gap-4 text-sm text-gray-400 mt-1">
+      {/* <span>Difficulty: {currentProblem.difficulty}</span> */}
+      <span>Round: {round.toUpperCase()}</span>
+      <span>Question: {currentProblemIndex + 1}/{problems.length}</span>
+    </div>
+  </div>
+  <div className="flex gap-2">
+    {currentProblemIndex < problems.length - 1 && onNextQuestion && (
+      <Button
+        content="Next →"
+        onClick={handleNextQuestionClick}
+      />
+    )}
+  </div>
+</div>
 
           <div className="flex-1 overflow-y-auto min-h-0">
             {showHints && currentProblem.hints && currentProblem.hints.length > 0 && (
