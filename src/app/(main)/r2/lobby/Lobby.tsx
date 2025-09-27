@@ -168,6 +168,8 @@ export default function LobbyR2() {
         if (isAdmin && socket) {
             socket.emit('round2:start', (response: SimpleSocketResponse) => {
                 if (response.success) {
+            localStorage.removeItem('battlecode-round-2-code-store');
+
                     showSuccessToast('Round 2 is starting!');
                 } else {
                     showErrorToast(response.message || 'Failed to start round.');

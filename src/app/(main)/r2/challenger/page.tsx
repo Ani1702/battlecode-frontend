@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/contexts/SocketContext';
-import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import ChallengerPlayerCard from '@/components/shared/ChallengerPlayerCard';
 import BountyQuestionCard, { BountyQuestion } from '@/components/shared/BountyQuestionCard';
@@ -25,11 +25,14 @@ interface SocketStateResponse {
     success: boolean;
     state: {
         userRole?: 'challenger' | 'elite' | null;
+        activeSession?: { type: 'match' | 'bounty', contextId: string } | null;
     };
 }
 
 interface ServerBountyQuestion extends Omit<BountyQuestion, 'name'> {
     title: string;
+    isSolvedByAnyone?: boolean;
+    isAttemptedByUser?: boolean;
 }
 
 interface DashboardResponse {
@@ -42,8 +45,8 @@ interface DashboardResponse {
     };
 }
 
-
 const formatTime = (ms: number) => {
+    if (ms <= 0) return "00:00";
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
     const seconds = (totalSeconds % 60).toString().padStart(2, '0');
@@ -60,12 +63,33 @@ export default function ChallengerDashboard() {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false); // Safeguard state
 
   useEffect(() => {
     if (!socket || !isConnected) return;
 
     socket.emit('round2:getState', (stateResponse: SocketStateResponse) => {
-        if (stateResponse.success && stateResponse.state.userRole === 'challenger') {
+        if (!stateResponse.success) {
+            showErrorToast("Could not verify state. Redirecting...");
+            router.push('/dashboard');
+            return;
+        }
+
+        if (stateResponse.state.activeSession) {
+            showInfoToast("Resuming your active session...");
+            try {
+                sessionStorage.setItem('r2_session_type', stateResponse.state.activeSession.type);
+                sessionStorage.setItem('r2_context_id', stateResponse.state.activeSession.contextId);
+                sessionStorage.setItem('r2_user_role', 'challenger');
+                router.push(`/r2/code`);
+            } catch (error) {
+              console.log(error);
+                showErrorToast("Could not resume session. Please enable storage.");
+            }
+            return;
+        }
+
+        if (stateResponse.state.userRole === 'challenger') {
             socket.emit('round2:getDashboardState', (dashResponse: DashboardResponse) => {
                 if (dashResponse.success) {
                     setRoundEndTime(dashResponse.dashboard.roundEndTime);
@@ -89,28 +113,36 @@ export default function ChallengerDashboard() {
     });
   }, [socket, isConnected, router]);
 
+  // --- MODIFIED: Timer now triggers redirection ---
   useEffect(() => {
-    if (!roundEndTime) return;
-
-    setTimeRemaining(Math.max(0, roundEndTime - Date.now()));
-
+    if (!roundEndTime || isRedirecting) return;
     const interval = setInterval(() => {
-        const remaining = Math.max(0, roundEndTime - Date.now());
-        setTimeRemaining(remaining);
+        const remaining = roundEndTime - Date.now();
+        setTimeRemaining(Math.max(0, remaining));
+         if (remaining <= 0) {
+            clearInterval(interval);
+            // --- FIX: Redirect when timer hits zero ---
+            if (!isRedirecting) {
+                setIsRedirecting(true);
+                showInfoToast("Round 2 has ended. You will be redirected to the dashboard.");
+                setTimeout(() => {
+                    router.push('/dashboard');
+                }, 3000);
+            }
+        }
     }, 1000);
-
     return () => clearInterval(interval);
-  }, [roundEndTime]);
+  }, [roundEndTime, router, isRedirecting]);
 
   useEffect(() => {
     if (!socket) return;
 
-    const handleRoundStateUpdate = (data: { participants: Participant[] }) => {
+    const handleLobbyUpdate = (data: { participants: Participant[] }) => {
         setAvailableElites(data.participants.filter(p => p.role === 'elite' && p.status === 'elite:idle'));
     };
-
-    const handleChallengeRejected = (data: { eliteId: string }) => {
-        showErrorToast(`Your challenge was rejected.`);
+    
+    const handleRequestFailed = (data: { eliteId: string, reason?: string }) => {
+        showInfoToast(data.reason || `Your challenge was rejected.`);
         setPendingRequests(prev => {
             const newSet = new Set(prev);
             newSet.delete(data.eliteId);
@@ -130,17 +162,39 @@ export default function ChallengerDashboard() {
             showErrorToast("Could not save session. Please enable cookies/storage.");
         }
     };
+    
+    const handleDashboardUpdate = (data: { pendingRequests?: string[] }) => {
+        if (data.pendingRequests) {
+            setPendingRequests(new Set(data.pendingRequests));
+        }
+    };
+    
+    const handleRoundEnd = () => {
+        // --- FIX: Use safeguard to prevent double redirection ---
+        if (isRedirecting) return;
+        setIsRedirecting(true);
+        showInfoToast("Round 2 has ended. You will be redirected to the dashboard.");
+        setTimeout(() => {
+            router.push('/dashboard');
+        }, 3000);
+    };
 
-    socket.on('round2:lobbyUpdate', handleRoundStateUpdate);
-    socket.on('round2:challengeRejected', handleChallengeRejected);
+    socket.on('round2:lobbyUpdate', handleLobbyUpdate);
+    socket.on('round2:challengeRejected', handleRequestFailed);
+    socket.on('round2:challengeExpired', handleRequestFailed);
     socket.on('round2:matchStarted', handleMatchStarted);
+    socket.on('round2:dashboardUpdate', handleDashboardUpdate);
+    socket.on('round2:ended', handleRoundEnd);
 
     return () => {
-      socket.off('round2:lobbyUpdate', handleRoundStateUpdate);
-      socket.off('round2:challengeRejected', handleChallengeRejected);
+      socket.off('round2:lobbyUpdate', handleLobbyUpdate);
+      socket.off('round2:challengeRejected', handleRequestFailed);
+      socket.off('round2:challengeExpired', handleRequestFailed);
       socket.off('round2:matchStarted', handleMatchStarted);
+      socket.off('round2:dashboardUpdate', handleDashboardUpdate);
+      socket.off('round2:ended', handleRoundEnd);
     };
-  }, [socket, router]);
+  }, [socket, router, isRedirecting]);
   
   const handleStartBounty = (questionId: string) => {
     if (!socket) return;
@@ -176,12 +230,15 @@ export default function ChallengerDashboard() {
                 newSet.delete(eliteId);
                 return newSet;
             });
+             if (response.message?.includes("active session")) {
+                router.refresh();
+            }
         }
     });
   };
   
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-white bg-gray-900">Loading Challenger Dashboard...</div>;
+    return <div className="flex items-center justify-center h-screen text-white bg-gray-900">Checking session status...</div>;
   }
 
   return (
@@ -193,7 +250,7 @@ export default function ChallengerDashboard() {
                 {formatTime(timeRemaining)}
             </div>
         </div>
-        <div className="flex-[4] flex flex-row">
+        <div className="flex-4 flex flex-row">
           <div className="flex-1">
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
               <h2 className="text-2xl font-bold text-white mb-4 ml-4 orbitron">Challenge Elites</h2>
@@ -224,7 +281,7 @@ export default function ChallengerDashboard() {
                     <BountyQuestionCard
                       key={question.id}
                       question={question}
-                      onSolve={handleStartBounty}
+                      onSolve={() => handleStartBounty(question.id)}
                     />
                   ))}
               </CustomScrollbar>
