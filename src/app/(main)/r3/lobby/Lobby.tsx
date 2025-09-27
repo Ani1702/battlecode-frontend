@@ -26,8 +26,9 @@ interface LobbyData {
 }
 
 interface RoundStartData {
-  problems?: unknown[];
+  questions?: unknown[];
   startTime?: number;
+  duration?: number;
   [key: string]: unknown;
 }
 
@@ -85,12 +86,6 @@ export default function Lobbyr0() {
 
     const handleRoundStart = (data: RoundStartData) => {
       console.log('Round 3 started! Data received:', data);
-    console.log('Data :', data);
-    console.log('Questions :', data.questions);
-    console.log('Data type: ', typeof data);
-    console.log('Questions type: ', typeof data.questions);
-    console.log('Start time : ', data.startTime);
-      // **** FIX: SAVE DATA TO sessionStorage WITH PROPER ERROR HANDLING ****
       if (data && typeof data === 'object' && data.questions && data.startTime) {
         try {
           const dataToStore = {
@@ -99,8 +94,7 @@ export default function Lobbyr0() {
             duration: data.duration || 1200
           };
           sessionStorage.setItem('round3_data', JSON.stringify(dataToStore));
-          const data_session = sessionStorage.getItem('round3_data');
-          console.log('Stored data:', data_session);
+          console.log('Stored round data in sessionStorage:', dataToStore);
         } catch (error) {
           console.error("Failed to save round data to sessionStorage:", error);
           showErrorToast("Error preparing round. Please try again.");
@@ -118,7 +112,7 @@ export default function Lobbyr0() {
 
       setTimeout(() => {
         router.push('/r3/code');
-      }, 1500); // Reduced delay slightly
+      }, 1500);
     };
 
     const handleTimer = (data: TimerData) => setTimeRemaining(data.timeRemaining || 0);
@@ -143,12 +137,25 @@ export default function Lobbyr0() {
     };
   }, [socket, router]);
 
+  // **** FIXED FUNCTION ****
   const handleStartRound = () => {
-    if (!socket || participants.length === 0) return;
+    if (!socket || participants.length === 0) {
+        showErrorToast("Cannot start round without participants.");
+        return;
+    }
     localStorage.removeItem('battlecode-round-3-code-store');
-    socket.emit('round3:ready');
     
-    
+    console.log("Emitting round3:ready to server...");
+    // Use a callback to get a response from the server
+    socket.emit('round3:ready', {}, (response: { success: boolean; message?: string; error?: string }) => {
+      console.log("Server response from round3:ready:", response);
+      if (response && response.success) {
+        showSuccessToast(response.message || "Round start initiated!");
+        // The 'round3:start' event listener will handle UI changes and redirection
+      } else {
+        showErrorToast(response.error || "Failed to start round.");
+      }
+    });
   };
  
 
