@@ -4,7 +4,7 @@ import Image from "next/image";
 // import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
-  Lightbulb, 
+  // Lightbulb, 
   RotateCcw, 
   Save, 
   AlertTriangle, 
