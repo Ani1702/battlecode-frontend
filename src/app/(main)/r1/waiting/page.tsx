@@ -12,7 +12,7 @@ interface Participant {
   id: string;
   username: string;
   rank: number;
-  eventScore?: number; // <-- ADDED: To hold the player's score
+  eventScore?: number;
   status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
   cooldownEndTime?: number;
   [key: string]: unknown;
@@ -23,6 +23,18 @@ interface MatchFoundData {
   question: { id:string; title: string; };
   startTime: number;
   duration: number;
+}
+
+// ✅ FIX: Define a more specific type for the getState response to ensure type safety.
+interface GetStateResponse {
+    success: boolean;
+    isActive?: boolean;
+    globalTimeRemaining?: number;
+    allParticipants?: Participant[];
+    nextMatchmakingCycle?: number;
+    participant?: Participant;
+    matchData?: MatchFoundData; // Expect matchData for re-joins
+    error?: string;
 }
 
 // ============================================================================
@@ -57,17 +69,20 @@ export default function WaitingRoomR1() {
     };
 
     const handleGlobalTimer = (data: { timeRemaining: number }) => setGlobalTimeRemaining(data.timeRemaining);
+    
     const handleParticipantsUpdate = (data: { participants: Participant[] }) => {
         setAllParticipants(data.participants || []);
         const me = data.participants?.find(p => p.id === userId);
-        if (me) setCurrentUser(me);
+        if (me) {
+          setCurrentUser(me);
+        }
     };
 
     const handleCooldownStart = (data: { cooldownEndTime: number }) => {
-      showInfoToast("Match finished. Entering 2-minute cooldown.");
+      showInfoToast("Match finished. Entering a cooldown period.");
       setCurrentUser(prev => prev ? { ...prev, status: 'cooldown', cooldownEndTime: data.cooldownEndTime } : null);
     };
-
+    
     const handleCooldownEnd = () => {
       showSuccessToast("You are back in the matchmaking queue!");
       setCurrentUser(prev => prev ? { ...prev, status: 'waiting', cooldownEndTime: undefined } : null);
@@ -113,7 +128,8 @@ export default function WaitingRoomR1() {
   useEffect(() => {
     if (!socket || !isConnected || !userId) return;
 
-    socket.emit('round1:getState', {}, (response: { success: boolean; isActive?: boolean; globalTimeRemaining?: number; allParticipants?: Participant[]; nextMatchmakingCycle?: number; participant?: Participant; error?: string }) => {
+    // ✅ FIX: The initial getState call now correctly handles the re-join scenario.
+    socket.emit('round1:getState', {}, (response: GetStateResponse) => {
       if (response?.success) {
         setIsRoundActive(response.isActive ?? false);
         setGlobalTimeRemaining(response.globalTimeRemaining || 0);
@@ -122,9 +138,19 @@ export default function WaitingRoomR1() {
 
         const me = response.participant;
         if (me) {
+          // ✅ FIX: This is the critical change. If the user is in a match,
+          // we now expect 'matchData' in the response. We must save it to
+          // sessionStorage BEFORE redirecting to prevent the race condition.
           if (me.status === 'in-match') {
-            showInfoToast('Rejoining your active match...');
-            router.push('/r1/code');
+            if (response.matchData) {
+                showInfoToast('Rejoining your active match...');
+                sessionStorage.setItem('round1_match_data', JSON.stringify(response.matchData));
+                router.push('/r1/code');
+            } else {
+                // This is a fallback in case the backend state is weird.
+                showErrorToast('Match data missing. Returning to dashboard.');
+                router.push('/dashboard');
+            }
             return;
           }
           setCurrentUser(me);
@@ -143,16 +169,14 @@ export default function WaitingRoomR1() {
       if (currentUser?.status === 'cooldown' && currentUser.cooldownEndTime) {
         const remaining = Math.max(0, Math.ceil((currentUser.cooldownEndTime - Date.now()) / 1000));
         setCooldownTimeRemaining(remaining);
-        // FIX: Automatically transition out of cooldown on the frontend
-        if (remaining === 0) {
-            setCurrentUser(prev => prev ? { ...prev, status: 'waiting', cooldownEndTime: undefined } : null);
-        }
       } else {
-        setCooldownTimeRemaining(0);
+        if (cooldownTimeRemaining !== 0) {
+            setCooldownTimeRemaining(0);
+        }
       }
     }, 1000);
     return () => clearInterval(cooldownInterval);
-  }, [currentUser]);
+  }, [currentUser, cooldownTimeRemaining]);
 
   const handleStartRound = () => {
     if (!isAdmin || !socket) return;
@@ -182,6 +206,9 @@ export default function WaitingRoomR1() {
         return 'Waiting for Match';
       case 'in-match': return 'In Match';
       case 'cooldown':
+        if (participant.id === userId) {
+             return `Cooldown (${formatTime(cooldownTimeRemaining)})`;
+        }
         const remaining = participant.cooldownEndTime ? Math.max(0, Math.ceil((participant.cooldownEndTime - Date.now()) / 1000)) : 0;
         return `Cooldown (${formatTime(remaining)})`;
       default: return participant.status;

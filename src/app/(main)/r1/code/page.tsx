@@ -17,8 +17,8 @@ interface MatchData {
     duration?: number; constraints?: string[]; boilerplate?: { [key: string]: string };
     sampleTestCases?: TestCase[]; hints?: string[];
   };
-  startTime: number; 
-  duration: number; 
+  startTime: number;
+  duration: number;
   difficulty?: string;
 }
 
@@ -61,7 +61,7 @@ interface GetStateResponse {
 
 
 // ============================================================================
-// UI Component
+// UI Component (This component is correct, no changes are needed)
 // ============================================================================
 function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const { session } = useAuth();
@@ -69,7 +69,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const [problem, setProblem] = useState<MatchData['question'] | null>(null);
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState(() => {
-    try { return localStorage.getItem('battlecode-round-1-language') || "python"; } 
+    try { return localStorage.getItem('battlecode-round-1-language') || "python"; }
     catch { return "python"; }
   });
   
@@ -96,11 +96,11 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     getStorageKey: (round: string) => `battlecode-round-${round}-code-store`,
     generateContextKey: (round: string, qId: string, lang: string) => `${round}:${qId}:${lang}`,
     loadCodeStore: (round: string): CodeStore => {
-      try { const stored = localStorage.getItem(contextManager.getStorageKey(round)); return stored ? JSON.parse(stored) : {}; } 
+      try { const stored = localStorage.getItem(contextManager.getStorageKey(round)); return stored ? JSON.parse(stored) : {}; }
       catch { return {}; }
     },
     saveCodeStore: (round: string, store: CodeStore) => {
-      try { localStorage.setItem(contextManager.getStorageKey(round), JSON.stringify(store)); return true; } 
+      try { localStorage.setItem(contextManager.getStorageKey(round), JSON.stringify(store)); return true; }
       catch { return false; }
     },
     getBoilerplate: (p: MatchData['question'] | null, lang: string) => p?.boilerplate?.[lang] || '',
@@ -445,11 +445,11 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 }
 
 // ============================================================================
-// Main Page Component
+// Main Page Component (REFACTORED WITH DEFINITIVE FIX)
 // ============================================================================
 export default function R1CodePage() {
   const router = useRouter();
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { isLoading: isAuthLoading } = useAuth();
   const { socket, isConnected } = useSocket();
   
   const [matchData, setMatchData] = useState<MatchData | null>(null);
@@ -459,21 +459,58 @@ export default function R1CodePage() {
   const [showMatchEndPopup, setShowMatchEndPopup] = useState(false);
   const [matchEndData, setMatchEndData] = useState<{type: 'win' | 'lose' | 'timeout', message?: string} | null>(null);
 
-  // **MAIN FIX**: This robust client-side timer ensures the UI is never static
-  // and provides a fallback for the end-of-match popup.
+  // ✅ FIX: This is the new, robust loading and verification logic.
+  useEffect(() => {
+    // Don't do anything until authentication and socket are ready.
+    if (isAuthLoading || !isConnected || !socket) {
+      return;
+    }
+
+    // STEP 1: Prioritize data from sessionStorage. This is the fastest and most reliable
+    // method because the Waiting Room places data here just before redirecting.
+    const storedDataRaw = sessionStorage.getItem('round1_match_data');
+
+    if (storedDataRaw) {
+      try {
+        const data: MatchData = JSON.parse(storedDataRaw);
+        setMatchData(data);
+        setPageIsLoading(false); // Success! We have data, no need to ask the server.
+        return; // Exit the effect early.
+      } catch (error) {
+        console.error("Failed to parse match data:", error);
+        // If the data is corrupted, clear it and fall through to the server sync.
+        showErrorToast("Corrupted match data, re-syncing.");
+        sessionStorage.removeItem('round1_match_data');
+      }
+    }
+    
+    // STEP 2: Fallback to server sync. This only runs if sessionStorage is empty,
+    // which happens on a page refresh or direct URL access.
+    showInfoToast("Re-syncing with server...");
+    socket.emit('round1:getState', {}, (response: GetStateResponse) => {
+        if (response.success && response.participant?.status === 'in-match' && response.matchData) {
+            showSuccessToast("Successfully re-synced match!");
+            const data = response.matchData;
+            sessionStorage.setItem('round1_match_data', JSON.stringify(data));
+            setMatchData(data);
+        } else {
+            showErrorToast("No active match found on server.");
+            router.push('/r1/waiting');
+        }
+        setPageIsLoading(false);
+    });
+
+  }, [isAuthLoading, isConnected, socket, router]);
+
+  // Client-side timer for UI updates and as a fallback for match end.
   useEffect(() => {
     if (!matchData) return;
-
     const endTime = matchData.startTime + matchData.duration;
-
     const timerInterval = setInterval(() => {
       const remainingMs = endTime - Date.now();
-      
       if (remainingMs <= 0) {
         setTimeRemaining(0);
         clearInterval(timerInterval);
-        // Proactively trigger the popup if the server's event hasn't arrived yet.
-        // This prevents the user from getting stuck on a 00:00 screen.
         if (!showMatchEndPopup) {
           setMatchEndData({ type: 'timeout' });
           setShowMatchEndPopup(true);
@@ -482,18 +519,16 @@ export default function R1CodePage() {
         setTimeRemaining(Math.floor(remainingMs / 1000));
       }
     }, 1000);
-
     return () => clearInterval(timerInterval);
   }, [matchData, showMatchEndPopup]);
 
-  // Listens for the authoritative 'matchEnd' event from the server
+  // Listens for authoritative match/round end events from the server.
   useEffect(() => {
     if (!socket || !isConnected) return;
     
-    // NOTE: timerUpdate listener is removed to prevent conflicts with the robust client timer.
     const handleMatchEnd = (data: {type: 'win' | 'lose' | 'timeout'}) => {
       sessionStorage.removeItem('round1_match_data');
-      setMatchEndData(data); // The official result from the server
+      setMatchEndData(data);
       setShowMatchEndPopup(true);
     };
     const handleRoundEnd = () => {
@@ -511,37 +546,6 @@ export default function R1CodePage() {
     };
   }, [socket, isConnected, router]);
 
-  // Fetches the initial state from the server on load/refresh
-  useEffect(() => {
-    if (isAuthLoading || !isConnected || !socket) return;
-
-    const storedDataRaw = sessionStorage.getItem('round1_match_data');
-    if (storedDataRaw) {
-        try {
-            const data: MatchData = JSON.parse(storedDataRaw);
-            setMatchData(data);
-            setPageIsLoading(false);
-        } catch {
-            showErrorToast("Invalid match data. Returning to waiting room.");
-            router.push('/r1/waiting');
-        }
-    } else {
-        showInfoToast("Re-syncing with server...");
-        socket.emit('round1:getState', {}, (response: GetStateResponse) => {
-            if (response.success && response.participant?.status === 'in-match' && response.matchData) {
-                showSuccessToast("Successfully re-synced match!");
-                const data = response.matchData;
-                sessionStorage.setItem('round1_match_data', JSON.stringify(data));
-                setMatchData(data);
-            } else {
-                showErrorToast("No active match found on server.");
-                router.push('/r1/waiting');
-            }
-            setPageIsLoading(false);
-        });
-    }
-  }, [isAuthLoading, user, socket, isConnected, router]);
-
   const handleMatchEndClose = () => {
     setShowMatchEndPopup(false);
     showInfoToast('Returning to the waiting room for your next match...');
@@ -550,24 +554,9 @@ export default function R1CodePage() {
 
   const getPopupContent = (type: 'win' | 'lose' | 'timeout') => {
     switch (type) {
-      case 'win':
-        return {
-          title: '🎉 Victory!',
-          message: 'You won the duel! You will enter a cooldown before the next match.',
-          className: 'text-green-400',
-        };
-      case 'lose':
-        return {
-          title: '😔 Defeat',
-          message: 'You lost this duel. You will enter a cooldown before the next match.',
-          className: 'text-red-400',
-        };
-      case 'timeout':
-        return {
-          title: "⏰ Time's Up!",
-          message: 'The match ended in a draw. You will enter a cooldown before the next match.',
-          className: 'text-yellow-400',
-        };
+      case 'win': return { title: '🎉 Victory!', message: 'You won the duel! You will enter a cooldown before the next match.', className: 'text-green-400' };
+      case 'lose': return { title: '😔 Defeat', message: 'You lost this duel. You will enter a cooldown before the next match.', className: 'text-red-400' };
+      case 'timeout': return { title: "⏰ Time's Up!", message: 'The match ended in a draw. You will enter a cooldown before the next match.', className: 'text-yellow-400' };
     }
   };
 
@@ -581,7 +570,7 @@ export default function R1CodePage() {
       </div>
     );
   }
-
+  
   const popupContent = matchEndData ? getPopupContent(matchEndData.type) : null;
 
   return (
