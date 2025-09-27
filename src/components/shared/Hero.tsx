@@ -9,15 +9,16 @@ const Hero = () => {
   const [isExiting, setIsExiting] = useState(false);
 
   const handleAuthClick = async () => {
-    if (user) {
-      setIsExiting(true);
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1000); // Wait for animation to complete
-    } else {
+    if (!user) {
       await signInWithGoogle();
+      return;
     }
+    setIsExiting(true);
+    setTimeout(() => {
+      router.push("/dashboard");
+    }, 1000);
   };
+
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Enter' && user) {
       setIsExiting(true);
@@ -78,7 +79,7 @@ const Hero = () => {
         <div className="containerContent flex flex-col items-center justify-center h-full ">
           <div className="flex items-center justify-center h-[20%]">
             <div className="z-1 absolute jusify-items items-center flex drop-shadow-[0_px_4px_#000]">
-              <h1 className=" text-5xl lg:text-8xl z-1 tracking-wide  font-medium stickyMask text-shadow-heading">
+              <h1 className="text-4xl lg:text-8xl z-1 tracking-wide px-8 font-medium stickyMask text-shadow-heading">
                 BATTLECODE
               </h1>
               <h1 className="text-5xl lg:text-8xl text-blur tracking-wide font-medium blur-sm absolute">
@@ -108,7 +109,7 @@ const Hero = () => {
         </div>
 
         <div className="w-[27rem] quote   flex relative bottom-50 lg:bottom-8 z-10 left-1/2 transform -translate-x-1/2 justify-center">
-          <p className="z-1 text-center uppercase text-white tracking-[4px] absolute bottom-[5rem] text-[0.85rem]">
+          <p className="z-1 text-center uppercase text-white tracking-[4px] absolute bottom-[5rem] text-[0.80rem] lg:text-[0.80rem] px-8 lg:px-0">
             This is more than just programming—it&apos;s precision under pressure.
             Enter the match with intent. Exit with impact.
           </p>

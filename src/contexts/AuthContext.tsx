@@ -215,10 +215,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Don't redirect if user is already navigating within the app
             const currentPath = window.location.pathname;
             console.log("Current path after verification:", currentPath);
-            if (currentPath === '/' || currentPath === '/login' || currentPath === '/auth-error') {
-              console.log("Redirecting to dashboard...");
-              router.push("/dashboard");
-            }
+            // if (currentPath === '/' || currentPath === '/login' || currentPath === '/auth-error') {
+            //   console.log("Redirecting to dashboard...");
+            //   router.push("/dashboard");
+            // }
             // For any other path (like /r0/code), let the user stay where they are
           } else {
             console.error("Backend verification failed:", await response.text());

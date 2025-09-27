@@ -1,12 +1,11 @@
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SocketProvider } from "@/contexts/SocketContext";
-
+import { Toaster } from "react-hot-toast";
 import type { Metadata } from "next";
 // import { Orbitron, Oxanium } from "next/font/google";
 import "./globals.css";
-import { Toaster } from 'react-hot-toast';
-
+import MobileOnly from "@/components/MobileOnly";
 
 
 export const metadata: Metadata = {
@@ -33,9 +32,12 @@ export default function RootLayout({
     <html lang="en">
       <body className={`oxanium antialiased`}>
         <AuthProvider>
-          
-            <SocketProvider>{children}<Toaster /></SocketProvider>
-          
+          <SocketProvider>
+            <MobileOnly>
+              {children}
+              <Toaster />
+            </MobileOnly>
+          </SocketProvider>
         </AuthProvider>
       </body>
     </html>
