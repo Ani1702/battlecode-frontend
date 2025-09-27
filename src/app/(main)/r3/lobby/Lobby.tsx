@@ -139,7 +139,6 @@ export default function Lobbyr0() {
 
   // **** FIXED FUNCTION ****
   const handleStartRound = () => {
-<<<<<<< Updated upstream
     if (!socket || participants.length === 0) {
         showErrorToast("Cannot start round without participants.");
         return;
@@ -158,22 +157,6 @@ export default function Lobbyr0() {
       }
     });
   };
-=======
-  console.log("handleStartRound function called."); // Log 1
-
-  if (!socket || participants.length === 0) {
-    console.error("Condition failed:", { 
-      socketExists: !!socket, 
-      participantsCount: participants.length 
-    });
-    return;
-  }
-
-  console.log("✅ Conditions passed. Emitting 'round3:ready'..."); // Log 2
-  localStorage.removeItem('battlecode-round-3-code-store');
-  socket.emit('round3:ready');
-};
->>>>>>> Stashed changes
  
 
   const handleJoinRound = () => router.push('/r3/code');
