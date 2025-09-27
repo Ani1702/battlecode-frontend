@@ -67,7 +67,7 @@ export default function Lobbyr0() {
   const [isRoundActive, setIsRoundActive] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [roundStarted, setRoundStarted] = useState(false);
+  // const [roundStarted, setRoundStarted] = useState(false);
   const [hasProcessedConnection, setHasProcessedConnection] = useState(false);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
   const [userHasActiveMatch, setUserHasActiveMatch] = useState(false);
@@ -148,7 +148,7 @@ export default function Lobbyr0() {
         return;
       }
 
-      setRoundStarted(true);
+      // setRoundStarted(true);
       setIsRoundActive(true);
       showSuccessToast('Round 0 has started! Redirecting...');
 
