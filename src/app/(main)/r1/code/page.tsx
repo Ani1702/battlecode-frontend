@@ -17,7 +17,9 @@ interface MatchData {
     duration?: number; constraints?: string[]; boilerplate?: { [key: string]: string };
     sampleTestCases?: TestCase[]; hints?: string[];
   };
-  startTime: number; duration: number; difficulty?: string;
+  startTime: number; 
+  duration: number; 
+  difficulty?: string;
 }
 
 interface TestCase {
@@ -457,15 +459,41 @@ export default function R1CodePage() {
   const [showMatchEndPopup, setShowMatchEndPopup] = useState(false);
   const [matchEndData, setMatchEndData] = useState<{type: 'win' | 'lose' | 'timeout', message?: string} | null>(null);
 
+  // **MAIN FIX**: This robust client-side timer ensures the UI is never static
+  // and provides a fallback for the end-of-match popup.
+  useEffect(() => {
+    if (!matchData) return;
+
+    const endTime = matchData.startTime + matchData.duration;
+
+    const timerInterval = setInterval(() => {
+      const remainingMs = endTime - Date.now();
+      
+      if (remainingMs <= 0) {
+        setTimeRemaining(0);
+        clearInterval(timerInterval);
+        // Proactively trigger the popup if the server's event hasn't arrived yet.
+        // This prevents the user from getting stuck on a 00:00 screen.
+        if (!showMatchEndPopup) {
+          setMatchEndData({ type: 'timeout' });
+          setShowMatchEndPopup(true);
+        }
+      } else {
+        setTimeRemaining(Math.floor(remainingMs / 1000));
+      }
+    }, 1000);
+
+    return () => clearInterval(timerInterval);
+  }, [matchData, showMatchEndPopup]);
+
+  // Listens for the authoritative 'matchEnd' event from the server
   useEffect(() => {
     if (!socket || !isConnected) return;
     
-    const handleTimerUpdate = (data: { timeRemaining: number }) => setTimeRemaining(data.timeRemaining || 0);
-    const handleMatchResumed = () => showSuccessToast("Opponent reconnected. Match resumed!");
-    const handleMatchPaused = () => showInfoToast("Opponent disconnected. The timer has paused.");
+    // NOTE: timerUpdate listener is removed to prevent conflicts with the robust client timer.
     const handleMatchEnd = (data: {type: 'win' | 'lose' | 'timeout'}) => {
       sessionStorage.removeItem('round1_match_data');
-      setMatchEndData(data);
+      setMatchEndData(data); // The official result from the server
       setShowMatchEndPopup(true);
     };
     const handleRoundEnd = () => {
@@ -474,31 +502,24 @@ export default function R1CodePage() {
       setTimeout(() => router.push('/dashboard'), 3000);
     };
     
-    socket.on('round1:timerUpdate', handleTimerUpdate);
     socket.on('round1:matchEnd', handleMatchEnd);
     socket.on('round1:ended', handleRoundEnd);
-    socket.on('round1:matchResumed', handleMatchResumed);
-    socket.on('round1:matchPaused', handleMatchPaused);
     
     return () => {
-      socket.off('round1:timerUpdate', handleTimerUpdate);
       socket.off('round1:matchEnd', handleMatchEnd);
       socket.off('round1:ended', handleRoundEnd);
-      socket.off('round1:matchResumed', handleMatchResumed);
-      socket.off('round1:matchPaused', handleMatchPaused);
     };
   }, [socket, isConnected, router]);
 
+  // Fetches the initial state from the server on load/refresh
   useEffect(() => {
     if (isAuthLoading || !isConnected || !socket) return;
 
     const storedDataRaw = sessionStorage.getItem('round1_match_data');
     if (storedDataRaw) {
         try {
-            const data = JSON.parse(storedDataRaw);
+            const data: MatchData = JSON.parse(storedDataRaw);
             setMatchData(data);
-            const elapsed = (Date.now() - data.startTime) / 1000;
-            setTimeRemaining(Math.max(0, Math.floor(data.duration / 1000 - elapsed)));
             setPageIsLoading(false);
         } catch {
             showErrorToast("Invalid match data. Returning to waiting room.");
@@ -512,8 +533,6 @@ export default function R1CodePage() {
                 const data = response.matchData;
                 sessionStorage.setItem('round1_match_data', JSON.stringify(data));
                 setMatchData(data);
-                const elapsed = (Date.now() - data.startTime) / 1000;
-                setTimeRemaining(Math.max(0, Math.floor(data.duration / 1000 - elapsed)));
             } else {
                 showErrorToast("No active match found on server.");
                 router.push('/r1/waiting');

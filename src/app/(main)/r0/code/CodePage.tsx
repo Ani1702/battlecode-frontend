@@ -110,6 +110,7 @@ export default function CodePage({
   const [isRunning, setIsRunning] = useState(false);
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
+  const [isNextQuestionModalOpen, setIsNextQuestionModalOpen] = useState(false); // State for the new modal
   
   // Context & Storage State
   const [currentContext, setCurrentContext] = useState<CodeContext | null>(null);
@@ -450,6 +451,17 @@ export default function CodePage({
     showInfoToast('Code reset to boilerplate');
   };
 
+  const handleNextQuestionClick = () => {
+    setIsNextQuestionModalOpen(true);
+  };
+
+  const confirmAndProceedToNext = () => {
+    if (onNextQuestion) {
+      onNextQuestion();
+    }
+    setIsNextQuestionModalOpen(false);
+  };
+
   // Get save status display
   const getSaveStatusDisplay = () => {
     if (!currentContext) return { text: '', className: '', icon: null };
@@ -787,14 +799,44 @@ export default function CodePage({
 
   return (
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
-      {/* Debug Info - Remove in production */}
+      {/* Confirmation Modal for Next Question */}
+      {isNextQuestionModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center transition-opacity duration-300">
+          <div className="bg-gray-900 border border-amber-600 rounded-lg p-6 shadow-xl max-w-md w-full transform transition-all duration-300 scale-100">
+            <h3 className="text-xl font-bold text-amber-400 mb-4 flex items-center gap-2">
+              <AlertTriangle className="h-6 w-6" />
+              Confirm Navigation
+            </h3>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to proceed to the next question? 
+              <strong> You will not be able to return to this problem.</strong>
+            </p>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setIsNextQuestionModalOpen(false)}
+                className="px-4 py-2 rounded border border-gray-600 text-white hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAndProceedToNext}
+                className="px-4 py-2 rounded bg-amber-600 text-black font-bold hover:bg-amber-500 transition-colors"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Info - Remove in production
       {currentContext && (
         <div className="bg-gray-900 text-xs p-2 text-gray-400">
           Context: {currentContext.round}:{currentContext.questionId}:{currentContext.language} | 
           Code Length: {code.length} | 
           Store Keys: {Object.keys(codeStore).length}
         </div>
-      )}
+      )} */}
       
       {/* Main Content */}
       <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
@@ -820,7 +862,7 @@ export default function CodePage({
               {currentProblemIndex < problems.length - 1 && onNextQuestion && (
                 <Button
                   content="Next →"
-                  onClick={onNextQuestion}
+                  onClick={handleNextQuestionClick} // Changed this to open the modal
                 />
               )}
             </div>

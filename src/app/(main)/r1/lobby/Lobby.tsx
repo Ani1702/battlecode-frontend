@@ -48,7 +48,7 @@ interface GetStateResponse extends SimpleSocketResponse {
 export default function Lobbyr1(){
     const router = useRouter();
     const { socket, isConnected } = useSocket();
-    const { userId, isLoading: authLoading } = useAuth();
+    const { userId, isLoading: authLoading,userRole } = useAuth();
     
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [isRoundActive, setIsRoundActive] = useState(false);
@@ -58,8 +58,7 @@ export default function Lobbyr1(){
     const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
     const [authenticationChecked, setAuthenticationChecked] = useState(false);
     
-    const isAdmin = true; // Placeholder for admin role logic
-
+    const isAdmin = userRole === 'ADMIN';
     // Effect to handle user authentication and redirection
     useEffect(() => {
         if (!authLoading) setAuthenticationChecked(true);

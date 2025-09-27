@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import CodePage from "./CodePage";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
 
+
 // --- Interfaces ---
 interface Problem {
   id: string;
@@ -159,12 +160,12 @@ export default function R0Code() {
                               (response?.error?.message || 'No active round found.');
           showErrorToast(errorMessage);
           localStorage.removeItem(`battlecode-round-0-code-store`);
-          router.push('/r0/lobby');
+          router.push('/dashboard');
         }
       } catch (error) {
         console.error('Error processing round state:', error);
         showErrorToast('Failed to load round data. Please try again.');
-        router.push('/r0/lobby');
+        router.push('/dashboard');
       }
       setPageIsLoading(false);
     });
@@ -212,7 +213,10 @@ export default function R0Code() {
     }
   };
 
-  const handleReturnToLobby = () => router.push('/r0/lobby');
+  const handleReturnToLobby = () => {
+    showInfoToast('Round-0 has ended.');
+    router.push('/dashboard');
+  }
 
   // --- Render ---
   return (
