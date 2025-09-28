@@ -123,6 +123,34 @@ export default function R2CodePage() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   
+  function handleEditorMount(
+      editor: monaco.editor.IStandaloneCodeEditor,
+      monacoInstance: typeof import('monaco-editor')
+    ){
+      editorRef.current = editor;
+      // Disable paste via context menu
+      editor.addAction({
+        id: "disable-paste",
+        label: "Paste",
+        keybindings: [],
+        precondition: "false",
+        run: () => {}
+      });
+      // Block DOM paste events
+      const domNode = editor.getDomNode();
+      if (domNode) {
+        domNode.addEventListener("paste", (e: any) => {
+          e.preventDefault();
+          showErrorToast("Paste is disabled");
+        }, true);
+      }
+      // Block keyboard shortcut Ctrl/Cmd+V
+      editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+        showErrorToast("Paste shortcut is disabled");
+      });
+    }
+    
+  
   useEffect(() => { codeRef.current = code; }, [code]);
   useEffect(() => { 
     try { localStorage.setItem('battlecode-round-2-language', language); } catch (e) { console.error("Could not save language to localStorage.", e); }
@@ -229,6 +257,16 @@ export default function R2CodePage() {
   }, [sessionData, isSubmitting, isRunning, session?.access_token, language, code]);
 
   const monaco = useMonaco();
+  const getMonacoLanguage = (lang: string) => {
+    const languageMap: { [key: string]: string } = {
+      'python': 'python',
+      'java': 'java',
+      'cpp': 'cpp',
+      'c': 'c',
+      
+    };
+    return languageMap[lang] || 'python';
+  };
   useEffect(() => {
     monaco?.editor.defineTheme('custom-dark', {
       base: 'vs-dark', inherit: true, rules: [],
@@ -498,17 +536,20 @@ export default function R2CodePage() {
                       </div>
                   </div>
                   <div className="flex-1 rounded overflow-hidden border border-gray-700">
-                      <Editor 
-                        height="100%" 
-                        language={language} 
-                        value={code} 
-                        onChange={(v) => setCode(v || "")} 
-                        theme="custom-dark" 
-                        options={editorOptions}
-                        onMount={(editor) => {
-                          editorRef.current = editor;
-                        }}
-                      />
+                      <Editor
+  height="100%"
+  language={getMonacoLanguage(language)}
+  value={code}
+  onChange={(value) => setCode(value || "")}
+  theme="custom-dark"
+  options={editorOptions}
+  onMount={handleEditorMount}
+  loading={
+    <div className="flex items-center justify-center h-full bg-black">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+    </div>
+  }
+/>
                   </div>
               </div>
               <div onMouseDown={handleMouseDown} className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors flex items-center justify-center ${isDragging ? 'bg-amber-600/60' : ''}`}><div className="w-8 h-1 bg-amber-600 rounded-full"></div></div>

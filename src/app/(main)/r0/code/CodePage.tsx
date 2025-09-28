@@ -295,6 +295,32 @@ export default function CodePage({
     setIsContextInitialized(true);
   }, [currentProblem, round, language, isContextInitialized, contextManager]);
 
+  function handleEditorMount(
+    editor: editor.IStandaloneCodeEditor,
+    monacoInstance: typeof import('monaco-editor')
+  ){
+    editorRef.current = editor;
+    // Disable paste via context menu
+    editor.addAction({
+      id: "disable-paste",
+      label: "Paste",
+      keybindings: [],
+      precondition: "false",
+      run: () => {}
+    });
+    // Block DOM paste events
+    const domNode = editor.getDomNode();
+    if (domNode) {
+      domNode.addEventListener("paste", (e: any) => {
+        e.preventDefault();
+        showErrorToast("Paste is disabled");
+      }, true);
+    }
+    // Block keyboard shortcut Ctrl/Cmd+V
+    editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+      showErrorToast("Paste shortcut is disabled");
+    });
+  }
   
 
   // ============================================================================
@@ -513,7 +539,7 @@ export default function CodePage({
       'java': 'java',
       'cpp': 'cpp',
       'c': 'c',
-      'javascript': 'javascript',
+      
     };
     return languageMap[lang] || 'python';
   };
@@ -1040,9 +1066,7 @@ useEffect(() => {
   onChange={(value) => setCode(value || "")}
   theme="custom-dark"
   options={editorOptions}
-  onMount={(editor) => {
-    editorRef.current = editor;
-  }}
+  onMount={handleEditorMount}
   loading={
     <div className="flex items-center justify-center h-full bg-black">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>

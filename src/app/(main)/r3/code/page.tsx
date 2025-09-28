@@ -125,8 +125,7 @@ export default function Round3Page() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [isContextInitialized, setIsContextInitialized] = useState(false);
   const [isHackModalOpen, setIsHackModalOpen] = useState(false);
-  const [activeTestCaseTab, setActiveTestCaseTab] = useState<number | 'custom'>(0);
-  const [customInput, setCustomInput] = useState("");
+  const [activeTestCaseTab, setActiveTestCaseTab] = useState<number>(0);
 
   // --- Refs ---
   const hasInitialized = useRef(false);
@@ -147,7 +146,6 @@ export default function Round3Page() {
 
   useEffect(() => {
     setActiveTestCaseTab(0);
-    setCustomInput("");
   }, [currentProblem]);
 
   const round = "3";
@@ -202,7 +200,16 @@ export default function Round3Page() {
       scheduleAutoSave();
     }
   }, [code, isContextInitialized, currentContext, scheduleAutoSave]);
-
+  const getMonacoLanguage = (lang: string) => {
+    const languageMap: { [key: string]: string } = {
+      'python': 'python',
+      'java': 'java',
+      'cpp': 'cpp',
+      'c': 'c',
+      
+    };
+    return languageMap[lang] || 'python';
+  };
   // --- Code Context Transition Logic ---
   const handleContextTransition = useCallback((newProblem: Problem, newLanguage: string) => {
     const newContext = contextManager.createContext(round, newProblem.id, newLanguage);
@@ -355,6 +362,33 @@ export default function Round3Page() {
     monaco?.editor.setTheme('custom-dark');
   }, [monaco]);
 
+  function handleEditorMount(
+      editor: monaco.editor.IStandaloneCodeEditor,
+      monacoInstance: typeof import('monaco-editor')
+    ){
+      editorRef.current = editor;
+      // Disable paste via context menu
+      editor.addAction({
+        id: "disable-paste",
+        label: "Paste",
+        keybindings: [],
+        precondition: "false",
+        run: () => {}
+      });
+      // Block DOM paste events
+      const domNode = editor.getDomNode();
+      if (domNode) {
+        domNode.addEventListener("paste", (e: any) => {
+          e.preventDefault();
+          showErrorToast("Paste is disabled");
+        }, true);
+      }
+      // Block keyboard shortcut Ctrl/Cmd+V
+      editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+        showErrorToast("Paste shortcut is disabled");
+      });
+    }
+
   useEffect(() => {
     if (monaco && editorRef.current) {
       let internalClipboard = "";
@@ -400,6 +434,55 @@ export default function Round3Page() {
     }
   }, [monaco]);
 
+  useEffect(() => {
+  if (monaco && editorRef.current) {
+    const editor = editorRef.current;
+    let internalClipboard = "";
+
+    // Intercept Copy
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+      const selection = editor.getSelection();
+      if (selection) {
+        const selectedText = editor.getModel()?.getValueInRange(selection);
+        if (selectedText) {
+          internalClipboard = selectedText;
+        }
+      }
+    });
+
+    // Intercept Cut (FIXED)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+      const model = editor.getModel();
+      const selection = editor.getSelection(); // 1. Get the selection object first
+
+      // 2. Check that the model and selection exist
+      if (model && selection && !selection.isEmpty()) {
+        // 3. Get the text to save to the clipboard
+        const selectedText = model.getValueInRange(selection);
+        internalClipboard = selectedText;
+        
+        // 4. Perform the cut using the non-null selection object
+        editor.executeEdits("cut", [{ range: selection, text: "" }]);
+      }
+    });
+
+    // Intercept Paste (FIXED)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+      const selection = editor.getSelection(); // 1. Get the current selection/cursor position
+
+      // 2. Check if there's anything to paste and if there's a valid cursor position
+      if (internalClipboard && selection) {
+        // 3. Perform the paste
+        editor.executeEdits("paste", [{ range: selection, text: internalClipboard }]);
+      }
+    });
+
+    // Disable right-click menu
+    editor.updateOptions({ contextmenu: false });
+  }
+  // The dependency array should not include '.current'
+}, [monaco]);
+
 
   const editorOptions = { minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false, automaticLayout: true, wordWrap: 'on' as const, readOnly: isLocked };
 
@@ -431,7 +514,7 @@ export default function Round3Page() {
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // --- Core Action Handlers ---
-  const executeCode = useCallback(async (isFinalSubmission: boolean, customStdin?: string) => {
+  const executeCode = useCallback(async (isFinalSubmission: boolean) => {
     if (!currentProblem || (isSubmitting || isRunning)) return;
     const action = isFinalSubmission ? 'Submitting' : 'Running';
     if (isFinalSubmission) { setIsSubmitting(true); } else { setIsRunning(true); }
@@ -442,7 +525,6 @@ export default function Round3Page() {
 
     const endpoint = isFinalSubmission ? '/submit' : '/run';
     const body: SubmissionPayload = { language, source_code: code, problemId: currentProblem.id, roundNumber: parseInt(round) };
-    if (!isFinalSubmission && customStdin !== undefined) { body.stdin = customStdin; }
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/submit${endpoint}`, {
@@ -593,23 +675,27 @@ export default function Round3Page() {
                       <Lock className="h-4 w-4" />Lock
                     </button>
                   )}
-                  <button onClick={() => executeCode(false, activeTestCaseTab === 'custom' ? customInput : undefined)} disabled={isRunning || isSubmitting || isLocked} className="flex items-center bg-black text-white p-2 rounded border border-amber-600 hover:bg-amber-600 hover:text-black transition-colors disabled:opacity-50"><span className="pl-2">Run Code</span><Play className="ml-2 h-4 w-4" /></button>
+                  <button onClick={() => executeCode(false)} disabled={isRunning || isSubmitting || isLocked} className="flex items-center bg-black text-white p-2 rounded border border-amber-600 hover:bg-amber-600 hover:text-black transition-colors disabled:opacity-50"><span className="pl-2">Run Code</span><Play className="ml-2 h-4 w-4" /></button>
                   <button onClick={() => executeCode(true)} disabled={isSubmitting || isRunning || isLocked} className="flex items-center gap-2 bg-black text-white p-2 rounded border border-amber-600 hover:bg-amber-600 hover:text-black transition-colors disabled:opacity-50"><p className="pl-2">{isSubmitting ? "Submitting..." : "Submit"}</p><Image src="/submit_2.png" alt="submit" width={16} height={16} className="mr-2" /></button>
                   <button onClick={resetCodeToBoilerplate} title="Reset to boilerplate" disabled={isLocked} className="flex items-center gap-2 bg-black text-white p-2 rounded border border-amber-600 hover:bg-amber-600 hover:text-black transition-colors disabled:opacity-50"><RotateCcw className="h-4 w-4" /></button>
                 </div>
               </div>
               <div className={`flex-1 rounded overflow-hidden border border-gray-700 ${isLocked ? 'bg-gray-800/50' : ''}`}>
-                <Editor 
-                        height="100%" 
-                        language={language} 
-                        value={code} 
-                        onChange={(v) => setCode(v || "")} 
-                        theme="custom-dark" 
-                        options={editorOptions}
-                        onMount={(editor) => {
-                          editorRef.current = editor;
-                        }}
-                      />
+                <Editor
+  height="100%"
+  language={getMonacoLanguage(language)}
+  value={code}
+  onChange={(value) => setCode(value || "")}
+  theme="custom-dark"
+  options={editorOptions}
+  onMount={handleEditorMount}
+  loading={
+    <div className="flex items-center justify-center h-full bg-black">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+    </div>
+  }
+/>
+
               </div>
             </div>
             <div onMouseDown={handleMouseDown} className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors flex items-center justify-center ${isDragging ? 'bg-amber-600/60' : ''}`}><div className="w-8 h-1 bg-amber-600 rounded-full"></div></div>
@@ -625,22 +711,14 @@ export default function Round3Page() {
                       {currentProblem.sampleTestCases.map((_, i) => (
                         <button key={i} onClick={() => setActiveTestCaseTab(i)} className={`px-3 py-2 text-sm ${activeTestCaseTab === i ? 'bg-amber-600/20 text-amber-400' : 'text-gray-400 hover:bg-gray-800'}`}>Case {i + 1}</button>
                       ))}
-                      <button onClick={() => setActiveTestCaseTab('custom')} className={`px-3 py-2 text-sm ${activeTestCaseTab === 'custom' ? 'bg-amber-600/20 text-amber-400' : 'text-gray-400 hover:bg-gray-800'}`}>Custom Input</button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 font-mono text-sm">
-                      {activeTestCaseTab !== 'custom' && typeof activeTestCaseTab === 'number' ? (
-                        <div>
-                          <label className="text-gray-400 font-sans font-bold">Input:</label>
-                          <pre className="bg-black/40 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(currentProblem.sampleTestCases[activeTestCaseTab]?.stdin || currentProblem.sampleTestCases[activeTestCaseTab]?.input?.stdin || '')}</pre>
-                          <label className="text-gray-400 font-sans font-bold mt-3 block">Expected Output:</label>
-                          <pre className="bg-black/40 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(currentProblem.sampleTestCases[activeTestCaseTab]?.expected_output || currentProblem.sampleTestCases[activeTestCaseTab]?.output?.stdout || '')}</pre>
-                        </div>
-                      ) : (
-                        <div>
-                          <label className="text-gray-400 font-sans font-bold">Your Custom Input:</label>
-                          <textarea value={customInput} onChange={(e) => setCustomInput(e.target.value)} placeholder="Enter your custom input here..." className="w-full h-48 bg-black/40 p-2 rounded mt-1 whitespace-pre-wrap border border-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none" />
-                        </div>
-                      )}
+                      <div>
+                        <label className="text-gray-400 font-sans font-bold">Input:</label>
+                        <pre className="bg-black/40 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(currentProblem.sampleTestCases[activeTestCaseTab]?.stdin || currentProblem.sampleTestCases[activeTestCaseTab]?.input?.stdin || '')}</pre>
+                        <label className="text-gray-400 font-sans font-bold mt-3 block">Expected Output:</label>
+                        <pre className="bg-black/40 p-2 rounded mt-1 whitespace-pre-wrap">{formatTestCaseData(currentProblem.sampleTestCases[activeTestCaseTab]?.expected_output || currentProblem.sampleTestCases[activeTestCaseTab]?.output?.stdout || '')}</pre>
+                      </div>
                     </div>
                   </div>
                 ) : (

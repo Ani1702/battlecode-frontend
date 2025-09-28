@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import Editor, { useMonaco } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play } from "lucide-react";
@@ -88,6 +89,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   
   const codeRef = useRef(code);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   
   useEffect(() => { codeRef.current = code; }, [code]);
   useEffect(() => { localStorage.setItem('battlecode-round-1-language', language); }, [language]);
@@ -118,6 +120,17 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       return newStore;
     },
   }), []);
+
+  const getMonacoLanguage = (lang: string) => {
+    const languageMap: { [key: string]: string } = {
+      'python': 'python',
+      'java': 'java',
+      'cpp': 'cpp',
+      'c': 'c',
+      
+    };
+    return languageMap[lang] || 'python';
+  };
   
   const scheduleAutoSave = useCallback(() => {
     if (!currentContext || !codeRef.current) return;
@@ -257,6 +270,8 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     setCodeEditorHeight(newHeight);
   }, [isDragging]);
 
+  
+
   useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -316,6 +331,32 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
   const saveStatusDisplay = getSaveStatusDisplay();
   const timerDisplay = getTimerDisplay();
+  function handleEditorMount(
+      editor: monaco.editor.IStandaloneCodeEditor,
+      monacoInstance: typeof import('monaco-editor')
+    ){
+      editorRef.current = editor;
+      // Disable paste via context menu
+      editor.addAction({
+        id: "disable-paste",
+        label: "Paste",
+        keybindings: [],
+        precondition: "false",
+        run: () => {}
+      });
+      // Block DOM paste events
+      const domNode = editor.getDomNode();
+      if (domNode) {
+        domNode.addEventListener("paste", (e: any) => {
+          e.preventDefault();
+          showErrorToast("Paste is disabled");
+        }, true);
+      }
+      // Block keyboard shortcut Ctrl/Cmd+V
+      editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+        showErrorToast("Paste shortcut is disabled");
+      });
+    }
 
   return (
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
@@ -391,7 +432,20 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                       </div>
                   </div>
                   <div className="flex-1 rounded overflow-hidden border border-gray-700">
-                      <Editor height="100%" language={language} value={code} onChange={(v) => setCode(v || "")} theme="custom-dark" options={editorOptions} />
+                      <Editor
+  height="100%"
+  language={getMonacoLanguage(language)}
+  value={code}
+  onChange={(value) => setCode(value || "")}
+  theme="custom-dark"
+  options={editorOptions}
+  onMount={handleEditorMount}
+  loading={
+    <div className="flex items-center justify-center h-full bg-black">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+    </div>
+  }
+/>
                   </div>
               </div>
 

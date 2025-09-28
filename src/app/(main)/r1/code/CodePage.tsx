@@ -591,8 +591,28 @@ export default function R1CodePage() {
                 height="100%" language={getMonacoLanguage(language)} value={code}
                 onChange={(value) => setCode(value || "")} theme="custom-dark"
                 options={{ ...editorOptions, readOnly: matchPaused }}
-                onMount={(editor) => {
+                onMount={(editor, monacoInstance) => {
                   editorRef.current = editor;
+                  // Disable paste via context menu
+                  editor.addAction({
+                    id: "disable-paste",
+                    label: "Paste",
+                    keybindings: [],
+                    precondition: "false",
+                    run: () => {}
+                  });
+                  // Block DOM paste events
+                  const domNode = editor.getDomNode();
+                  if (domNode) {
+                    domNode.addEventListener("paste", (e: any) => {
+                      e.preventDefault();
+                      showErrorToast("Paste is disabled");
+                    }, true);
+                  }
+                  // Block keyboard shortcut Ctrl/Cmd+V
+                  editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+                    showErrorToast("Paste shortcut is disabled");
+                  });
                 }}
                 loading={<div className="flex items-center justify-center h-full bg-gray-900"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div></div>}
               />
