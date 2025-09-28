@@ -90,7 +90,7 @@ export default function Lobbyr1(){
     
             if (response.participant) {
                 // User is already a participant, handle their current status
-                console.log("User already a participant with status:", response.participant.status);
+                
                 if (response.participant.status === 'in-match') {
                     router.push('/r1/code'); // Redirect to their ongoing match
                 } else if (response.participant.status !== 'lobby') {

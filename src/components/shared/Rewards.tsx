@@ -28,7 +28,7 @@ const Rewards: React.FC<RewardsProps> = ({ badges, onBadgeClick }) => {
   }, [badges.length]);
 
   const handleBadgeClick = (badge: Badge) => {
-    console.log('Badge clicked:', badge.name);
+    
     if (onBadgeClick) {
       onBadgeClick(badge);
     } else if (badge.onClick) {

@@ -274,7 +274,7 @@ export default function CodePage({
   useEffect(() => {
     if (!currentProblem || isContextInitialized) return;
     
-    console.log('🚀 Initializing context for:', currentProblem.title);
+    
     
     // Load code store from localStorage
     const loadedStore = contextManager.loadCodeStore(round);
@@ -289,7 +289,7 @@ export default function CodePage({
     const boilerplate = contextManager.getBoilerplate(currentProblem, language);
     const codeToLoad = savedCode || boilerplate;
     
-    console.log('📝 Loading code for context:', initialContext, 'Code length:', codeToLoad.length);
+    
     setCode(codeToLoad);
     
     setIsContextInitialized(true);
@@ -308,11 +308,11 @@ export default function CodePage({
     
     // If context hasn't actually changed, don't do anything
     if (contextManager.contextEquals(currentContext, newContext)) {
-      console.log('🔄 Context unchanged, skipping transition');
+     
       return;
     }
     
-    console.log('🔄 Context transition:', currentContext, '->', newContext);
+    
     
     // STEP 1: Save current code to current context
     const currentCode = codeRef.current;
@@ -322,7 +322,7 @@ export default function CodePage({
     );
     
     if (currentCode && currentCode !== currentBoilerplate) {
-      console.log('💾 Saving current code before transition');
+      
       setCodeStore(prevStore => {
         const updatedStore = contextManager.setCodeForContext(prevStore, currentContext, currentCode);
         contextManager.saveCodeStore(round, updatedStore);
@@ -341,7 +341,7 @@ export default function CodePage({
     const newBoilerplate = contextManager.getBoilerplate(newProblem, newLanguage);
     const codeToLoad = savedCodeForNewContext || newBoilerplate;
     
-    console.log('📝 Loading code for new context:', newContext, 'Code length:', codeToLoad.length);
+    
     
     // STEP 4: Update state atomically
     setCurrentContext(newContext);
@@ -379,7 +379,7 @@ export default function CodePage({
     setSaveStatus('saving');
     
     saveTimeoutRef.current = setTimeout(() => {
-      console.log('💾 Auto-saving code for context:', currentContext);
+      
       
       setCodeStore(prevStore => {
         const updatedStore = contextManager.setCodeForContext(prevStore, currentContext, codeToSave);
@@ -418,7 +418,7 @@ export default function CodePage({
         if (context && codeToSave) {
           const boilerplate = contextManager.getBoilerplate(currentProblem, context.language);
           if (codeToSave !== boilerplate) {
-            console.log('🚨 Emergency save before page unload');
+
             const currentStore = contextManager.loadCodeStore(round);
             const updatedStore = contextManager.setCodeForContext(currentStore, context, codeToSave);
             contextManager.saveCodeStore(round, updatedStore);

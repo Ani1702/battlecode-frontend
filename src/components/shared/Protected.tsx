@@ -11,7 +11,7 @@ export default function Protected({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Only redirect if we're completely done loading AND have no user AND no session
     if (!isLoading && !user && !session && (pathname !== "/")) {
-      console.log("Protected: Redirecting to home - no user or session");
+
       router.push("/");
     }
   }, [user, session, isLoading, router, pathname]);

@@ -44,7 +44,7 @@ interface ErrorData {
 export default function Lobbyr0() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
-  const { user, userId, isLoading: authLoading } = useAuth();
+  const { user, userId, userRole, isLoading: authLoading } = useAuth();
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isRoundActive, setIsRoundActive] = useState(false);
@@ -54,7 +54,7 @@ export default function Lobbyr0() {
   const [hasJoinedLobby, setHasJoinedLobby] = useState(false);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
 
-  const isAdmin = true;
+  const isAdmin = userRole === "ADMIN";
 
   // Authentication and Lobby Join useEffects remain the same...
   useEffect(() => {

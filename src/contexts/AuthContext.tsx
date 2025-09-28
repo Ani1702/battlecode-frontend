@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Only clear if we explicitly marked a session as stuck, not just because we're on dashboard
           if (hasStuckSession === 'true') {
-            console.log('Clearing explicitly marked stuck session...');
+    
             await supabase.auth.signOut();
             localStorage.removeItem('stuck_session_detected');
             // Clear all auth-related storage
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.access_token) {
           setIsLoading(true); // Set loading during verification
           try {
-            console.log("Initial session verification starting...");
+       
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/verify`, {
               method: "POST",
               headers: {
@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (response.ok) {
               const data = await response.json();
-              console.log("Initial session verification successful:", data);
+      
               setHasUsername(data.hasUsername);
               
               // Store the user data from backend
@@ -177,8 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event: string, session: Session | null) => {
-      console.log("Auth state change event:", event, "Current path:", window.location.pathname);
-      
+     
       setSession(session);
       setUser(session?.user ?? null);
       setUserId(session?.user?.id ?? null);
@@ -189,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Only handle actual sign-ins, not token refreshes
         setIsLoading(true); // Set loading when starting verification
         try {
-          console.log("Starting backend verification for SIGNED_IN event...");
+        
           const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/verify`, {
             method: "POST",
             headers: {
@@ -199,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (response.ok) {
             const data = await response.json();
-            console.log("Backend verification successful:", data);
+         
             setHasUsername(data.hasUsername);
             
             // Store the user data from backend
@@ -213,10 +212,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             
             // Only redirect to dashboard if we're on the home page or login page
             // Don't redirect if user is already navigating within the app
-            const currentPath = window.location.pathname;
-            console.log("Current path after verification:", currentPath);
+            // const currentPath = window.location.pathname;
+           
             // if (currentPath === '/' || currentPath === '/login' || currentPath === '/auth-error') {
-            //   console.log("Redirecting to dashboard...");
+         
             //   router.push("/dashboard");
             // }
             // For any other path (like /r0/code), let the user stay where they are
@@ -296,12 +295,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false); // Clear loading on sign out
       } else if (event === "TOKEN_REFRESHED" && session) {
         // Handle token refresh without redirecting
-        console.log("Token refreshed, updating session state only");
+      
         // Just update the session state, don't verify again or redirect
         setIsLoading(false);
       } else if (event === "INITIAL_SESSION" && session) {
         // Handle initial session load without redirecting if already on a page
-        console.log("Initial session loaded");
+    
         // Only clear loading, don't trigger verification again
         setIsLoading(false);
       } else {
@@ -314,10 +313,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase.auth, router]);
   const signInWithGoogle = async () => {
     try {
-      console.log("🔐 Starting Google OAuth...");
-      console.log("🔐 Redirect URL will be:", `${location.origin}/api/auth/callback`);
+   
       
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${location.origin}/api/auth/callback`,
@@ -327,14 +325,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      console.log("🔐 OAuth response:", { data, error });
+
 
       if (error) {
         console.error("❌ Sign-in error:", error);
         throw error;
       }
       
-      console.log("🔐 OAuth initiated successfully, redirecting...");
+     
     } catch (error) {
       console.error("❌ Error during Google sign-in:", error);
     }

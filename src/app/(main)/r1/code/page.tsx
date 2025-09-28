@@ -325,7 +325,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                   <div>
                       <h2 className="text-2xl font-bold">{problem.title}</h2>
                       <div className="flex gap-4 text-sm text-gray-400 mt-1">
-                          <span>Difficulty: {problem.difficulty}</span>
+                          
                           <span>vs {matchData.opponent.id}</span>
                       </div>
                   </div>

@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Editor, { useMonaco } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth} from "@/contexts/AuthContext"; 
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
@@ -132,7 +133,7 @@ export default function Round3Page() {
   const isMountedRef = useRef(true);
   const codeRef = useRef(code);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  
   // --- Core Hooks & Memos ---
   useEffect(() => {
     isMountedRef.current = true;
@@ -260,8 +261,7 @@ export default function Round3Page() {
       setHackableSubmissions({});
       setIsHackingPhase(false);
       setIsHackModalOpen(false);
-      
-      console.log(`Context for round ${roundToClear} has been cleared.`);
+
     } catch (error) {
       console.error("Failed to clear match context:", error);
     }
@@ -346,6 +346,7 @@ export default function Round3Page() {
 
   // --- Editor and Resizing Logic ---
   const monaco = useMonaco();
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   useEffect(() => {
     monaco?.editor.defineTheme('custom-dark', {
       base: 'vs-dark', inherit: true, rules: [],
@@ -353,6 +354,52 @@ export default function Round3Page() {
     });
     monaco?.editor.setTheme('custom-dark');
   }, [monaco]);
+
+  useEffect(() => {
+    if (monaco && editorRef.current) {
+      let internalClipboard = "";
+      const editor = editorRef.current;
+
+      // intercept copy
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+        const sel = editor.getSelection();
+        if (sel) {
+          const selection = editor.getModel()?.getValueInRange(sel);
+          if (selection) {
+            internalClipboard = selection;
+          }
+        }
+      });
+
+      // intercept cut
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+        const sel = editor.getSelection();
+        if (sel) {
+          const selection = editor.getModel()?.getValueInRange(sel);
+          if (selection) {
+            internalClipboard = selection;
+            editor.executeEdits("cut", [
+              { range: sel, text: "", forceMoveMarkers: true },
+            ]);
+          }
+        }
+      });
+
+      // intercept paste
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+        const sel = editor.getSelection();
+        if (internalClipboard && sel) {
+          editor.executeEdits("paste", [
+            { range: sel, text: internalClipboard, forceMoveMarkers: true },
+          ]);
+        }
+      });
+
+      // disable right-click menu
+      editor.updateOptions({ contextmenu: false });
+    }
+  }, [monaco]);
+
 
   const editorOptions = { minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false, automaticLayout: true, wordWrap: 'on' as const, readOnly: isLocked };
 
@@ -501,7 +548,7 @@ export default function Round3Page() {
               <div>
                 <h2 className="text-2xl font-bold">{currentProblem.title}</h2>
                 <div className="flex items-center gap-4 text-sm text-gray-400 mt-2">
-                  <span>Difficulty: {currentProblem.difficulty}</span>
+                  {/* <span>Difficulty: {currentProblem.difficulty}</span> */}
                   <span>Round: {round.toUpperCase()}</span>
                   <div className="flex items-center gap-2 border border-gray-600 rounded-md p-1">
                     <button onClick={() => handleQuestionSelect(currentProblemIndex - 1)} disabled={currentProblemIndex === 0} aria-label="Previous question" className="p-1 rounded-md hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">
@@ -532,7 +579,7 @@ export default function Round3Page() {
               <div className="flex justify-between items-center mb-2 gap-2">
                 <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500" disabled={isLocked}>
                   <option value="python">Python</option><option value="java">Java</option>
-                  <option value="cpp">C++</option><option value="javascript">JavaScript</option>
+                  <option value="cpp">C++</option><option value="c">C</option>
                 </select>
                 <div className={`text-center p-2 font-mono text-xl bg-gray-800 rounded border border-amber-600 ${timerDisplay.className}`}>{timerDisplay.time}</div>
                 <div className="flex-1 flex justify-end items-center gap-2">
@@ -552,7 +599,17 @@ export default function Round3Page() {
                 </div>
               </div>
               <div className={`flex-1 rounded overflow-hidden border border-gray-700 ${isLocked ? 'bg-gray-800/50' : ''}`}>
-                <Editor height="100%" language={language} value={code} onChange={(v) => setCode(v || "")} theme="custom-dark" options={editorOptions} />
+                <Editor 
+                        height="100%" 
+                        language={language} 
+                        value={code} 
+                        onChange={(v) => setCode(v || "")} 
+                        theme="custom-dark" 
+                        options={editorOptions}
+                        onMount={(editor) => {
+                          editorRef.current = editor;
+                        }}
+                      />
               </div>
             </div>
             <div onMouseDown={handleMouseDown} className={`h-1 bg-amber-600/20 hover:bg-amber-600/40 cursor-row-resize transition-colors flex items-center justify-center ${isDragging ? 'bg-amber-600/60' : ''}`}><div className="w-8 h-1 bg-amber-600 rounded-full"></div></div>

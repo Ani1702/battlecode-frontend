@@ -190,7 +190,7 @@ export default function R1CodePage() {
             const elapsed = Date.now() - data.startTime;
             const remaining = Math.max(0, data.duration - elapsed);
             setTimeRemaining(Math.floor(remaining / 1000));
-            console.log('Set initial timer from sessionStorage:', Math.floor(remaining / 1000), 'seconds');
+           
         }
         if (data.question) {
           const problemData: Problem = {
@@ -323,7 +323,7 @@ export default function R1CodePage() {
         router.push('/dashboard');
     };
     const handleTimerUpdate = (data: { timeRemaining: number }) => {
-        console.log('Timer update received:', data.timeRemaining, 'seconds');
+
         setTimeRemaining(data.timeRemaining);
         
         // If timer is very low, warn user
@@ -356,7 +356,7 @@ export default function R1CodePage() {
   // Request timer sync when socket and matchData are available
   useEffect(() => {
     if (socket && matchData && matchData.question && !isLoading) {
-      console.log('Requesting timer sync for question:', matchData.question.id);
+      
       socket.emit('round1:getTimerState', { questionId: matchData.question.id });
       
       // Set up periodic timer sync every 10 seconds to stay accurate

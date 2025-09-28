@@ -11,7 +11,7 @@ export default function ClearSessionPage() {
   useEffect(() => {
     const clearEverything = async () => {
       try {
-        console.log('Emergency session clear initiated...');
+
         
         // Sign out from Supabase
         await supabase.auth.signOut();
@@ -27,7 +27,7 @@ export default function ClearSessionPage() {
           });
         }
         
-        console.log('Emergency session clear completed');
+      
         
         // Redirect to home after 2 seconds
         setTimeout(() => {

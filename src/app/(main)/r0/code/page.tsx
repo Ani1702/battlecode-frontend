@@ -120,7 +120,7 @@ export default function R0Code() {
     // PRIMARY METHOD: Attempt to load data from sessionStorage
     const storedDataRaw = sessionStorage.getItem('round0_data');
     if (storedDataRaw) {
-      console.log("✅ Data found in sessionStorage. Initializing page.");
+  
       try {
         const storedData = JSON.parse(storedDataRaw);
         sessionStorage.removeItem('round0_data'); // Clean up immediately
@@ -145,7 +145,7 @@ export default function R0Code() {
     }
 
     // FALLBACK METHOD: Only runs if sessionStorage is empty (e.g., on page refresh)
-    console.log("🟡 No session data. Fetching from server (fallback).");
+    
     socket.emit('round0:getState', {}, (response: StateResponse) => {
       if (!isMountedRef.current) return;
       try {

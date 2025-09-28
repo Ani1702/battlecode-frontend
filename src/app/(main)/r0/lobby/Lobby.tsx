@@ -92,12 +92,12 @@ export default function Lobbyr0() {
 
     socket.emit('round0:getState', {}, (data: GameStateData) => {
       if (data && data.success) {
-        console.log("Active match found for user.", data);
+     
         setUserHasActiveMatch(true);
         setIsRoundActive(true);
         setTimeRemaining(data.timeRemaining || 0);
       } else {
-        console.log("No active match found, attempting to join lobby.");
+      
         socket.emit('round0:join', { userId, username: user?.user_metadata?.full_name || user?.id }, (joinResponse: JoinResponse) => {
             if (joinResponse && !joinResponse.success) {
                 console.error("Failed to join lobby:", joinResponse.error);
@@ -127,7 +127,7 @@ export default function Lobbyr0() {
     };
 
     const handleRoundStart = (data: RoundStartData) => {
-      console.log('Round 0 started! Data received:', data);
+ 
       
       if (data && typeof data === 'object' && data.problems && data.startTime) {
         try {

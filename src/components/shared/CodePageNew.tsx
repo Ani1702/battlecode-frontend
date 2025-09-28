@@ -179,7 +179,7 @@ export default function CodePage({ round }: CodePageProps) {
           setIsTimerRunning(false);
           // Update session status
           setQuestionSession(prev => prev ? { ...prev, status: 'timeout' } : null);
-          console.log("Time's up!");
+ 
           alert("Time's up! The question will be auto-submitted.");
           return 0;
         }

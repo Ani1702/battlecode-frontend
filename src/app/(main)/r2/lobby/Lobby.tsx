@@ -188,9 +188,9 @@ export default function LobbyR2() {
             <header className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(8, 145, 178, 1)' }}>
                 <h1 className='flex-1 flex items-end pt-8'>
                     <span className="text-white">ROUND</span>
-                    <span className="text-cyan-400">&nbsp; 2</span>
+                    <span className="text-orange-500">&nbsp; 2</span>
                 </h1>
-                <h2 className="text-cyan-400 text-2xl pb-4">LOBBY</h2>
+                <h2 className="text-orange-500 text-2xl pb-4">LOBBY</h2>
                 
                 {isRoundActive && (
                     <div className="mt-3 flex flex-col items-center gap-2">
@@ -239,7 +239,7 @@ export default function LobbyR2() {
                     {isAdmin && (
                         <button
                             onClick={handleStartRound}
-                            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-sky-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={lobbyParticipants.length < 2 || !isConnected}
                         >
                             <Rocket className="h-4 w-4" />

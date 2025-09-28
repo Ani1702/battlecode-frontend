@@ -451,7 +451,7 @@ export default function R2CodePage() {
                   <div>
                       <h2 className="text-2xl font-bold">{question.title}</h2>
                       <div className="flex gap-4 text-sm text-gray-400 mt-1">
-                          <span>Difficulty: {question.difficulty}</span>
+                          {/* <span>Difficulty: {question.difficulty}</span> */}
                           {type === 'match' && opponent && <span>vs {opponent.username}</span>}
                           {type === 'bounty' && <span>Bounty Challenge</span>}
                       </div>

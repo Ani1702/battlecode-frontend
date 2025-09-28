@@ -85,7 +85,7 @@ export default function Dashboard() {
     
     // If we have a session but no user and we're not loading, it means verification is in progress
     if (!isLoading && session && !user) {
-      console.log("Session exists but user verification in progress...");
+      
     }
     
     prevUserRef.current = user;
@@ -116,7 +116,7 @@ export default function Dashboard() {
   useEffect(() => {
     const prevUser = prevUserRef.current;
     if (!prevUser && user && !isLoading && !hasShownLoginToast) {
-      console.log("🎉 User successfully authenticated, showing login toast");
+    
       showSuccessToast("Successfully logged in");
       setHasShownLoginToast(true);
       
@@ -124,7 +124,7 @@ export default function Dashboard() {
       setIsAdmin(userRole === 'ADMIN');
     }
     if (prevUser && !user && !isLoading) {
-      console.log("🔄 User signed out, resetting toast flag");
+
       showSuccessToast("Signed Out");
       setHasShownLoginToast(false);
       setIsAdmin(false);
@@ -155,15 +155,15 @@ export default function Dashboard() {
     }
 
     if (!socket || !isConnected) {
-      console.log("❌ Socket not ready", { hasSocket: !!socket, isConnected });
+    
       return;
     }
 
-    console.log("✅ Socket is ready, setting up event listeners");
+ 
 
     // Listen for leaderboard updates
     const handleLeaderboard = (data: { leaderboard: LeaderboardEntry[] }) => {
-      console.log("📊 Received leaderboard update:", data);
+      
       setLeaderboard(data.leaderboard);
       // Persist to localStorage
       if (isClient) {
@@ -173,7 +173,7 @@ export default function Dashboard() {
 
     // Listen for current round updates
     const handleCurrentRound = (data: CurrentRoundData) => {
-      console.log("🎮 Received current round update:", data);
+     
       setCurrentRoundData(data);
 
       // Update locked status based on round data
@@ -183,7 +183,7 @@ export default function Dashboard() {
           newLockedStatus[round.roundNumber] = round.isLocked;
         }
       });
-      console.log("🔒 Updated lock status:", newLockedStatus);
+      
       setIsLocked(newLockedStatus);
 
       // Persist to localStorage
@@ -198,7 +198,7 @@ export default function Dashboard() {
     socket.on("server:currentRound", handleCurrentRound);
 
     // Request initial data when socket connects
-    console.log("📡 Requesting initial data from socket...");
+   
     socket.emit("client:join");
 
 
@@ -209,7 +209,7 @@ export default function Dashboard() {
 
     // Cleanup function
     return () => {
-      console.log("🧹 Cleaning up socket event listeners");
+  
       socket.off("server:leaderboard", handleLeaderboard);
       socket.off("server:currentRound", handleCurrentRound);
     };
