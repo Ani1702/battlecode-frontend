@@ -310,12 +310,12 @@ export default function CodePage({
     });
     // Block DOM paste events
     const domNode = editor.getDomNode();
-    if (domNode) {
-      domNode.addEventListener("paste", (e: any) => {
-        e.preventDefault();
-        showErrorToast("Paste is disabled");
-      }, true);
-    }
+if (domNode) {
+  domNode.addEventListener("paste", (e: ClipboardEvent) => { // Fixed with the specific event type
+    e.preventDefault();
+    showErrorToast("Paste is disabled");
+  }, true);
+}
     // Block keyboard shortcut Ctrl/Cmd+V
     editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
       showErrorToast("Paste shortcut is disabled");

@@ -181,6 +181,7 @@ export default function Lobbyr0() {
 
   const handleStartRound = () => {
     if (!socket || participants.length === 0) return;
+    localStorage.removeItem(`battlecode-round-0-code-store`);
     socket.emit('round0:ready');
   };
 
