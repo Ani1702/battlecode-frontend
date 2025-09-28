@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Image from "next/image";
 // import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import type { editor } from 'monaco-editor';
 import { 
   // Lightbulb, 
   RotateCcw, 
@@ -121,7 +122,7 @@ export default function CodePage({
   const [isContextInitialized, setIsContextInitialized] = useState(false);
   
   // Stable refs for race-free operations
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const codeRef = useRef(code);
   const currentContextRef = useRef(currentContext);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -552,41 +553,52 @@ export default function CodePage({
 // Add this after the Monaco theme useEffect (around line 580)
 useEffect(() => {
   if (monaco && editorRef.current) {
-    let internalClipboard = "";
     const editor = editorRef.current;
+    let internalClipboard = "";
 
-    // intercept copy
+    // Intercept Copy
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-      const selection = editor.getModel()?.getValueInRange(editor.getSelection());
+      const selection = editor.getSelection();
       if (selection) {
-        internalClipboard = selection;
+        const selectedText = editor.getModel()?.getValueInRange(selection);
+        if (selectedText) {
+          internalClipboard = selectedText;
+        }
       }
     });
 
-    // intercept cut
+    // Intercept Cut (FIXED)
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
-      const selection = editor.getModel()?.getValueInRange(editor.getSelection());
-      if (selection) {
-        internalClipboard = selection;
-        editor.executeEdits("cut", [
-          { range: editor.getSelection(), text: "", forceMoveMarkers: true },
-        ]);
+      const model = editor.getModel();
+      const selection = editor.getSelection(); // 1. Get the selection object first
+
+      // 2. Check that the model and selection exist
+      if (model && selection && !selection.isEmpty()) {
+        // 3. Get the text to save to the clipboard
+        const selectedText = model.getValueInRange(selection);
+        internalClipboard = selectedText;
+        
+        // 4. Perform the cut using the non-null selection object
+        editor.executeEdits("cut", [{ range: selection, text: "" }]);
       }
     });
 
-    // intercept paste
+    // Intercept Paste (FIXED)
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-      if (internalClipboard) {
-        editor.executeEdits("paste", [
-          { range: editor.getSelection(), text: internalClipboard, forceMoveMarkers: true },
-        ]);
+      const selection = editor.getSelection(); // 1. Get the current selection/cursor position
+
+      // 2. Check if there's anything to paste and if there's a valid cursor position
+      if (internalClipboard && selection) {
+        // 3. Perform the paste
+        editor.executeEdits("paste", [{ range: selection, text: internalClipboard }]);
       }
     });
 
-    // disable right-click menu
+    // Disable right-click menu
     editor.updateOptions({ contextmenu: false });
   }
-}, [monaco, editorRef.current]);
+  // The dependency array should not include '.current'
+}, [monaco]);
 
   // ============================================================================
   // CODE EXECUTION

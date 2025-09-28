@@ -6,6 +6,7 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
 import Editor, { useMonaco } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 
 // FIX: Add the robust useInterval custom hook. This is a standard pattern
@@ -80,7 +81,7 @@ export default function R1CodePage() {
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
   const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
   const editorOptions = {
     minimap: { enabled: false }, fontSize: 14, lineNumbers: 'on' as const,
@@ -121,28 +122,35 @@ export default function R1CodePage() {
 
       // intercept copy
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-        const selection = editor.getModel()?.getValueInRange(editor.getSelection());
-        if (selection) {
-          internalClipboard = selection;
+        const sel = editor.getSelection();
+        if (sel) {
+          const selection = editor.getModel()?.getValueInRange(sel);
+          if (selection) {
+            internalClipboard = selection;
+          }
         }
       });
 
       // intercept cut
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
-        const selection = editor.getModel()?.getValueInRange(editor.getSelection());
-        if (selection) {
-          internalClipboard = selection;
-          editor.executeEdits("cut", [
-            { range: editor.getSelection(), text: "", forceMoveMarkers: true },
-          ]);
+        const sel = editor.getSelection();
+        if (sel) {
+          const selection = editor.getModel()?.getValueInRange(sel);
+          if (selection) {
+            internalClipboard = selection;
+            editor.executeEdits("cut", [
+              { range: sel, text: "", forceMoveMarkers: true },
+            ]);
+          }
         }
       });
 
       // intercept paste
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-        if (internalClipboard) {
+        const sel = editor.getSelection();
+        if (internalClipboard && sel) {
           editor.executeEdits("paste", [
-            { range: editor.getSelection(), text: internalClipboard, forceMoveMarkers: true },
+            { range: sel, text: internalClipboard, forceMoveMarkers: true },
           ]);
         }
       });
@@ -150,7 +158,7 @@ export default function R1CodePage() {
       // disable right-click menu
       editor.updateOptions({ contextmenu: false });
     }
-  }, [monaco, editorRef.current]);
+  }, [monaco]);
 
   
 

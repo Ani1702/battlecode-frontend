@@ -9,7 +9,7 @@ import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import HackModal from "@/components/shared/HackModal";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
 import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play, ChevronLeft, ChevronRight, Lock, Swords, Clock, MemoryStick } from "lucide-react";
-import toast from "react-hot-toast";
+
 
 // --- Interfaces ---
 interface Problem {
@@ -275,7 +275,7 @@ export default function Round3Page() {
       if (isMountedRef.current) setTimeRemaining(data.timeRemaining || 0);
     };
     
-    const handleRoundEnd = (data: { message?: string }) => {
+    const handleRoundEnd = () => {
       if (!isMountedRef.current) return;
       clearMatchContext(round);
       showSuccessToast("Round 3 completed!");

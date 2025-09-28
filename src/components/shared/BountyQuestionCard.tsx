@@ -16,9 +16,10 @@ export interface BountyQuestion {
 interface BountyQuestionCardProps {
   question: BountyQuestion;
   onSolve: (questionId: string) => void;
+  questionIndex : number;
 }
 
-export default function BountyQuestionCard({ question, onSolve }: BountyQuestionCardProps) {
+export default function BountyQuestionCard({ question, onSolve, questionIndex }: BountyQuestionCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // --- Determine the card's state based on the new props ---
@@ -41,14 +42,14 @@ export default function BountyQuestionCard({ question, onSolve }: BountyQuestion
   };
 
   // --- Updated logic for the small card's status text ---
-  const getCardStatus = () => {
-    if (hasUserSolved) return { text: '✓ SOLVED', className: 'text-green-300' };
-    if (hasUserAttempted) return { text: 'ATTEMPTED', className: 'text-yellow-300' };
-    if (isBountyClaimed) return { text: 'CLAIMED', className: 'text-white/80' };
-    return { text: 'AVAILABLE', className: 'text-white/80' };
-  };
+  // const getCardStatus = () => {
+  //   if (hasUserSolved) return { text: '✓ SOLVED', className: 'text-green-300' };
+  //   if (hasUserAttempted) return { text: 'ATTEMPTED', className: 'text-yellow-300' };
+  //   if (isBountyClaimed) return { text: 'CLAIMED', className: 'text-white/80' };
+  //   return { text: 'AVAILABLE', className: 'text-white/80' };
+  // };
 
-  const cardStatus = getCardStatus();
+  // const cardStatus = getCardStatus(); // Removed unused variable
   
   // --- Updated logic for the main action button in the modal ---
   const getButtonState = () => {
@@ -63,14 +64,13 @@ export default function BountyQuestionCard({ question, onSolve }: BountyQuestion
     <>
       {/* Small Card */}
       <div
-        className={`w-auto h-16 rounded-lg shadow-lg mt-2 ml-2 p-2 cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 ${
+        className={`w-32 h-20 rounded-lg shadow-lg mt-2 ml-2 p-2 cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 ${
           isBountyClaimed ? 'bg-cyan-700' : 'bg-orange-500' // Color reflects if bounty is claimed
-        } border-2 border-white/30 mb-2 mr-2 inline-flex flex-col justify-center items-center transform hover:z-10 relative`}
+        } border-2 border-white/30 mb-2 mr-2 flex justify-center items-center transform hover:z-10 relative`}
         onClick={() => setIsModalOpen(true)}
       >
-        <div className="text-white text-xs font-bold font-orbitron truncate max-w-[80px]">{question.name}</div>
-        <div className={`text-xs ${cardStatus.className}`}>
-          {cardStatus.text}
+        <div className="text-white text-4xl font-bold font-orbitron">
+          {questionIndex + 1}
         </div>
       </div>
 
@@ -88,7 +88,7 @@ export default function BountyQuestionCard({ question, onSolve }: BountyQuestion
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 oxanium">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium border ${getDifficultyBg(question.difficulty)} ${getDifficultyColor(question.difficulty)}`}>
                   {question.difficulty.replace('R2_','')}
@@ -109,7 +109,7 @@ export default function BountyQuestionCard({ question, onSolve }: BountyQuestion
 
               <div>
                 <h4 className="text-cyan-300 font-semibold mb-2">Description:</h4>
-                <p className="text-gray-300 text-sm leading-relaxed bg-black/20 rounded-lg p-3 max-h-40 overflow-y-auto">
+                <p className="text-gray-300 text-sm leading-relaxed bg-black/20 rounded-lg p-3 oxanium max-h-40 overflow-y-auto">
                   {question.description}
                 </p>
               </div>

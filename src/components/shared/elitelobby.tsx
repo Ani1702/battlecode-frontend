@@ -342,13 +342,16 @@ export default function EliteDashboard() {
             <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
               <h2 className="text-2xl font-bold text-white mb-4 orbitron">Bounty Questions</h2>
               <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto pr-2">
-                {bountyQuestions.map((question) => (
-                    <BountyQuestionCard
-                      key={question.id}
-                      question={question}
-                      onSolve={() => handleStartBounty(question.id)}
-                    />
-                  ))}
+                <div className="grid grid-cols-4 gap-2">
+                  {bountyQuestions.map((question, index) => (
+                      <BountyQuestionCard
+                        key={question.id}
+                        question={question}
+                        onSolve={() => handleStartBounty(question.id)}
+                        questionIndex={index}
+                      />
+                    ))}
+                </div>
               </CustomScrollbar>
             </div>
           </div>
