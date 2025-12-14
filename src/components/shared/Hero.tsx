@@ -15,7 +15,7 @@ const Hero = () => {
     }
     setIsExiting(true);
     setTimeout(() => {
-      router.push("/dashboard");
+      router.push("/r1/rules");
     }, 1000);
   };
 
@@ -23,7 +23,7 @@ const Hero = () => {
     if (event.key === 'Enter' && user) {
       setIsExiting(true);
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/r1/rules');
       }, 1000); // Wait for animation to complete
     }
   }, [user, router]);
