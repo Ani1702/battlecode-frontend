@@ -2,12 +2,13 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState, useCallback } from "react";
+import {useSocket} from "@/contexts/SocketContext";
 
 const Hero = () => {
   const router = useRouter();
   const { signInWithGoogle, user, isLoading } = useAuth();
   const [isExiting, setIsExiting] = useState(false);
-
+  const {socket, isConnected} = useSocket();
   const handleAuthClick = async () => {
     if (!user) {
       await signInWithGoogle();
@@ -15,6 +16,7 @@ const Hero = () => {
     }
     setIsExiting(true);
     setTimeout(() => {
+      socket?.emit("client:join");
       router.push("/r1/rules");
     }, 1000);
   };
@@ -23,6 +25,7 @@ const Hero = () => {
     if (event.key === 'Enter' && user) {
       setIsExiting(true);
       setTimeout(() => {
+
         router.push('/r1/rules');
       }, 1000); // Wait for animation to complete
     }

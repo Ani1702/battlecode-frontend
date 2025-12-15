@@ -123,6 +123,17 @@ export default function Admin() {
         });
     };
 
+    const handleStartRound = (roundNumber: number) => {
+        if (!socket || participants.length === 0) return;
+        socket.emit(`round${roundNumber}:ready`, {}, (response: SimpleSocketResponse) => {
+            if (response.success) {
+                showSuccessToast(`Round ${roundNumber} started successfully`);
+            } else {
+                showErrorToast(response.error || 'Failed to start the round');
+            }
+        });
+    };
+
     const fetchRoundData = async () => {
         try {
             if (!session?.access_token) return;
@@ -216,24 +227,25 @@ export default function Admin() {
     useEffect(() => {
         if (!socket) return;
 
-        const handleLobbyUpdate = (data: any) => {
-            if (data.participants) {
+        const handleLobbyUpdate = (roundNumber: number) => (data: any) => {
+            // Only update if this is the currently selected round
+            if (roundNumber === selectedRoundForUsers && data.participants) {
                 setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
             }
         };
 
-        socket.on('lobby:round0', handleLobbyUpdate);
-        socket.on('lobby:round1', handleLobbyUpdate);
-        socket.on('lobby:round2', handleLobbyUpdate);
-        socket.on('lobby:round3', handleLobbyUpdate);
+        socket.on('lobby:round0', handleLobbyUpdate(0));
+        socket.on('lobby:round1', handleLobbyUpdate(1));
+        socket.on('lobby:round2', handleLobbyUpdate(2));
+        socket.on('lobby:round3', handleLobbyUpdate(3));
 
         return () => {
-            socket.off('lobby:round0', handleLobbyUpdate);
-            socket.off('lobby:round1', handleLobbyUpdate);
-            socket.off('lobby:round2', handleLobbyUpdate);
-            socket.off('lobby:round3', handleLobbyUpdate);
+            socket.off('lobby:round0', handleLobbyUpdate(0));
+            socket.off('lobby:round1', handleLobbyUpdate(1));
+            socket.off('lobby:round2', handleLobbyUpdate(2));
+            socket.off('lobby:round3', handleLobbyUpdate(3));
         };
-    }, [socket]);
+    }, [socket, selectedRoundForUsers]);
 
     const resetAllRounds = async () => {
   try {
@@ -453,7 +465,22 @@ export default function Admin() {
 
             {/* Lobby Users Section */}
             <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
-              <h4 className="text-orange-400 font-medium mb-4">Lobby Users by Round</h4>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-orange-400 font-medium">Lobby Users by Round</h4>
+                {participants.length > 0 && (
+                  <button
+                    onClick={() => handleStartRound(selectedRoundForUsers)}
+                    disabled={!socket || participants.length === 0}
+                    className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+                      !socket || participants.length === 0
+                        ? 'bg-gray-600 cursor-not-allowed opacity-50'
+                        : 'bg-green-600 hover:bg-green-500 hover:scale-105'
+                    } text-white`}
+                  >
+                    Start Round {selectedRoundForUsers}
+                  </button>
+                )}
+              </div>
               <div className="space-y-4">
                 <div className="flex gap-2">
                   {[0, 1, 2, 3].map((round) => (
