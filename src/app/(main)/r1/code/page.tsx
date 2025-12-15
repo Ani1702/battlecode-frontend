@@ -9,6 +9,7 @@ import * as monaco from 'monaco-editor';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play } from "lucide-react";
+import SecureWrapper from "@/components/shared/SecureWrapper";
 
 // --- Interfaces ---
 interface MatchData {
@@ -359,6 +360,7 @@ if (domNode) {
     }
 
   return (
+    <SecureWrapper>
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
         <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
           <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
@@ -495,6 +497,7 @@ if (domNode) {
           </div>
         </div>
     </div>
+    </SecureWrapper>
   );
 }
 
