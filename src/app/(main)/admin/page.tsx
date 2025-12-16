@@ -236,7 +236,7 @@ export default function Admin() {
         const handleLobbyUpdate = (roundNumber: number) => (data: any) => {
             // Only update if this is the currently selected round
             if (roundNumber === selectedRoundForUsers && data.participants) {
-                setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby' && p.roundNumber === roundNumber));
+                setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
             }
         };
 
@@ -311,6 +311,9 @@ export default function Admin() {
       setAdminLoading(false);
     }
   };
+
+
+ 
 
   const getStatusButtonColor = (currentStatus: string, targetStatus: string) => {
     const statusColors: { [key: string]: string } = {

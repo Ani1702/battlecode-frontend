@@ -68,47 +68,61 @@ export default function Lobbyr1(){
 
     // Effect to handle initial server state synchronization and joining the lobby
     useEffect(() => {
-        if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin) return;
-    
-        // 1. Request the current round state from the server
-        socket.emit('round1:getState', {}, (response: GetStateResponse) => {
-            setIsLoading(false);
-            setHasAttemptedJoin(true); // Ensures this logic runs only once
-    
-            if (!response.success) {
-                showErrorToast(response.error || "Could not sync with the server.");
-                return;
-            }
-            
-            // --- FIX: Populate participant list and round status on initial load ---
-            // This ensures that on refresh, the lobby state is immediately restored.
-            if (response.allParticipants) {
-                setParticipants(response.allParticipants.filter(p => p.status === 'lobby'));
-            }
-            setIsRoundActive(response.isActive ?? false);
-            // --- END FIX ---
-    
-            if (response.participant) {
-                // User is already a participant, handle their current status
-                
-                if (response.participant.status === 'in-match') {
-                    router.push('/r1/code'); // Redirect to their ongoing match
-                } else if (response.participant.status !== 'lobby') {
-                    router.push('/r1/waiting'); // Redirect to the waiting room
-                }
-                // If status is 'lobby', they remain on this page.
+    console.log("use effect 1");
+
+    if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin)
+        return;
+
+    console.log("use effect 2");
+
+    socket.emit("round1:getState");
+}, [socket, isConnected, authenticationChecked, hasAttemptedJoin]);
+
+
+    const handleState = (response: GetStateResponse) => {
+        console.log("use effect 3 ✅");
+
+        setIsLoading(false);
+        setHasAttemptedJoin(true);
+
+        if (!response.success) {
+        showErrorToast(response.error || "Could not sync with the server.");
+        return;
+        }
+
+        // Populate lobby
+        if (response.allParticipants) {
+        setParticipants(response.allParticipants.filter(p => p.status === "lobby"));
+        }
+
+        setIsRoundActive(response.isActive ?? false);
+
+        if (response.participant) {
+        if (response.participant.status === "in-match") {
+            router.push("/r1/code");
+        } else if (response.participant.status !== "lobby") {
+            router.push("/r1/waiting");
+        }
+        } else {
+        // Not a participant → join
+        socket?.emit("round1:join", {}, (joinResponse: SimpleSocketResponse) => {
+            if (joinResponse.success) {
+            showSuccessToast("Successfully joined Round 1 lobby");
             } else {
-                // 2. If not a participant, join the lobby
-                socket.emit('round1:join', {}, (joinResponse: SimpleSocketResponse) => {
-                    if (joinResponse.success) {
-                        showSuccessToast('Successfully joined Round 1 lobby');
-                    } else {
-                        showErrorToast(joinResponse.error || 'Failed to join the lobby');
-                    }
-                });
+            showErrorToast(joinResponse.error || "Failed to join lobby");
             }
         });
-    }, [socket, isConnected, authenticationChecked, hasAttemptedJoin, router]);
+        }
+    };
+
+    useEffect(() => {
+    if (!socket) return;
+    socket.on("round1:state", handleState);
+
+    return () => {
+        socket.off("round1:state", handleState);
+    };
+}, [socket, router]);
 
     // Effect to set up and tear down all socket event listeners
     useEffect(() => {
