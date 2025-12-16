@@ -1,7 +1,7 @@
 "use client"
 import {useState} from 'react';
 import {useAuth} from "@/contexts/AuthContext";
-import { showErrorToast, showSuccessToast } from "@/components/shared/CustomToast";
+import { showErrorToast, showInfoToast, showSuccessToast } from "@/components/shared/CustomToast";
 import {useRef} from 'react';
 import {useRouter} from "next/navigation"
 import { useEffect } from 'react';
@@ -38,9 +38,6 @@ interface GetStateResponse extends SimpleSocketResponse {
     isActive?: boolean;
     allParticipants?: Participant[]; // Added to correctly type the full list response
 }
-
-
-
 
 export default function Admin() {
     const [isAdmin, setIsAdmin] = useState(false);
@@ -135,16 +132,13 @@ export default function Admin() {
         });
     };
 
-    const endRound = (roundNumber: number) => {
-      if (!socket && (roundNumber !== undefined || roundNumber !== null)) return;
-      socket?.emit(`round${roundNumber}:end`, {}, (response: SimpleSocketResponse) =>{
-        if (response.success) {
-                showSuccessToast(`Round ${roundNumber} started successfully`);
-            } else {
-                showErrorToast(response.error || 'Failed to start the round');
-            }
-      });
-    };
+      const endRound = (roundNumber: number) => {
+        if (!socket) return;
+
+        socket.emit("admin:endRound", { roundNumber });
+
+        showInfoToast(`Ending Round ${roundNumber}...`);
+      };
 
     const fetchRoundData = async () => {
         try {
@@ -259,7 +253,7 @@ export default function Admin() {
         };
     }, [socket, selectedRoundForUsers]);
 
-    const resetAllRounds = async () => {
+  const resetAllRounds = async () => {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/reset`, {
       method: 'POST',
