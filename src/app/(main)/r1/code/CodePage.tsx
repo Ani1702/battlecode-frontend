@@ -421,6 +421,30 @@ export default function R1CodePage() {
   const handleMouseUp = () => { setIsDragging(false); };
 
   useEffect(() => {
+  if (!socket) return;
+
+  const handleState = (data: any) => {
+    if (!data.success) return;
+
+    if (data.matchData) {
+      setMatchData(prev => prev ? { ...prev, ...data.matchData } : data.matchData);
+    }
+
+    if (typeof data.globalTimeRemaining === "number") {
+      setTimeRemaining(data.globalTimeRemaining);
+    }
+  };
+
+  socket.on("round1:state", handleState);
+  socket.emit("round1:getState"); // request once on mount
+
+  return () => {
+    socket.off("round1:state", handleState);
+  };
+}, [socket]);
+
+
+  useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
