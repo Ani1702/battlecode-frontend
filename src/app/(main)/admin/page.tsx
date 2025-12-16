@@ -118,6 +118,7 @@ export default function Admin() {
             }
             
             if (response.allParticipants) {
+
                 setParticipants(response.allParticipants.filter(p => p.status === 'lobby'));
             }
         });
@@ -132,6 +133,17 @@ export default function Admin() {
                 showErrorToast(response.error || 'Failed to start the round');
             }
         });
+    };
+
+    const endRound = (roundNumber: number) => {
+      if (!socket && (roundNumber !== undefined || roundNumber !== null)) return;
+      socket?.emit(`round${roundNumber}:end`, {}, (response: SimpleSocketResponse) =>{
+        if (response.success) {
+                showSuccessToast(`Round ${roundNumber} started successfully`);
+            } else {
+                showErrorToast(response.error || 'Failed to start the round');
+            }
+      });
     };
 
     const fetchRoundData = async () => {
@@ -230,7 +242,7 @@ export default function Admin() {
         const handleLobbyUpdate = (roundNumber: number) => (data: any) => {
             // Only update if this is the currently selected round
             if (roundNumber === selectedRoundForUsers && data.participants) {
-                setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby' && p.roundNumber === roundNumber));
             }
         };
 
@@ -461,6 +473,30 @@ export default function Admin() {
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* End Round Section */}
+            <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
+              <h4 className="text-orange-400 font-medium mb-4">End Round Controls</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[0, 1, 2, 3].map((roundNum) => (
+                  <button
+                    key={roundNum}
+                    onClick={() => endRound(roundNum)}
+                    disabled={!socket}
+                    className={`px-4 py-3 rounded text-sm font-medium transition-all ${
+                      !socket
+                        ? 'bg-gray-600 cursor-not-allowed opacity-50'
+                        : 'bg-red-600 hover:bg-red-500 hover:scale-105'
+                    } text-white`}
+                  >
+                    End Round {roundNum}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                Note: This will trigger the end of the selected round via socket event.
+              </p>
             </div>
 
             {/* Lobby Users Section */}
