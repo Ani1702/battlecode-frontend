@@ -125,11 +125,16 @@ export default function WaitingRoomR1() {
   }, [socket, isConnected, router, userId]);
 
   // --- Initial State Fetch ---
-  useEffect(() => {
-    if (!socket || !isConnected || !userId) return;
 
-    // ✅ FIX: The initial getState call now correctly handles the re-join scenario.
-    socket.emit('round1:getState', {}, (response: GetStateResponse) => {
+
+  useEffect(() => {
+    if (!socket || !isConnected || !userId)
+        return;
+    socket.emit("round1:getState");
+}, [socket, isConnected, userId, router]);
+
+const handleState = (response: GetStateResponse) => {
+      console.log("Ehllo");
       if (response?.success) {
         setIsRoundActive(response.isActive ?? false);
         setGlobalTimeRemaining(response.globalTimeRemaining || 0);
@@ -159,9 +164,27 @@ export default function WaitingRoomR1() {
         showErrorToast(response?.error || "Could not get round state.");
         router.push('/dashboard');
       }
+      console.log(1);
       setIsLoading(false);
-    });
-  }, [socket, isConnected, userId, router]);
+    
+    }
+
+
+
+    
+
+    
+   
+
+    // ✅ FIX: The initial getState call now correctly handles the re-join scenario.
+  useEffect(() => {
+    if (!socket) return;
+    socket.on("round1:state", handleState);
+
+    return () => {
+        socket.off("round1:state", handleState);
+    };
+  }, [socket, router]);
 
   // --- Client-Side Timers for Smooth UI ---
   useEffect(() => {
@@ -223,6 +246,10 @@ export default function WaitingRoomR1() {
   }[status] || 'text-gray-400');
 
   if (authLoading || isLoading) {
+    console.log("auth loading");
+    console.log(authLoading);
+    console.log("is loading");
+    console.log(isLoading);
     return <div className="flex items-center justify-center h-screen bg-black text-white">Loading Waiting Room...</div>;
   }
 
