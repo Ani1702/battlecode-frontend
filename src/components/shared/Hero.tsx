@@ -8,7 +8,7 @@ const Hero = () => {
   const router = useRouter();
   const { signInWithGoogle, user, isLoading } = useAuth();
   const [isExiting, setIsExiting] = useState(false);
-  const {socket, isConnected} = useSocket();
+  const {socket} = useSocket();
   const handleAuthClick = async () => {
     if (!user) {
       await signInWithGoogle();

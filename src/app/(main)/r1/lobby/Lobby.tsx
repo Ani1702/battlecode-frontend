@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Rocket } from "lucide-react";
 import PlayerCard from '@/components/shared/PlayerCard';
@@ -79,7 +79,7 @@ export default function Lobbyr1(){
 }, [socket, isConnected, authenticationChecked, hasAttemptedJoin]);
 
 
-    const handleState = (response: GetStateResponse) => {
+    const handleState = useCallback((response: GetStateResponse) => {
         console.log("use effect 3 ✅");
 
         setIsLoading(false);
@@ -113,7 +113,7 @@ export default function Lobbyr1(){
             }
         });
         }
-    };
+    }, [router, socket]);
 
     useEffect(() => {
     if (!socket) return;
@@ -122,7 +122,7 @@ export default function Lobbyr1(){
     return () => {
         socket.off("round1:state", handleState);
     };
-}, [socket, router]);
+}, [socket, handleState]);
 
     // Effect to set up and tear down all socket event listeners
     useEffect(() => {

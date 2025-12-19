@@ -423,11 +423,11 @@ export default function R1CodePage() {
   useEffect(() => {
   if (!socket) return;
 
-  const handleState = (data: any) => {
+  const handleState = (data: { success?: boolean; matchData?: MatchData; globalTimeRemaining?: number }) => {
     if (!data.success) return;
 
     if (data.matchData) {
-      setMatchData(prev => prev ? { ...prev, ...data.matchData } : data.matchData);
+      setMatchData(prev => prev ? { ...prev, ...data.matchData } : (data.matchData ?? null));
     }
 
     if (typeof data.globalTimeRemaining === "number") {

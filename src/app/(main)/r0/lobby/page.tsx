@@ -1,3 +1,7 @@
+export default function R0Lobby() {
+  return null;
+}
+
 // "use client"
 // import Lobbyr0 from "./Lobby";
 

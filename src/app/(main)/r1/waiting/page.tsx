@@ -2,7 +2,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from '@/contexts/SocketContext';
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
@@ -133,7 +133,7 @@ export default function WaitingRoomR1() {
     socket.emit("round1:getState");
 }, [socket, isConnected, userId, router]);
 
-const handleState = (response: GetStateResponse) => {
+const handleState = useCallback((response: GetStateResponse) => {
       console.log("Ehllo");
       if (response?.success) {
         setIsRoundActive(response.isActive ?? false);
@@ -167,7 +167,7 @@ const handleState = (response: GetStateResponse) => {
       console.log(1);
       setIsLoading(false);
     
-    }
+    }, [router]);
 
 
 
@@ -184,7 +184,7 @@ const handleState = (response: GetStateResponse) => {
     return () => {
         socket.off("round1:state", handleState);
     };
-  }, [socket, router]);
+  }, [socket, handleState]);
 
   // --- Client-Side Timers for Smooth UI ---
   useEffect(() => {

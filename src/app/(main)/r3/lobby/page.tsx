@@ -1,6 +1,3 @@
-// "use client"
-// import Lobbyr0 from "./Lobby";
-
-// export default function R0Lobby() {
-//   return <Lobbyr0 />;
-// }
+﻿export default function R3Lobby() {
+  return null;
+}

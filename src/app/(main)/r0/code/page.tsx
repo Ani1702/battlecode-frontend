@@ -1,3 +1,7 @@
+export default function R0Code() {
+  return null;
+}
+
 // "use client";
 // import { useEffect, useState, useRef } from "react";
 // import { useRouter } from "next/navigation";

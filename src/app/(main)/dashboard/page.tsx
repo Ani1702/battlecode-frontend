@@ -59,7 +59,6 @@ export default function Dashboard() {
 
   // Admin controls state
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminLoading, setAdminLoading] = useState(false);
 
   const prevUserRef = useRef(user);
 

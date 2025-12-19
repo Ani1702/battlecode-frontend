@@ -1,8 +1,7 @@
 "use client"
-import {useState} from 'react';
+import {useState, useCallback} from 'react';
 import {useAuth} from "@/contexts/AuthContext";
 import { showErrorToast, showInfoToast, showSuccessToast } from "@/components/shared/CustomToast";
-import {useRef} from 'react';
 import {useRouter} from "next/navigation"
 import { useEffect } from 'react';
 import { useSocket } from "@/contexts/SocketContext";
@@ -42,14 +41,12 @@ interface GetStateResponse extends SimpleSocketResponse {
 export default function Admin() {
     const [isAdmin, setIsAdmin] = useState(false);
     const [adminLoading, setAdminLoading] = useState(false);
-    const { user, session, isLoading, userRole, userName /*username*/ } = useAuth();
+    const { session, isLoading, userRole } = useAuth();
     const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundData | null>(null);
-    const [islocked, setIsLocked] = useState([true, true, true, true]);
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [selectedRoundForUsers, setSelectedRoundForUsers] = useState(0);
     
-    const { socket, isConnected } = useSocket();
-    const prevUserRef = useRef(user);
+    const { socket } = useSocket();
     const router = useRouter();
 
     // Load currentRoundData from localStorage on mount
@@ -59,7 +56,7 @@ export default function Admin() {
         if (savedRounds) {
             try {
                 setCurrentRoundData(JSON.parse(savedRounds));
-            } catch (error) {
+            } catch {
                 localStorage.removeItem('battlecode_rounds');
             }
         }
@@ -104,7 +101,7 @@ export default function Admin() {
         );
     };
 
-    const fetchLobbyUsers = (roundNumber: number) => {
+    const fetchLobbyUsers = useCallback((roundNumber: number) => {
         if (!socket) return;
         
         const eventName = `round${roundNumber}:getState`;
@@ -119,7 +116,7 @@ export default function Admin() {
                 setParticipants(response.allParticipants.filter(p => p.status === 'lobby'));
             }
         });
-    };
+    }, [socket]);
 
     const handleStartRound = (roundNumber: number) => {
         if (!socket || participants.length === 0) return;
@@ -140,7 +137,7 @@ export default function Admin() {
         showInfoToast(`Ending Round ${roundNumber}...`);
       };
 
-    const fetchRoundData = async () => {
+    const fetchRoundData = useCallback(async () => {
         try {
             if (!session?.access_token) return;
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds`, {
@@ -169,7 +166,7 @@ export default function Admin() {
             }
             }
         }
-    };
+    }, [session?.access_token]);
 
 
     useEffect(() => {
@@ -195,7 +192,7 @@ export default function Admin() {
             fetchRoundData();
         }
         
-    }, [isLoading, userRole, router, session?.access_token]);
+    }, [isLoading, userRole, router, session?.access_token, fetchRoundData]);
 
     // Save round data to localStorage whenever it changes
     useEffect(() => {
@@ -227,13 +224,13 @@ export default function Admin() {
     useEffect(() => {
         if (!socket) return;
         fetchLobbyUsers(selectedRoundForUsers);
-    }, [socket, selectedRoundForUsers]);
+    }, [socket, selectedRoundForUsers, fetchLobbyUsers]);
 
     // Listen for live lobby updates
     useEffect(() => {
         if (!socket) return;
 
-        const handleLobbyUpdate = (roundNumber: number) => (data: any) => {
+        const handleLobbyUpdate = (roundNumber: number) => (data: { participants?: Participant[] }) => {
             // Only update if this is the currently selected round
             if (roundNumber === selectedRoundForUsers && data.participants) {
                 setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
@@ -253,6 +250,7 @@ export default function Admin() {
         };
     }, [socket, selectedRoundForUsers]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const resetAllRounds = async () => {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/reset`, {
