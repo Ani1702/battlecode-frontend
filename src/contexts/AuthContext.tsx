@@ -81,12 +81,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.access_token) {
           setIsLoading(true); // Set loading during verification
           try {
-       
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/verify`, {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const response = await fetch(`${apiUrl}/api/user/verify`, {
               method: "POST",
               headers: {
                 Authorization: `Bearer ${session.access_token}`,
               },
+            }).catch((fetchError) => {
+              console.error("Network error during initial verification:", fetchError);
+              // Return a mock response object to handle network errors gracefully
+              return { ok: false, status: 0, text: async () => 'Network error' } as Response;
             });
 
             if (response.ok) {
@@ -188,12 +192,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Only handle actual sign-ins, not token refreshes
         setIsLoading(true); // Set loading when starting verification
         try {
-        
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/verify`, {
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${apiUrl}/api/user/verify`, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${session.access_token}`,
             },
+          }).catch((fetchError) => {
+            console.error("Network error during SIGNED_IN verification:", fetchError);
+            // Return a mock response object to handle network errors gracefully
+            return { ok: false, status: 0, text: async () => 'Network error' } as Response;
           });
 
           if (response.ok) {
@@ -418,7 +426,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("No active session");
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/set-username`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/api/user/set-username`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

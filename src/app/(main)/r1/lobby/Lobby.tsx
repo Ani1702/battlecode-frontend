@@ -45,6 +45,21 @@ interface GetStateResponse extends SimpleSocketResponse {
     allParticipants?: Participant[]; // Added to correctly type the full list response
 }
 
+interface RoundInfo {
+    roundNumber: number;
+    status: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+    isActive: boolean;
+    isLocked: boolean;
+}
+
+interface CurrentRoundResponse extends SimpleSocketResponse {
+    currentRound?: {
+        currentRoundNumber: number;
+        currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+        rounds: RoundInfo[];
+    };
+}
+
 
 export default function Lobbyr1(){
     const router = useRouter();
@@ -58,6 +73,8 @@ export default function Lobbyr1(){
     const [roundStarted, setRoundStarted] = useState(false);
     const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
     const [authenticationChecked, setAuthenticationChecked] = useState(false);
+    const [isCheckingRound, setIsCheckingRound] = useState(true);
+    const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundResponse['currentRound'] | null>(null);
     
     const isAdmin = userRole === 'ADMIN';
     // Effect to handle user authentication and redirection
@@ -66,17 +83,62 @@ export default function Lobbyr1(){
         if (!authLoading && !userId) router.push('/dashboard');
     }, [authLoading, userId, router]);
 
+    // Effect to check current round status before allowing lobby access
+    useEffect(() => {
+        if (!socket || !isConnected || !authenticationChecked) return;
+
+        socket.emit("user:current-round", {}, (response: CurrentRoundResponse) => {
+            console.log("Current round response:", response);
+            setIsCheckingRound(false);
+            
+            if (!response.success) {
+                showErrorToast(response.error || "Failed to check round status");
+                router.back();
+                return;
+            }
+
+            const currentRound = response.currentRound;
+
+            // Check if current round data exists
+            if (!currentRound) {
+                showErrorToast("No active round found");
+                router.back();
+                return;
+            }
+
+            // Store the round data for later use
+            setCurrentRoundData(currentRound);
+
+            // Check if current round is Round 1 and in appropriate status
+            if (currentRound.currentRoundNumber !== 1) {
+                showErrorToast("Round 1 is not the current round");
+                router.back();
+                return;
+            }
+
+            if (currentRound.currentRoundStatus !== 'LOBBY') {
+                showErrorToast(`Round 1 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`);
+                console.log("Current round status:", currentRound.currentRoundStatus);
+                router.back();
+                return;
+            }
+
+            // Round status is valid, proceed with joining
+            console.log("Round status valid, proceeding to get state");
+        });
+    }, [socket, isConnected, authenticationChecked, router]);
+
     // Effect to handle initial server state synchronization and joining the lobby
     useEffect(() => {
     console.log("use effect 1");
 
-    if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin)
+    if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin || isCheckingRound)
         return;
 
     console.log("use effect 2");
 
     socket.emit("round1:getState");
-}, [socket, isConnected, authenticationChecked, hasAttemptedJoin]);
+}, [socket, isConnected, authenticationChecked, hasAttemptedJoin, isCheckingRound]);
 
 
     const handleState = useCallback((response: GetStateResponse) => {
@@ -157,11 +219,49 @@ export default function Lobbyr1(){
             router.push('/dashboard');
         };
 
+        const handleAdminRemoved = () => {
+            console.log("You have been removed from Round 1 by an admin");
+            showErrorToast("You have been removed from Round 1 by an admin");
+            localStorage.removeItem('battlecode-round-1-code-store');
+            sessionStorage.removeItem('round1_match_data');
+            router.push('/');
+        };
+
+        const handleAdminAdded = () => {
+            console.log("You have been added to Round 1 by an admin");
+            
+            // Reuse the already fetched round data
+            if (!currentRoundData) {
+                showErrorToast("Round data not available");
+                return;
+            }
+
+            const { currentRoundNumber, currentRoundStatus } = currentRoundData;
+
+            if (currentRoundNumber !== 1) {
+                showErrorToast("Round 1 is not the current round");
+                return;
+            }
+
+            if (currentRoundStatus === 'LOBBY') {
+                showSuccessToast("You have been added to Round 1! Already in lobby.");
+            } else if (currentRoundStatus === 'IN_PROGRESS') {
+                showSuccessToast("You have been added to Round 1! Redirecting to waiting room...");
+                setTimeout(() => router.push('/r1/waiting'), 1500);
+            } else if (currentRoundStatus === 'COMPLETED') {
+                showErrorToast("Round 1 has already completed");
+            } else if (currentRoundStatus === 'LOCKED') {
+                showErrorToast("Round 1 is currently locked");
+            }
+        };
+
         socket.on('lobby:round1', handleLobbyUpdate);
         socket.on('round1:started', handleRoundStarted);
         socket.on('round1:matchFound', handleMatchFound);
         socket.on('round1:globalTimer', handleGlobalTimer);
         socket.on('round1:ended', handleRoundEnd);
+        socket.on('round1:adminRemoved', handleAdminRemoved);
+        socket.on('round1:adminAdded', handleAdminAdded);
 
         // Cleanup listeners on component unmount
         return () => {
@@ -170,8 +270,10 @@ export default function Lobbyr1(){
             socket.off('round1:matchFound', handleMatchFound);
             socket.off('round1:globalTimer', handleGlobalTimer);
             socket.off('round1:ended', handleRoundEnd);
+            socket.off('round1:adminRemoved', handleAdminRemoved);
+            socket.off('round1:adminAdded', handleAdminAdded);
         };
-    }, [socket, router]);
+    }, [socket, router, currentRoundData]);
 
     // Handler for admin to start the round
     const handleStartRound = () => {
@@ -188,8 +290,12 @@ export default function Lobbyr1(){
     // Utility to format seconds into MM:SS format
     const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 19);
 
-    if (authLoading || !authenticationChecked) {
-        return ( <div className="flex items-center justify-center h-screen text-white">Loading Authentication...</div> );
+    if (authLoading || !authenticationChecked || isCheckingRound) {
+        return ( 
+            <div className="flex items-center justify-center h-screen text-white">
+                {authLoading ? "Loading Authentication..." : "Checking Round Status..."}
+            </div> 
+        );
     }
 
     return (

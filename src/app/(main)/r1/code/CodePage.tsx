@@ -320,7 +320,7 @@ export default function R1CodePage() {
     const handleRoundEnd = () => {
         if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
         showInfoToast('Round 1 has ended');
-        router.push('/dashboard');
+        router.push('/');
     };
     const handleTimerUpdate = (data: { timeRemaining: number }) => {
 

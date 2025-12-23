@@ -45,6 +45,8 @@ export default function Admin() {
     const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundData | null>(null);
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [selectedRoundForUsers, setSelectedRoundForUsers] = useState(0);
+    const [showEndRoundConfirm, setShowEndRoundConfirm] = useState(false);
+    const [roundToEnd, setRoundToEnd] = useState<number | null>(null);
     
     const { socket } = useSocket();
     const router = useRouter();
@@ -135,6 +137,24 @@ export default function Admin() {
         socket.emit("admin:endRound", { roundNumber });
 
         showInfoToast(`Ending Round ${roundNumber}...`);
+        setShowEndRoundConfirm(false);
+        setRoundToEnd(null);
+      };
+
+      const handleEndRoundClick = (roundNumber: number) => {
+        setRoundToEnd(roundNumber);
+        setShowEndRoundConfirm(true);
+      };
+
+      const handleCancelEndRound = () => {
+        setShowEndRoundConfirm(false);
+        setRoundToEnd(null);
+      };
+
+      const handleConfirmEndRound = () => {
+        if (roundToEnd !== null) {
+          endRound(roundToEnd);
+        }
       };
 
     const fetchRoundData = useCallback(async () => {
@@ -343,6 +363,32 @@ export default function Admin() {
         <>
         {isAdmin && (
         <div className="min-h-screen w-full bg-[url('/bg-dashboard.svg')] bg-cover bg-center flex items-center justify-center px-5">
+          {/* Confirmation Modal */}
+          {showEndRoundConfirm && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+              <div className="bg-gray-900 border-2 border-orange-500 rounded-lg p-6 max-w-md w-full">
+                <h3 className="text-xl font-bold text-orange-500 mb-4">Confirm End Round</h3>
+                <p className="text-white mb-6">
+                  Are you sure you want to end Round {roundToEnd}? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleConfirmEndRound}
+                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-medium transition-all"
+                  >
+                    Yes, End Round
+                  </button>
+                  <button
+                    onClick={handleCancelEndRound}
+                    className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded font-medium transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="w-full max-w-6xl rounded-lg border-2 border-orange-500/50 glass-box p-6">
             <div className="flex items-center mb-6">
               <div className="w-4 h-4 bg-orange-500 rounded-full mr-3 animate-pulse"></div>
@@ -477,7 +523,7 @@ export default function Admin() {
                 {[0, 1, 2, 3].map((roundNum) => (
                   <button
                     key={roundNum}
-                    onClick={() => endRound(roundNum)}
+                    onClick={() => handleEndRoundClick(roundNum)}
                     disabled={!socket}
                     className={`px-4 py-3 rounded text-sm font-medium transition-all ${
                       !socket
