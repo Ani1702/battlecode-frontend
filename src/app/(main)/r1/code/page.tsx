@@ -337,6 +337,9 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       monacoInstance: typeof import('monaco-editor')
     ){
       editorRef.current = editor;
+
+
+      //commment here to enable
       // Disable paste via context menu
       editor.addAction({
         id: "disable-paste",
@@ -358,8 +361,10 @@ if (domNode) {
         showErrorToast("Paste shortcut is disabled");
       });
     }
+    //till here
 
   return (
+    //remove this securewrapper also to disable copy paste
     <SecureWrapper>
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
         <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">

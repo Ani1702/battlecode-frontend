@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import CustomScrollbar from "./CustomScrollbar";
 
 export default function RulesPage({ rules, round }: { rules: string[]; round: string | string[] }) {
     const router = useRouter();
@@ -16,17 +17,25 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
                 {/* Left Column: Increased flex-grow to give more width */}
                 <div className="flex-[3] h-full flex flex-col p-10 justify-center items-center">
                     <div className="w-full h-full flex flex-col">
+                        {/* Club Logo */}
+                        <div className="flex-shrink-0 flex justify-start mb-4">
+                            <img 
+                                src="/logo.svg" 
+                                alt="Club Logo" 
+                                className="h-16 w-auto object-contain drop-shadow-[0_4px_8px_rgba(249,115,22,0.6)]"
+                            />
+                        </div>
                         <p className="flex-shrink-0 mt-5 text-xl font-bold">Read and accept the rules to continue</p>
                         
                         {/* Rules list is now scrollable if content overflows */}
-                        <div className="flex-grow my-4 pr-2 oxanium overflow-y-auto">
+                        <CustomScrollbar className="flex-grow my-4 pr-2 oxanium overflow-y-auto">
                             {rules.map((rule, i) => (
                                 <div key={i} className="flex items-start mb-2">
                                     <span className="mr-2 flex-shrink-0">{i + 1}.</span>
                                     <span className="flex-1">{rule}</span>
                                 </div>
                             ))}
-                        </div>
+                        </CustomScrollbar>
                         
                         <div className="flex-shrink-0">
                             <label className="flex items-center cursor-pointer">
@@ -56,7 +65,7 @@ export default function RulesPage({ rules, round }: { rules: string[]; round: st
                                     : 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                             }`}
                             disabled={!isChecked}
-                            onClick={() => router.push(`/r${roundString}/lobby`)}
+                            onClick={() => router.push(`/r1/lobby`)}
                         >
                             Proceed To Lobby
                         </button>
