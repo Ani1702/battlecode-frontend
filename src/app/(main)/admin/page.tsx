@@ -47,6 +47,8 @@ export default function Admin() {
     const [selectedRoundForUsers, setSelectedRoundForUsers] = useState(0);
     const [showEndRoundConfirm, setShowEndRoundConfirm] = useState(false);
     const [roundToEnd, setRoundToEnd] = useState<number | null>(null);
+    const [showResetRedisConfirm, setShowResetRedisConfirm] = useState(false);
+    const [roundToReset, setRoundToReset] = useState<number | null>(null);
     
     const { socket } = useSocket();
     const router = useRouter();
@@ -156,6 +158,35 @@ export default function Admin() {
           endRound(roundToEnd);
         }
       };
+
+    const resetRoundRedis = (roundNumber: number) => {
+        if (!socket) {
+            showErrorToast('Socket not connected');
+            return;
+        }
+
+        const eventName = `round${roundNumber}:reset`;
+        socket.emit(eventName);
+        showSuccessToast(`Reset Redis for Round ${roundNumber}`);
+        setShowResetRedisConfirm(false);
+        setRoundToReset(null);
+    };
+
+    const handleResetRedisClick = (roundNumber: number) => {
+        setRoundToReset(roundNumber);
+        setShowResetRedisConfirm(true);
+    };
+
+    const handleCancelResetRedis = () => {
+        setShowResetRedisConfirm(false);
+        setRoundToReset(null);
+    };
+
+    const handleConfirmResetRedis = () => {
+        if (roundToReset !== null) {
+            resetRoundRedis(roundToReset);
+        }
+    };
 
     const fetchRoundData = useCallback(async () => {
         try {
@@ -363,7 +394,7 @@ export default function Admin() {
         <>
         {isAdmin && (
         <div className="min-h-screen w-full bg-[url('/bg-dashboard.svg')] bg-cover bg-center flex items-center justify-center px-5">
-          {/* Confirmation Modal */}
+          {/* End Round Confirmation Modal */}
           {showEndRoundConfirm && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
               <div className="bg-gray-900 border-2 border-orange-500 rounded-lg p-6 max-w-md w-full">
@@ -380,6 +411,32 @@ export default function Admin() {
                   </button>
                   <button
                     onClick={handleCancelEndRound}
+                    className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded font-medium transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reset Redis Confirmation Modal */}
+          {showResetRedisConfirm && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+              <div className="bg-gray-900 border-2 border-yellow-500 rounded-lg p-6 max-w-md w-full">
+                <h3 className="text-xl font-bold text-yellow-500 mb-4">Confirm Reset Redis</h3>
+                <p className="text-white mb-6">
+                  Are you sure you want to reset Redis for Round {roundToReset}? This will clear all cached data for this round.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleConfirmResetRedis}
+                    className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded font-medium transition-all"
+                  >
+                    Yes, Reset Redis
+                  </button>
+                  <button
+                    onClick={handleCancelResetRedis}
                     className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded font-medium transition-all"
                   >
                     Cancel
@@ -537,6 +594,30 @@ export default function Admin() {
               </div>
               <p className="text-xs text-gray-400 mt-3">
                 Note: This will trigger the end of the selected round via socket event.
+              </p>
+            </div>
+
+            {/* Reset Redis Section */}
+            <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
+              <h4 className="text-orange-400 font-medium mb-4">Reset Redis Controls</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[1, 2, 3].map((roundNum) => (
+                  <button
+                    key={roundNum}
+                    onClick={() => handleResetRedisClick(roundNum)}
+                    disabled={!socket}
+                    className={`px-4 py-3 rounded text-sm font-medium transition-all ${
+                      !socket
+                        ? 'bg-gray-600 cursor-not-allowed opacity-50'
+                        : 'bg-yellow-600 hover:bg-yellow-500 hover:scale-105'
+                    } text-white`}
+                  >
+                    Reset Round {roundNum}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                Note: This will reset the Redis data for the selected round.
               </p>
             </div>
 
