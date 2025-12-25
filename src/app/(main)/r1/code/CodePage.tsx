@@ -337,12 +337,19 @@ export default function R1CodePage() {
             handleSubmit();
         }
     };
+    
+    const handleAdminRemoved = () => {
+      if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
+      showErrorToast('You have been removed from Round 1 by an admin');
+      router.push('/');
+    };
 
     socket.on('match:pause', handleMatchPause);
     socket.on('match:resume', handleMatchResume);
     socket.on('round1:cooldown', handleCooldown);
     socket.on('round1:ended', handleRoundEnd);
     socket.on('round1:timerUpdate', handleTimerUpdate);
+    socket.on('round1:adminRemoved', handleAdminRemoved);
 
     return () => {
       socket.off('match:pause', handleMatchPause);
@@ -350,6 +357,7 @@ export default function R1CodePage() {
       socket.off('round1:cooldown', handleCooldown);
       socket.off('round1:ended', handleRoundEnd);
       socket.off('round1:timerUpdate', handleTimerUpdate);
+      socket.off('round1:adminRemoved', handleAdminRemoved);
     };
   }, [socket, router, problem, handleSubmit]);
 
