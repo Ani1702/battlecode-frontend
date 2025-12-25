@@ -618,6 +618,7 @@ export default function R1CodePage() {
         }
 
         const { currentRoundNumber, currentRoundStatus } = response.currentRound;
+        console.log(currentRoundNumber, currentRoundStatus);
 
         if (currentRoundNumber !== 1) {
           showErrorToast("Round 1 is not the current round");

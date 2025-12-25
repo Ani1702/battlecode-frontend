@@ -6,7 +6,7 @@ import {useSocket} from "@/contexts/SocketContext";
 
 const Hero = () => {
   const router = useRouter();
-  const { signInWithGoogle, user, isLoading } = useAuth();
+  const { signInWithGoogle, signOut, user, isLoading } = useAuth();
   const [isExiting, setIsExiting] = useState(false);
   const {socket} = useSocket();
   const handleAuthClick = async () => {
@@ -19,6 +19,15 @@ const Hero = () => {
       socket?.emit("client:join");
       router.push("/r1/rules");
     }, 1000);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      router.push("/");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
   };
 
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
@@ -46,6 +55,26 @@ const Hero = () => {
       isExiting ? '-translate-y-full' : 'translate-y-0'
     }`}>
       <div className="h-full z-1 orbitron text-white bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
+        {/* Logout button in top right */}
+        {user && (
+          <div className="absolute top-4 right-4 z-50">
+            <button
+              onClick={handleSignOut}
+              disabled={isLoading}
+              className="group flex items-center justify-start w-11 h-11 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full cursor-pointer relative overflow-hidden transition-all duration-200 shadow-lg hover:w-32 hover:rounded-lg hover:bg-white/20 active:translate-x-1 active:translate-y-1"
+            >
+              <div className="flex items-center justify-center w-full transition-all duration-300 group-hover:justify-start group-hover:px-3">
+                <svg className="w-4 h-4" viewBox="0 0 512 512" fill="white">
+                  <path d="M377.9 105.9L500.7 228.7c7.2 7.2 11.3 17.1 11.3 27.3s-4.1 20.1-11.3 27.3L377.9 406.1c-6.4 6.4-15 9.9-24 9.9c-18.7 0-33.9-15.2-33.9-33.9l0-62.1-128 0c-17.7 0-32-14.3-32-32l0-64c0-17.7 14.3-32 32-32l128 0 0-62.1c0-18.7 15.2-33.9 33.9-33.9c9 0 17.6 3.6 24 9.9zM160 96L96 96c-17.7 0-32 14.3-32 32l0 256c0 17.7 14.3 32 32 32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-53 0-96-43-96-96L0 128C0 75 43 32 96 32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32z"></path>
+                </svg>
+              </div>
+              <div className="absolute orbitron right-5 transform translate-x-full opacity-0 text-white text-lg font-semibold transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100">
+                Logout
+              </div>
+            </button>
+          </div>
+        )}
+        
         <div className="hud">
           <div className="absolute topHUD left-0 top-50 lg:top-2 h-[6rem] w-full flex items-center justify-center">
             <div className="text-white h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 tracking-wider">
@@ -109,6 +138,7 @@ const Hero = () => {
           >
             {isLoading ? "LOADING..." : user ? "DASHBOARD" : "SIGN IN WITH GOOGLE"}
           </button>
+
         </div>
 
         <div className="w-[27rem] quote   flex relative bottom-50 lg:bottom-8 z-10 left-1/2 transform -translate-x-1/2 justify-center">

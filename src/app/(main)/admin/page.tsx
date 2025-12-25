@@ -144,8 +144,10 @@ export default function Admin() {
       };
 
       const handleEndRoundClick = (roundNumber: number) => {
+        
         setRoundToEnd(roundNumber);
         setShowEndRoundConfirm(true);
+
       };
 
       const handleCancelEndRound = () => {

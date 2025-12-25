@@ -64,6 +64,7 @@ export default function Dashboard() {
 
   // Security: Redirect if not authenticated (FIRST useEffect)
   useEffect(() => {
+    router.push("/");
     const prevUser = prevUserRef.current;
     
     // Only redirect if we're done loading AND have no session at all
