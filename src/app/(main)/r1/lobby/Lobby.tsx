@@ -403,7 +403,7 @@ export default function Lobbyr1(){
                         )}
                     </div>
 
-                    {isAdmin && !isLoading && participants.length > 0 && (
+                    {/* {isAdmin && !isLoading && participants.length > 0 && (
                         <button
                             onClick={handleStartRound}
                             className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm flex items-center gap-2"
@@ -412,7 +412,7 @@ export default function Lobbyr1(){
                             <Rocket className="h-4 w-4" />
                             Start Round 1
                         </button>
-                    )}
+                    )} */}
                 </div>
             )}
         </div>

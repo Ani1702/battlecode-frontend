@@ -38,6 +38,13 @@ interface GetStateResponse extends SimpleSocketResponse {
     allParticipants?: Participant[]; // Added to correctly type the full list response
 }
 
+interface MatchParticipant {
+  id: string;
+  username: string;
+  status: 'waiting' | 'in-match';
+  opponentUsername?: string;
+}
+
 export default function Admin() {
     const [isAdmin, setIsAdmin] = useState(false);
     const [adminLoading, setAdminLoading] = useState(false);
@@ -49,6 +56,8 @@ export default function Admin() {
     const [roundToEnd, setRoundToEnd] = useState<number | null>(null);
     const [showResetRedisConfirm, setShowResetRedisConfirm] = useState(false);
     const [roundToReset, setRoundToReset] = useState<number | null>(null);
+    const [matchParticipants, setMatchParticipants] = useState<MatchParticipant[]>([]);
+    const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(1);
     
     const { socket } = useSocket();
     const router = useRouter();
@@ -122,6 +131,80 @@ export default function Admin() {
         });
     }, [socket]);
 
+    const fetchMatchUsers = useCallback((roundNumber: number) => {
+        if (!socket) return;
+        
+        const eventName = `round${roundNumber}:getState`;
+        socket.emit(eventName, {});
+    }, [socket]);
+
+    // Listen for the state response event
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleStateResponse = (response: GetStateResponse) => {
+            console.log('[STATE RESPONSE]', response);
+            if (!response.success) return;
+            
+            if (response.allParticipants) {
+                // Filter for users who are either waiting or in-match
+                const activeUsers = response.allParticipants.filter(
+                    p => p.status === 'waiting' || p.status === 'in-match'
+                );
+                
+                console.log('[ACTIVE USERS]', activeUsers);
+                
+                // Get users who are in-match
+                const inMatchUsers = activeUsers.filter(p => p.status === 'in-match');
+                
+                // Build match info
+                const matchInfo: MatchParticipant[] = activeUsers.map((user) => {
+                    const matchData: MatchParticipant = {
+                        id: user.id,
+                        username: user.username,
+                        status: user.status as 'waiting' | 'in-match',
+                    };
+                    
+                    // If user is in-match, try to find their opponent
+                    if (user.status === 'in-match') {
+                        // First try using opponentId if available
+                        if (user.opponentId) {
+                            const opponent = response.allParticipants?.find(
+                                p => p.id === user.opponentId
+                            );
+                            if (opponent) {
+                                matchData.opponentUsername = opponent.username;
+                            }
+                        } else if (inMatchUsers.length === 2) {
+                            // Fallback: If there are exactly 2 users in-match and no opponentId,
+                            // assume they're matched against each other
+                            const otherUser = inMatchUsers.find(p => p.id !== user.id);
+                            if (otherUser) {
+                                matchData.opponentUsername = otherUser.username;
+                            }
+                        }
+                    }
+                    
+                    return matchData;
+                });
+                
+                console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
+                setMatchParticipants(matchInfo);
+            }
+        };
+
+        // Listen for state responses from all rounds
+        socket.on('round1:state', handleStateResponse);
+        socket.on('round2:state', handleStateResponse);
+        socket.on('round3:state', handleStateResponse);
+
+        return () => {
+            socket.off('round1:state', handleStateResponse);
+            socket.off('round2:state', handleStateResponse);
+            socket.off('round3:state', handleStateResponse);
+        };
+    }, [socket]);
+
     const handleStartRound = (roundNumber: number) => {
         if (!socket || participants.length === 0) return;
         socket.emit(`round${roundNumber}:ready`, {}, (response: SimpleSocketResponse) => {
@@ -134,9 +217,23 @@ export default function Admin() {
     };
 
       const endRound = (roundNumber: number) => {
-        if (!socket) return;
+        if (!socket) {
+          showErrorToast('Socket not connected');
+          return;
+        }
 
-        socket.emit("admin:endRound", { roundNumber });
+        if (!socket.connected) {
+          showErrorToast('Socket disconnected. Please refresh the page.');
+          return;
+        }
+        
+        socket.emit("admin:endRound", { roundNumber }, (response: SimpleSocketResponse) => {
+          if (response?.success) {
+            showSuccessToast(`Round ${roundNumber} ended successfully`);
+          } else {
+            showErrorToast(response?.error || `Failed to end Round ${roundNumber}`);
+          }
+        });
 
         showInfoToast(`Ending Round ${roundNumber}...`);
         setShowEndRoundConfirm(false);
@@ -225,7 +322,6 @@ export default function Admin() {
     useEffect(() => {
         if (isLoading) return;
        
-        console.log(userRole);
         const savedRounds = localStorage.getItem('battlecode_rounds');
         if (savedRounds) {
            try {
@@ -259,7 +355,6 @@ export default function Admin() {
         if (!socket) return;
 
         const handleCurrentRound = (data: CurrentRoundData) => {
-            console.log('Current round data received via socket:', data);
             setCurrentRoundData(data);
         };
 
@@ -278,6 +373,12 @@ export default function Admin() {
         if (!socket) return;
         fetchLobbyUsers(selectedRoundForUsers);
     }, [socket, selectedRoundForUsers, fetchLobbyUsers]);
+
+    // Fetch match users whenever socket changes or selected round for matches changes
+    useEffect(() => {
+        if (!socket) return;
+        fetchMatchUsers(selectedRoundForMatches);
+    }, [socket, selectedRoundForMatches, fetchMatchUsers]);
 
     // Listen for live lobby updates
     useEffect(() => {
@@ -303,6 +404,78 @@ export default function Admin() {
         };
     }, [socket, selectedRoundForUsers]);
 
+    // Listen for live match updates - DISABLED to prevent interference
+    // The backend lobby events don't contain reliable match data
+    // We only rely on the initial fetch via round:state events
+    /*
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleMatchUpdate = (roundNumber: number) => (data: { participants?: Participant[] }) => {
+            console.log(`[LOBBY UPDATE round${roundNumber}]`, data);
+            // Only update if this is the currently selected round
+            if (roundNumber === selectedRoundForMatches && data.participants && data.participants.length > 0) {
+                const activeUsers = data.participants.filter(
+                    (p: Participant) => p.status === 'waiting' || p.status === 'in-match'
+                );
+                
+                console.log(`[ACTIVE USERS FROM LOBBY round${roundNumber}]`, activeUsers);
+                
+                // Only update if we have active users to show
+                if (activeUsers.length > 0) {
+                    // Get users who are in-match
+                    const inMatchUsers = activeUsers.filter(p => p.status === 'in-match');
+                    
+                    const matchInfo: MatchParticipant[] = activeUsers.map((user: Participant) => {
+                        const matchData: MatchParticipant = {
+                            id: user.id,
+                            username: user.username,
+                            status: user.status as 'waiting' | 'in-match',
+                        };
+                        
+                        // If user is in-match, try to find their opponent
+                        if (user.status === 'in-match') {
+                            // First try using opponentId if available
+                            if (user.opponentId) {
+                                const opponent = data.participants?.find(
+                                    (p: Participant) => p.id === user.opponentId
+                                );
+                                if (opponent) {
+                                    matchData.opponentUsername = opponent.username;
+                                }
+                            } else if (inMatchUsers.length === 2) {
+                                // Fallback: If there are exactly 2 users in-match and no opponentId,
+                                // assume they're matched against each other
+                                const otherUser = inMatchUsers.find(p => p.id !== user.id);
+                                if (otherUser) {
+                                    matchData.opponentUsername = otherUser.username;
+                                }
+                            }
+                        }
+                        
+                        return matchData;
+                    });
+                    
+                    console.log('[SETTING MATCH PARTICIPANTS FROM LOBBY UPDATE]', matchInfo);
+                    setMatchParticipants(matchInfo);
+                } else {
+                    console.log('[NO ACTIVE USERS - NOT CLEARING STATE]');
+                }
+            }
+        };
+
+        socket.on('lobby:round1', handleMatchUpdate(1));
+        socket.on('lobby:round2', handleMatchUpdate(2));
+        socket.on('lobby:round3', handleMatchUpdate(3));
+
+        return () => {
+            socket.off('lobby:round1', handleMatchUpdate(1));
+            socket.off('lobby:round2', handleMatchUpdate(2));
+            socket.off('lobby:round3', handleMatchUpdate(3));
+        };
+    }, [socket, selectedRoundForMatches]);
+    */
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const resetAllRounds = async () => {
   try {
@@ -314,8 +487,9 @@ export default function Admin() {
       }
     });
     
-    const data = await response.json();
-    console.log(data.message);
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
   } catch (error) {
     console.error('Error resetting rounds:', error);
   }
@@ -684,6 +858,76 @@ export default function Admin() {
                     </div>
                   ) : (
                     <p className="text-gray-400 text-sm text-center py-4">No users in lobby for Round {selectedRoundForUsers}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Match Users Section - IN_PROGRESS Users */}
+            <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-orange-400 font-medium">Active Users in IN_PROGRESS Rounds</h4>
+              </div>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  {[1, 2, 3].map((round) => (
+                    <button
+                      key={round}
+                      onClick={() => {
+                        setSelectedRoundForMatches(round);
+                        fetchMatchUsers(round);
+                      }}
+                      className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+                        selectedRoundForMatches === round
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Round {round}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="bg-gray-700/50 rounded-lg p-4">
+                  {matchParticipants.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-gray-300 text-sm mb-3">
+                        {matchParticipants.length} active user{matchParticipants.length !== 1 ? 's' : ''}
+                      </p>
+                      <div className="max-h-96 overflow-y-auto space-y-2">
+                        {matchParticipants.map((participant) => (
+                          <div
+                            key={participant.id}
+                            className={`bg-gray-600/50 px-4 py-3 rounded border-l-4 ${
+                              participant.status === 'in-match' ? 'border-blue-500' : 'border-yellow-500'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${
+                                  participant.status === 'in-match' ? 'bg-blue-500' : 'bg-yellow-500'
+                                }`}></div>
+                                <span className="text-white font-medium">{participant.username}</span>
+                              </div>
+                              <span className={`text-xs font-semibold uppercase ${
+                                participant.status === 'in-match' ? 'text-blue-400' : 'text-yellow-400'
+                              }`}>
+                                {participant.status === 'in-match' ? 'In Match' : 'Waiting'}
+                              </span>
+                            </div>
+                            {participant.opponentUsername && (
+                              <div className="text-sm text-gray-300 mt-2 ml-5">
+                                vs <span className="font-medium">{participant.opponentUsername}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm text-center py-4">
+                      No active users for Round {selectedRoundForMatches}
+                    </p>
                   )}
                 </div>
               </div>

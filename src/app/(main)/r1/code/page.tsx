@@ -212,14 +212,29 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     setActiveTab('results');
     showInfoToast(`${action} for judging...`);
 
-    const endpoint = isFinalSubmission ? '/submit' : '/run';
+    const endpoint = isFinalSubmission ? '/api/submit/submit' : '/api/submit/run';
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/submit${endpoint}`, {
+      // ✅ Log the request
+      console.log('[SUBMIT] Sending request:', {
+        endpoint: `${process.env.NEXT_PUBLIC_API_URL}${endpoint}`,
+        payload: { language, problemId: problem.id, roundNumber: 1 },
+        hasToken: !!session?.access_token
+      });
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({ language, source_code: code, problemId: problem.id, roundNumber: 1 })
       });
+
+      // ✅ Log the raw response
+      console.log('[SUBMIT] Response status:', response.status, response.statusText);
+
       const result = await response.json();
+      
+      // ✅ Log the parsed result
+      console.log('[SUBMIT] Response data:', result);
+
       if (result.success) {
         setSubmissionResults(result.results || []);
         const summary = result.summary || { passed: 0, total: (result.results || []).length };
@@ -231,8 +246,14 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
         } else {
             showInfoToast(`Test run completed: ${summary.passed}/${summary.total} passed`);
         }
-      } else { throw new Error(result.message || 'Request failed'); }
+      } else { 
+        // ✅ Log the failure reason
+        console.error('[SUBMIT] Backend returned success: false', result);
+        throw new Error(result.message || result.error || 'Request failed'); 
+      }
     } catch (error) {
+      // ✅ Log the full error
+      console.error('[SUBMIT] Caught error:', error);
       showErrorToast(`Failed to ${action.toLowerCase()}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       if (isFinalSubmission) setIsSubmitting(false); else setIsRunning(false);
@@ -487,7 +508,22 @@ if (domNode) {
                                               return (
                                                   <div key={res.token || i} className={`p-3 rounded border ${isAccepted ? "bg-green-800/30 border-green-600/50" : "bg-red-800/30 border-red-600/50"}`}>
                                                       <div className="flex items-center justify-between mb-2"><p className="font-bold">Test Case {i + 1}</p><span className={`text-sm font-medium px-2 py-1 rounded ${isAccepted ? "text-green-400 bg-green-900/50" : "text-red-400 bg-red-900/50"}`}>{res.status.description}</span></div>
-                                                      {!isAccepted && (res.stderr || res.compile_output) && <pre className="text-xs text-red-300 whitespace-pre-wrap bg-black/50 p-2 rounded border border-gray-700 overflow-x-auto">{res.stderr || res.compile_output}</pre>}
+                                                      
+                                                      {/* Display stdout if available */}
+                                                      {res.stdout && (
+                                                          <div className="mt-2">
+                                                              <p className="text-xs font-semibold text-gray-300 mb-1">Output:</p>
+                                                              <pre className="text-xs text-gray-200 whitespace-pre-wrap bg-black/40 p-2 rounded border border-gray-600 max-h-32 overflow-y-auto">{res.stdout}</pre>
+                                                          </div>
+                                                      )}
+                                                      
+                                                      {!isAccepted && (res.stderr || res.compile_output) && (
+                                                          <div className="mt-2">
+                                                              <p className="text-xs font-semibold text-red-300 mb-1">Error:</p>
+                                                              <pre className="text-xs text-red-300 whitespace-pre-wrap bg-black/50 p-2 rounded border border-gray-700 max-h-32 overflow-y-auto">{res.stderr || res.compile_output}</pre>
+                                                          </div>
+                                                      )}
+                                                      
                                                       {res.time && <div className="flex gap-4 text-xs text-gray-400 mt-2"><span>Runtime: {res.time}s</span><span>Memory: {res.memory}KB</span></div>}
                                                   </div>
                                               );
