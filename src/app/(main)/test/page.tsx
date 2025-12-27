@@ -184,8 +184,7 @@ export default function CodePage() {
       'python': 'python',
       'java': 'java',
       'cpp': 'cpp',
-      'c': 'c',
-      'javascript': 'javascript',
+      'c': 'c'
     };
     return languageMap[lang] || 'python';
   };

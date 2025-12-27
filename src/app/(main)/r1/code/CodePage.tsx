@@ -82,6 +82,8 @@ export default function R1CodePage() {
   const [isDragging, setIsDragging] = useState(false);
   const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const [showViolationModal, setShowViolationModal] = useState(false);
+  const [violationModalType, setViolationModalType] = useState<'forfeit' | 'opponentViolated' | null>(null);
 
   const editorOptions = {
     minimap: { enabled: false }, fontSize: 14, lineNumbers: 'on' as const,
@@ -91,7 +93,7 @@ export default function R1CodePage() {
   };
 
   const getMonacoLanguage = (lang: string) => ({
-    'python': 'python', 'java': 'java', 'cpp': 'cpp', 'c': 'c', 'javascript': 'javascript',
+    'python': 'python', 'java': 'java', 'cpp': 'cpp', 'c': 'c'
   }[lang] || 'python');
   
   useEffect(() => {
@@ -344,12 +346,26 @@ export default function R1CodePage() {
       router.push('/');
     };
 
+    const handleViolationForfeit = () => {
+      if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
+      setViolationModalType('forfeit');
+      setShowViolationModal(true);
+    };
+
+    const handleOpponentViolated = () => {
+      if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
+      setViolationModalType('opponentViolated');
+      setShowViolationModal(true);
+    };
+
     socket.on('match:pause', handleMatchPause);
     socket.on('match:resume', handleMatchResume);
     socket.on('round1:cooldown', handleCooldown);
     socket.on('round1:ended', handleRoundEnd);
     socket.on('round1:timerUpdate', handleTimerUpdate);
     socket.on('round1:adminRemoved', handleAdminRemoved);
+    socket.on('round1:violationForfeit', handleViolationForfeit);
+    socket.on('round1:opponentViolated', handleOpponentViolated);
 
     return () => {
       socket.off('match:pause', handleMatchPause);
@@ -358,6 +374,8 @@ export default function R1CodePage() {
       socket.off('round1:ended', handleRoundEnd);
       socket.off('round1:timerUpdate', handleTimerUpdate);
       socket.off('round1:adminRemoved', handleAdminRemoved);
+      socket.off('round1:violationForfeit', handleViolationForfeit);
+      socket.off('round1:opponentViolated', handleOpponentViolated);
     };
   }, [socket, router, problem, handleSubmit]);
 
@@ -427,6 +445,12 @@ export default function R1CodePage() {
     setCodeEditorHeight(newHeightPercentage);
    }, [isDragging]);
   const handleMouseUp = () => { setIsDragging(false); };
+
+  const handleViolationModalClose = () => {
+    setShowViolationModal(false);
+    setViolationModalType(null);
+    router.push('/r1/waiting');
+  };
 
   useEffect(() => {
   if (!socket) return;
@@ -683,6 +707,45 @@ if (domNode) {
           </div>
         </div>
       </div>
+
+      {/* Violation Modal */}
+      {showViolationModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+          <div className="text-center p-8 bg-gray-900 rounded-lg border-2 max-w-md">
+            {violationModalType === 'forfeit' ? (
+              <>
+                <div className="border-red-600 border-2 rounded-lg p-6">
+                  <h2 className="text-3xl font-bold text-red-500 mb-4">❌ Match Forfeited</h2>
+                  <p className="text-gray-300 mb-6 text-lg">
+                    You have been disqualified for exceeding the maximum allowed security violations.
+                  </p>
+                  <button
+                    onClick={handleViolationModalClose}
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded transition-colors w-full"
+                  >
+                    Return to Waiting Room
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="border-green-600 border-2 rounded-lg p-6">
+                  <h2 className="text-3xl font-bold text-green-500 mb-4">🎉 You Won!</h2>
+                  <p className="text-gray-300 mb-6 text-lg">
+                    Your opponent has been disqualified for exceeding the maximum allowed security violations.
+                  </p>
+                  <button
+                    onClick={handleViolationModalClose}
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded transition-colors w-full"
+                  >
+                    Return to Waiting Room
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

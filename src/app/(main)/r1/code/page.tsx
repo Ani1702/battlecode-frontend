@@ -626,11 +626,13 @@ export default function R1CodePage() {
     
     const handleMatchEnd = (data: {type: 'win' | 'lose' | 'timeout'}) => {
       sessionStorage.removeItem('round1_match_data');
+      sessionStorage.removeItem('fullscreen_violations'); // Clear violations on match end
       setMatchEndData(data);
       setShowMatchEndPopup(true);
     };
     const handleRoundEnd = () => {
       sessionStorage.removeItem('round1_match_data');
+      sessionStorage.removeItem('fullscreen_violations'); // Clear violations on round end
       showInfoToast('Round 1 has ended');
       setTimeout(() => router.push("/"),3000);
     };
@@ -640,6 +642,7 @@ export default function R1CodePage() {
       showErrorToast("You have been removed from Round 1 by an admin");
       localStorage.removeItem('battlecode-round-1-code-store');
       sessionStorage.removeItem('round1_match_data');
+      sessionStorage.removeItem('fullscreen_violations'); // Clear violations when admin removes
       router.push('/');
     };
 

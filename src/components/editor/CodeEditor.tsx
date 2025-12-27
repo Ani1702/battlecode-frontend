@@ -10,7 +10,7 @@ type CodeEditorProps = {
 export default function CodeEditor({
   code,
   onChange,
-  language = "javascript",
+  language = "C",
 }: CodeEditorProps) {
   const [isMounted, setIsMounted] = useState(false);
 

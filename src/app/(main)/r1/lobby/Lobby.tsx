@@ -206,6 +206,7 @@ export default function Lobbyr1(){
 
         const handleMatchFound = (data: MatchFoundData) => {
             sessionStorage.setItem('round1_match_data', JSON.stringify(data));
+            sessionStorage.removeItem('fullscreen_violations'); // Clear violations when new match starts
             showSuccessToast('Match found! Redirecting...');
             setTimeout(() => router.push('/r1/code'), 1500);
         };

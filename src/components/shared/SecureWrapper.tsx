@@ -1,17 +1,39 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function SecureWrapper( {children, }:{children:React.ReactNode;}) {
+    const { socket } = useSocket();
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [showPrompt, setShowPrompt] = useState(true);
-    const [showWarning, setShowWarning] = useState(false);
-    const [fullscreenViolations, setFullscreenViolations] = useState<Array<{ timestamp: number; message: string }>>([]);
+    const [showWarning, setShowWarning] = useState(true);
+    const [fullscreenViolations, setFullscreenViolations] = useState<Array<{ timestamp: number; message: string }>>(() => {
+        // Load violations from sessionStorage on mount
+        if (typeof window !== 'undefined') {
+            const stored = sessionStorage.getItem('fullscreen_violations');
+            if (stored) {
+                try {
+                    return JSON.parse(stored);
+                } catch (e) {
+                    console.error('Failed to parse stored violations:', e);
+                    return [];
+                }
+            }
+        }
+        return [];
+    });
     const violationsRef = useRef<Array<{ timestamp: number; message: string }>>([]);
 
     // Keep ref in sync with state
     useEffect(() => {
         violationsRef.current = fullscreenViolations;
+    }, [fullscreenViolations]);
+
+    // Save violations to sessionStorage whenever they change
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('fullscreen_violations', JSON.stringify(fullscreenViolations));
+        }
     }, [fullscreenViolations]);
 
     useEffect(() => {
@@ -61,7 +83,6 @@ export default function SecureWrapper( {children, }:{children:React.ReactNode;})
                 setShowWarning(true);
             } else if (document.fullscreenElement) {
                 setIsFullscreen(true);
-                setShowPrompt(false);
                 setShowWarning(false);
             }
         };
@@ -144,50 +165,59 @@ export default function SecureWrapper( {children, }:{children:React.ReactNode;})
         }
     }, [fullscreenViolations]);
 
+    // Emit socket event when violations hit 5
+    useEffect(() => {
+        if (fullscreenViolations.length === 5 && socket) {
+            console.log('🚨 CRITICAL: 5 violations reached! Emitting round1:violation event');
+            socket.emit('round1:violation', {
+                violations: fullscreenViolations,
+                timestamp: Date.now(),
+                totalCount: fullscreenViolations.length
+            });
+            // Reset violations after emitting
+            setFullscreenViolations([]);
+            if (typeof window !== 'undefined') {
+                sessionStorage.removeItem('fullscreen_violations');
+            }
+        }
+    }, [fullscreenViolations, socket]);
+
+    // Reset violations when match ends
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleMatchEnd = () => {
+            console.log('🔄 Match ended, resetting violations');
+            setFullscreenViolations([]);
+            if (typeof window !== 'undefined') {
+                sessionStorage.removeItem('fullscreen_violations');
+            }
+        };
+
+        socket.on('round1:matchEnd', handleMatchEnd);
+
+        return () => {
+            socket.off('round1:matchEnd', handleMatchEnd);
+        };
+    }, [socket]);
+
     const enterFullScreen = async () => {
         // Check if already in fullscreen
         if (document.fullscreenElement) {
-            // Already in fullscreen, just hide the warning and prompt
+            // Already in fullscreen, just hide the warning
             setShowWarning(false);
-            setShowPrompt(false);
             setIsFullscreen(true);
         } else {
             // Not in fullscreen, enter it
             try{
                 await document.documentElement.requestFullscreen();
                 setIsFullscreen(true);
-                setShowPrompt(false);
                 setShowWarning(false);
             } catch (err) {
                 console.error("Failed to enter fullscreen:", err);
             }
         }
     };
-
-    if (showPrompt) {
-        // Check if already in fullscreen on mount
-        const isCurrentlyFullscreen = !!document.fullscreenElement;
-        
-        return (
-            <div className="h-screen w-screen flex items-center justify-center bg-black/95">
-                <div className="text-center p-8 bg-gray-900 rounded-lg border border-amber-600 max-w-md">
-                    <h2 className="text-2xl font-bold text-white mb-4">Secure Mode Required</h2>
-                    <p className="text-gray-300 mb-6">
-                        {isCurrentlyFullscreen 
-                            ? "You're in fullscreen mode. Click below to continue."
-                            : "This page requires fullscreen mode to prevent cheating. Click the button below to enter secure mode."
-                        }
-                    </p>
-                    <button
-                        onClick={enterFullScreen}
-                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded transition-colors"
-                    >
-                        {isCurrentlyFullscreen ? "Continue" : "Enter Fullscreen Mode"}
-                    </button>
-                </div>
-            </div>
-        );
-    }
 
     const blockEvent = (e: React.ClipboardEvent) => {
         e.preventDefault();
@@ -216,24 +246,20 @@ export default function SecureWrapper( {children, }:{children:React.ReactNode;})
       {showWarning && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
             <div className="text-center p-8 bg-gray-900 rounded-lg border border-red-600 max-w-md">
-                <h2 className="text-2xl font-bold text-red-500 mb-4">⚠️ Security Violation</h2>
+                <h2 className="text-2xl font-bold text-red-500 mb-4">Exited Full Screen!</h2>
                 <p className="text-gray-300 mb-4">
-                    You must remain in fullscreen mode and keep this tab focused during the challenge.
-                    Do not switch tabs, screens, or windows.
+                    You must remain in fullscreen mode during the challenge.
                 </p>
                 <div className="bg-red-900/30 border border-red-600 rounded p-3 mb-6">
                     <p className="text-red-400 font-bold">
                         Violations: {fullscreenViolations.length}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                        All violations are being logged (fullscreen exits, tab switches, screen switches)
                     </p>
                 </div>
                 <button
                     onClick={enterFullScreen}
                     className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded transition-colors"
                 >
-                    Re-enter Fullscreen
+                    {document.fullscreenElement ? "Continue" : "Enter Fullscreen Mode"}
                 </button>
             </div>
         </div>

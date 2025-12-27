@@ -127,7 +127,6 @@ export default function CodePage({
       'java': 'java',
       'cpp': 'cpp',
       'c': 'c',
-      'javascript': 'javascript',
     };
     return languageMap[lang] || 'python';
   };
@@ -200,7 +199,6 @@ export default function CodePage({
         'java': 62,
         'cpp': 54,
         'c': 50,
-        'javascript': 63
       };
 
       const languageId = languageIds[language] || 71;
@@ -506,7 +504,7 @@ export default function CodePage({
                   <option value="java">Java</option>
                   <option value="cpp">C++</option>
                   <option value="c">C</option>
-                  <option value="javascript">JavaScript</option>
+                  
                 </select>
                 <div className={`bg-gray-800 flex-1 text-white p-2 rounded border focus:outline-none focus:ring-2 focus:ring-amber-500 text-center font-mono ${
                   getTimerDisplay().className
