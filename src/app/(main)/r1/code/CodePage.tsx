@@ -715,7 +715,7 @@ if (domNode) {
             {violationModalType === 'forfeit' ? (
               <>
                 <div className="border-red-600 border-2 rounded-lg p-6">
-                  <h2 className="text-3xl font-bold text-red-500 mb-4">❌ Match Forfeited</h2>
+                  <h2 className="text-3xl font-bold text-red-500 mb-4"> Match Forfeited</h2>
                   <p className="text-gray-300 mb-6 text-lg">
                     You have been disqualified for exceeding the maximum allowed security violations.
                   </p>
