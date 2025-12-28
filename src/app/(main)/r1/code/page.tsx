@@ -386,7 +386,7 @@ if (domNode) {
 
   return (
     //remove this securewrapper also to disable copy paste
-    <SecureWrapper>
+    // <SecureWrapper>
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
         <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
           <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
@@ -447,7 +447,7 @@ if (domNode) {
                   <div className="flex justify-between items-center mb-2 gap-2">
                       <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500">
                           <option value="python">Python</option><option value="java">Java</option>
-                          <option value="cpp">C++</option><option value="javascript">JavaScript</option>
+                          <option value="cpp">C++</option><option value="c">C</option>
                       </select>
                       <div className={`text-center p-2 font-mono text-xl bg-gray-800 rounded border border-amber-600 ${timerDisplay.className}`}>
                           {timerDisplay.time}
@@ -538,7 +538,7 @@ if (domNode) {
           </div>
         </div>
     </div>
-    </SecureWrapper>
+    // </SecureWrapper> 
   );
 }
 

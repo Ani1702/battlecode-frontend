@@ -103,8 +103,8 @@ const Hero = () => {
             <div className="h-full w-full  lg:bg-[url(/RightLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
           </div>
           <div className="absolute bottomRight right-10 top-0 h-full w-[6rem] flex items-flex-end justify-center">
-            <div className="h-full w-full   lg:bg-[url(/bottomRight.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
-            <div className="h-full w-full  lg:bg-[url(/bottomRight.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
+            <div className="h-full w-full    bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
+            <div className="h-full w-full   bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
           </div>
         </div>
 

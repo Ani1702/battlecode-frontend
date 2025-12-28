@@ -168,7 +168,7 @@ export default function SecureWrapper( {children, }:{children:React.ReactNode;})
     // Emit socket event when violations hit 5
     useEffect(() => {
         if (fullscreenViolations.length === 5 && socket) {
-            console.log('🚨 CRITICAL: 5 violations reached! Emitting round1:violation event');
+            console.log('CRITICAL: 5 violations reached! Emitting round1:violation event');
             socket.emit('round1:violation', {
                 violations: fullscreenViolations,
                 timestamp: Date.now(),
