@@ -55,7 +55,7 @@ export default function Rules() {
     }, [socket, isConnected, router]);
         
     const rules = [
-        "This round lasts 90 minutes.",
+        "This round lasts 60 minutes.",
         "Players are matched 1-on-1 randomly",
         "Each match is a race: the first to solve the problem correctly wins.",
         "There will be a cooldown time of 30 seconds after every match.",
