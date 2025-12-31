@@ -566,6 +566,68 @@ export default function Admin() {
     return validTransitions[currentStatus]?.includes(targetStatus) || false;
   };
   
+    // --- Round 1 Active Section State ---
+    // Reuse logic from waiting page for timers and cooldown
+    const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
+    const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<number | null>(null);
+    const [cooldownTimeRemaining, setCooldownTimeRemaining] = useState(0);
+    const [isRoundActive, setIsRoundActive] = useState(false);
+    const [currentUser, setCurrentUser] = useState<Participant | null>(null);
+    // --- Leaderboard State ---
+    const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
+    // Find the admin's participant object (if present)
+    useEffect(() => {
+      if (!socket) return;
+      // Listen for round1:state for admin's own status
+      const handleState = (response: any) => {
+        if (response?.success) {
+          setIsRoundActive(response.isActive ?? false);
+          setGlobalTimeRemaining(response.globalTimeRemaining || 0);
+          setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
+          if (response.participant) setCurrentUser(response.participant);
+          if (Array.isArray(response.allParticipants)) setAllParticipants(response.allParticipants);
+        }
+      };
+      socket.on('round1:state', handleState);
+      // Initial fetch
+      socket.emit('round1:getState');
+      return () => { socket.off('round1:state', handleState); };
+    }, [socket]);
+
+    // Live decrement timers for globalTimeRemaining and nextMatchmakingCycle
+    useEffect(() => {
+      if (!isRoundActive) return;
+      const interval = setInterval(() => {
+        setGlobalTimeRemaining(prev => (typeof prev === 'number' && prev > 0 ? prev - 1 : 0));
+        setNextMatchmakingCycle(prev => (typeof prev === 'number' && prev > 0 ? prev - 1 : prev));
+      }, 1000);
+      return () => clearInterval(interval);
+    }, [isRoundActive]);
+    // Cooldown timer logic
+    useEffect(() => {
+      const cooldownInterval = setInterval(() => {
+        if (
+          currentUser?.status === 'cooldown' &&
+          typeof currentUser.cooldownEndTime === 'number' &&
+          !isNaN(currentUser.cooldownEndTime)
+        ) {
+          const remaining = Math.max(0, Math.ceil((currentUser.cooldownEndTime - Date.now()) / 1000));
+          setCooldownTimeRemaining(remaining);
+        } else {
+          if (cooldownTimeRemaining !== 0) setCooldownTimeRemaining(0);
+        }
+      }, 1000);
+      return () => clearInterval(cooldownInterval);
+    }, [currentUser, cooldownTimeRemaining]);
+    // Format time helper
+    const formatTime = (seconds: number | null | undefined): string => {
+      if (typeof seconds !== 'number' || seconds < 0 || isNaN(seconds)) return '00:00';
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+    const isInCooldown = currentUser?.status === 'cooldown' && cooldownTimeRemaining > 0;
+
     return (
         <>
         {isAdmin && (
@@ -623,6 +685,29 @@ export default function Admin() {
           )}
 
           <div className="w-full max-w-6xl rounded-lg border-2 border-orange-500/50 glass-box p-6">
+            {/* --- Round 1 Active Section (from waiting page) --- */}
+            <div className="mb-8">
+              {isRoundActive && (
+                <>
+                  <div className="text-4xl text-center text-green-400">Round 1 Active</div>
+                  <div className="text-gray-200 text-center space-y-3">
+                    <div className="bg-black/40 rounded-lg p-4 border border-amber-600">
+                      <p className="text-amber-400 font-bold text-xl">
+                        Round Time Remaining: {formatTime(globalTimeRemaining)}
+                      </p>
+                    </div>
+                    <div className="bg-black/40 rounded-lg p-4 border border-blue-600">
+                      <p className="text-blue-400 font-bold">
+                        {nextMatchmakingCycle !== null ? `Next Match In: ${formatTime(nextMatchmakingCycle)}` : 'Matchmaking in Progress...'}
+                      </p>
+                      <p className="text-gray-400 text-sm">
+                        New matches are formed every 3 minutes.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <div className="flex items-center mb-6">
               <div className="w-4 h-4 bg-orange-500 rounded-full mr-3 animate-pulse"></div>
               <h3 className="text-2xl font-bold text-orange-500">Admin Controls</h3>
@@ -915,7 +1000,7 @@ export default function Admin() {
                                 {participant.status === 'in-match' ? 'In Match' : 'Waiting'}
                               </span>
                             </div>
-                            {participant.opponentUsername && (
+                            {participant.status === 'in-match' && participant.opponentUsername && (
                               <div className="text-sm text-gray-300 mt-2 ml-5">
                                 vs <span className="font-medium">{participant.opponentUsername}</span>
                               </div>
@@ -930,6 +1015,51 @@ export default function Admin() {
                     </p>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Leaderboard Section (from waiting room) */}
+            <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
+              <div className="flex items-center mb-4">
+                <img src="/leaderboard-img.svg" alt="Leaderboard Icon" width={16} height={16} />
+                <p className="text-2xl text-orange-500 ml-2">Round 1 Participants</p>
+              </div>
+              <div className="overflow-x-auto">
+                {Array.isArray(allParticipants) && allParticipants.length > 0 ? (
+                  <table className="w-full text-left text-sm text-white">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="py-2 px-3 font-bold">#</th>
+                        <th className="py-2 px-3 font-bold">Player</th>
+                        <th className="py-2 px-3 font-bold">Score</th>
+                        <th className="py-2 px-3 font-bold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allParticipants
+                        .slice()
+                        .sort((a, b) => {
+                          const aScore = typeof a.eventScore === 'number' ? a.eventScore : 0;
+                          const bScore = typeof b.eventScore === 'number' ? b.eventScore : 0;
+                          return bScore - aScore;
+                        })
+                        .map((p, idx) => (
+                          <tr key={p.id} className="border-gray-800 hover:bg-white/5 transition">
+                            <td className="py-2 px-3">{idx + 1}</td>
+                            <td className="py-2 px-3 max-w-[100px] truncate">{p.username}</td>
+                            <td className="py-2 px-3 font-mono text-cyan-400">{typeof p.eventScore === 'number' ? p.eventScore : '...'}</td>
+                            <td className="py-2 px-3 text-sm">
+                              {typeof p.status === 'string' ? p.status.charAt(0).toUpperCase() + p.status.slice(1) : ''}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-400">
+                    <p>No participants in the lobby yet.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
