@@ -230,6 +230,7 @@ const handleState = useCallback((response: GetStateResponse) => {
   }, [socket, handleState]);
 
   // --- Client-Side Timers for Smooth UI ---
+  // Timer for cooldown
   useEffect(() => {
     const cooldownInterval = setInterval(() => {
       if (currentUser?.status === 'cooldown' && currentUser.cooldownEndTime) {
@@ -243,6 +244,34 @@ const handleState = useCallback((response: GetStateResponse) => {
     }, 1000);
     return () => clearInterval(cooldownInterval);
   }, [currentUser, cooldownTimeRemaining]);
+
+  // Timer for global round time - countdown every second
+  useEffect(() => {
+    if (!isRoundActive || globalTimeRemaining <= 0) return;
+    
+    const globalTimerInterval = setInterval(() => {
+      setGlobalTimeRemaining(prev => {
+        const newTime = Math.max(0, prev - 1);
+        return newTime;
+      });
+    }, 1000);
+    
+    return () => clearInterval(globalTimerInterval);
+  }, [isRoundActive, globalTimeRemaining]);
+
+  // Timer for next matchmaking cycle - countdown every second
+  useEffect(() => {
+    if (!isRoundActive || nextMatchmakingCycle === null || nextMatchmakingCycle <= 0) return;
+    
+    const matchmakingTimerInterval = setInterval(() => {
+      setNextMatchmakingCycle(prev => {
+        if (prev === null || prev <= 0) return prev;
+        return Math.max(0, prev - 1);
+      });
+    }, 1000);
+    
+    return () => clearInterval(matchmakingTimerInterval);
+  }, [isRoundActive, nextMatchmakingCycle]);
 
   const handleStartRound = () => {
     if (!isAdmin || !socket) return;
