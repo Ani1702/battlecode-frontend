@@ -1,4 +1,6 @@
 "use client";
+
+// Imports
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Rocket } from "lucide-react";
@@ -8,23 +10,21 @@ import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
 
-// Defines the structure for a participant in the lobby
+// Interfaces
 interface Participant {
   id: string;
   username: string;
   rank: number;
   status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
-  [key: string]: unknown; // Allows for additional properties
+  [key: string]: unknown;
 }
 
-// Defines the structure for lobby update data from the server
 interface LobbyData {
   participants?: Participant[];
   isActive?: boolean;
   [key: string]: unknown;
 }
 
-// Defines the structure for match found data from the server
 interface MatchFoundData {
   matchId?: string;
   opponent?: Participant;
@@ -33,7 +33,6 @@ interface MatchFoundData {
   [key: string]: unknown;
 }
 
-// Interfaces for strongly-typed socket event responses
 interface SimpleSocketResponse {
     success: boolean;
     error?: string;
@@ -42,7 +41,7 @@ interface SimpleSocketResponse {
 interface GetStateResponse extends SimpleSocketResponse {
     participant?: Participant | null;
     isActive?: boolean;
-    allParticipants?: Participant[]; // Added to correctly type the full list response
+    allParticipants?: Participant[];
 }
 
 interface RoundInfo {
@@ -60,11 +59,11 @@ interface CurrentRoundResponse extends SimpleSocketResponse {
     };
 }
 
-
+// Component
 export default function Lobbyr1(){
     const router = useRouter();
     const { socket, isConnected } = useSocket();
-    const { userId, isLoading: authLoading,userRole } = useAuth();
+    const { userId, isLoading: authLoading, userRole } = useAuth();
     
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [isRoundActive, setIsRoundActive] = useState(false);
@@ -77,13 +76,61 @@ export default function Lobbyr1(){
     const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundResponse['currentRound'] | null>(null);
     
     const isAdmin = userRole === 'ADMIN';
-    // Effect to handle user authentication and redirection
+
+    // Functions
+    const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 19);
+
+    const handleStartRound = () => {
+        if (!socket || participants.length === 0) return;
+        socket.emit('round1:ready', {}, (response: SimpleSocketResponse) => {
+            if (response.success) {
+                showSuccessToast('Round 1 started successfully');
+            } else {
+                showErrorToast(response.error || 'Failed to start the round');
+            }
+        });
+    };
+
+    const handleState = useCallback((response: GetStateResponse) => {
+        console.log("use effect 3 ✅");
+
+        setIsLoading(false);
+        setHasAttemptedJoin(true);
+
+        if (!response.success) {
+            showErrorToast(response.error || "Could not sync with the server.");
+            return;
+        }
+
+        if (response.allParticipants) {
+            setParticipants(response.allParticipants.filter(p => p.status === "lobby"));
+        }
+
+        setIsRoundActive(response.isActive ?? false);
+
+        if (response.participant) {
+            if (response.participant.status === "in-match") {
+                router.push("/r1/code");
+            } else if (response.participant.status !== "lobby") {
+                router.push("/r1/waiting");
+            }
+        } else {
+            socket?.emit("round1:join", {}, (joinResponse: SimpleSocketResponse) => {
+                if (joinResponse.success) {
+                    showSuccessToast("Successfully joined Round 1 lobby");
+                } else {
+                    showErrorToast(joinResponse.error || "Failed to join lobby");
+                }
+            });
+        }
+    }, [router, socket]);
+
+    // useEffect Hooks
     useEffect(() => {
         if (!authLoading) setAuthenticationChecked(true);
         if (!authLoading && !userId) router.push('/dashboard');
     }, [authLoading, userId, router]);
 
-    // Effect to check current round status before allowing lobby access
     useEffect(() => {
         if (!socket || !isConnected || !authenticationChecked) return;
 
@@ -99,17 +146,14 @@ export default function Lobbyr1(){
 
             const currentRound = response.currentRound;
 
-            // Check if current round data exists
             if (!currentRound) {
                 showErrorToast("No active round found");
                 router.back();
                 return;
             }
 
-            // Store the round data for later use
             setCurrentRoundData(currentRound);
 
-            // Check if current round is Round 1 and in appropriate status
             if (currentRound.currentRoundNumber !== 1) {
                 showErrorToast("Round 1 is not the current round");
                 router.back();
@@ -123,70 +167,30 @@ export default function Lobbyr1(){
                 return;
             }
 
-            // Round status is valid, proceed with joining
             console.log("Round status valid, proceeding to get state");
         });
     }, [socket, isConnected, authenticationChecked, router]);
 
-    // Effect to handle initial server state synchronization and joining the lobby
     useEffect(() => {
-    console.log("use effect 1");
+        console.log("use effect 1");
 
-    if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin || isCheckingRound)
-        return;
+        if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin || isCheckingRound)
+            return;
 
-    console.log("use effect 2");
+        console.log("use effect 2");
 
-    socket.emit("round1:getState");
-}, [socket, isConnected, authenticationChecked, hasAttemptedJoin, isCheckingRound]);
-
-
-    const handleState = useCallback((response: GetStateResponse) => {
-        console.log("use effect 3 ✅");
-
-        setIsLoading(false);
-        setHasAttemptedJoin(true);
-
-        if (!response.success) {
-        showErrorToast(response.error || "Could not sync with the server.");
-        return;
-        }
-
-        // Populate lobby
-        if (response.allParticipants) {
-        setParticipants(response.allParticipants.filter(p => p.status === "lobby"));
-        }
-
-        setIsRoundActive(response.isActive ?? false);
-
-        if (response.participant) {
-        if (response.participant.status === "in-match") {
-            router.push("/r1/code");
-        } else if (response.participant.status !== "lobby") {
-            router.push("/r1/waiting");
-        }
-        } else {
-        // Not a participant → join
-        socket?.emit("round1:join", {}, (joinResponse: SimpleSocketResponse) => {
-            if (joinResponse.success) {
-            showSuccessToast("Successfully joined Round 1 lobby");
-            } else {
-            showErrorToast(joinResponse.error || "Failed to join lobby");
-            }
-        });
-        }
-    }, [router, socket]);
+        socket.emit("round1:getState");
+    }, [socket, isConnected, authenticationChecked, hasAttemptedJoin, isCheckingRound]);
 
     useEffect(() => {
-    if (!socket) return;
-    socket.on("round1:state", handleState);
+        if (!socket) return;
+        socket.on("round1:state", handleState);
 
-    return () => {
-        socket.off("round1:state", handleState);
-    };
-}, [socket, handleState]);
+        return () => {
+            socket.off("round1:state", handleState);
+        };
+    }, [socket, handleState]);
 
-    // Effect to set up and tear down all socket event listeners
     useEffect(() => {
         if (!socket) return;
 
@@ -206,7 +210,7 @@ export default function Lobbyr1(){
 
         const handleMatchFound = (data: MatchFoundData) => {
             sessionStorage.setItem('round1_match_data', JSON.stringify(data));
-            sessionStorage.removeItem('fullscreen_violations'); // Clear violations when new match starts
+            sessionStorage.removeItem('fullscreen_violations');
             showSuccessToast('Match found! Redirecting...');
             setTimeout(() => router.push('/r1/code'), 1500);
         };
@@ -231,7 +235,6 @@ export default function Lobbyr1(){
         const handleAdminAdded = () => {
             console.log("You have been added to Round 1 by an admin");
             
-            // Reuse the already fetched round data
             if (!currentRoundData) {
                 showErrorToast("Round data not available");
                 return;
@@ -264,7 +267,6 @@ export default function Lobbyr1(){
         socket.on('round1:adminRemoved', handleAdminRemoved);
         socket.on('round1:adminAdded', handleAdminAdded);
 
-        // Cleanup listeners on component unmount
         return () => {
             socket.off('lobby:round1', handleLobbyUpdate);
             socket.off('round1:started', handleRoundStarted);
@@ -276,21 +278,7 @@ export default function Lobbyr1(){
         };
     }, [socket, router, currentRoundData]);
 
-    // Handler for admin to start the round
-    const handleStartRound = () => {
-        if (!socket || participants.length === 0) return;
-        socket.emit('round1:ready', {}, (response: SimpleSocketResponse) => {
-            if (response.success) {
-                showSuccessToast('Round 1 started successfully');
-            } else {
-                showErrorToast(response.error || 'Failed to start the round');
-            }
-        });
-    };
-
-    // Utility to format seconds into MM:SS format
-    const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 19);
-
+    // Early return
     if (authLoading || !authenticationChecked || isCheckingRound) {
         return ( 
             <div className="flex items-center justify-center h-screen text-white">
@@ -299,6 +287,7 @@ export default function Lobbyr1(){
         );
     }
 
+    // JSX Return
     return (
         <div className="flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
             <div className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>

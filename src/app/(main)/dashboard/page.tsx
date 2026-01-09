@@ -1,22 +1,14 @@
 "use client"
-// import ContributionsGrid from "@/components/shared/ContributionsGrid";
-// import Rewards from "@/components/shared/Rewards";
-// import Navbar from "@/components/shared/Navbar";
-import CustomScrollbar from "@/components/shared/CustomScrollbar";
-import { showErrorToast, showSuccessToast } from "@/components/shared/CustomToast";
-import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useSocket } from "@/contexts/SocketContext";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import SignOut from "@/components/auth/SignOut"
-// import toast from "react-hot-toast";
-import { useRef } from 'react';
+import { useAuth } from "@/contexts/AuthContext";
+import { useSocket } from "@/contexts/SocketContext";
+import CustomScrollbar from "@/components/shared/CustomScrollbar";
+import { showErrorToast, showSuccessToast } from "@/components/shared/CustomToast";
+import SignOut from "@/components/auth/SignOut";
 
-
-
-
-// Define types for socket data
+// Interfaces
 interface LeaderboardEntry {
   rank: number;
   id: string;
@@ -42,27 +34,60 @@ interface CurrentRoundData {
 }
 
 export default function Dashboard() {
-  const { user, session, isLoading, userRole, userName /*username*/ } = useAuth();
+  const { user, session, isLoading, userRole, userName } = useAuth();
   const { socket, isConnected } = useSocket();
   const router = useRouter();
 
-  // State initialization without localStorage during SSR
+  // State declarations
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundData | null>(null);
   const [islocked, setIsLocked] = useState([true, true, true, true]);
-
-  // Loading and connection states
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [hasConnectedOnce, setHasConnectedOnce] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [hasShownLoginToast, setHasShownLoginToast] = useState(false);
-
-  // Admin controls state
   const [isAdmin, setIsAdmin] = useState(false);
 
   const prevUserRef = useRef(user);
 
-  // Security: Redirect if not authenticated (FIRST useEffect)
+  // Helper Functions
+  const getBorderColor = (status: string) => {
+    switch (status) {
+      case 'COMPLETED':
+        return '!border-green-500/50 !border-2';
+      case 'IN_PROGRESS':
+        return '!border-amber-600 !border-2';
+      case 'LOBBY':
+        return '!border-orange-500/80 !border-2';
+      case 'LOCKED':
+      default:
+        return '!border-gray-400/50 !border-2';
+    }
+  };
+
+  const handleRoundClick = (roundNumber: number, locked: boolean, status: string) => {
+    if (!locked && status !== 'COMPLETED') {
+      router.push(`r${roundNumber}/rules`);
+    }
+  };
+
+  // Constants
+  const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"];
+  const leaderboard_titles = ["Rank", "Player", "Score"];
+  const fallbackLeaderboard = [
+    [1, "cypher", 2450, ""],
+    [2, "glitch", 2300, ""],
+    [3, "reaver", 2288, ""],
+    [4, "sentinel", 2150, ""],
+    [5, "omen", 2000, ""],
+    [6, "vex", 1950, ""],
+    [7, "jett", 1800, ""],
+    [8, "raze", 1750, ""],
+    [9, "sage", 1720, ""],
+    [10, "phoenix", 1700, ""],
+  ];
+
+  // useEffect Hooks
   useEffect(() => {
     router.push("/");
     const prevUser = prevUserRef.current;
@@ -215,26 +240,6 @@ export default function Dashboard() {
     };
   }, [socket, isConnected, isClient]);
 
-  // Constants (after all hooks)
-  const titles = ["Qualifier", "Head to Head", "Elite Bounties", "The Final Hack"];
-  const leaderboard_titles = ["Rank", "Player", "Score"];
-
-  // Admin functions
-  
-  // Fallback leaderboard data (in case socket hasn't loaded yet)
-  const fallbackLeaderboard = [
-    [1, "cypher", 2450, ""],
-    [2, "glitch", 2300, ""],
-    [3, "reaver", 2288, ""],
-    [4, "sentinel", 2150, ""],
-    [5, "omen", 2000, ""],
-    [6, "vex", 1950, ""],
-    [7, "jett", 1800, ""],
-    [8, "raze", 1750, ""],
-    [9, "sage", 1720, ""],
-    [10, "phoenix", 1700, ""],
-  ];
-
   return (
     <>
       <div className="bg-[url('/bg-dashboard.svg')] h-screen bg-cover bg-center flex flex-col relative overflow-hidden">
@@ -285,25 +290,9 @@ export default function Dashboard() {
             <div className = "flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron text-white"> <p className="text-orange-500">Competition</p> &nbsp;Rounds</div>
             <div className="flex-4 ">
               {[0, 1, 2, 3].map((i) => {
-                /*const isCurrentRound = currentRoundData?.currentRoundNumber === i;*/
                 const roundStatus = currentRoundData?.rounds.find(r => r.roundNumber === i);
                 const locked = islocked[i];
                 const currentStatus = roundStatus?.status || 'LOCKED';
-
-                // Determine border color based on status
-                const getBorderColor = (status: string) => {
-                  switch (status) {
-                    case 'COMPLETED':
-                      return '!border-green-500/50 !border-2';
-                    case 'IN_PROGRESS':
-                      return '!border-amber-600 !border-2';
-                    case 'LOBBY':
-                      return '!border-orange-500/80 !border-2';
-                    case 'LOCKED':
-                    default:
-                      return '!border-gray-400/50 !border-2';
-                  }
-                };
 
                 return (
                   <div className={`flex-[1.2] flex justify-center items-center pb-5 `} key={i}>
@@ -313,9 +302,7 @@ export default function Dashboard() {
                       role="button"
                       tabIndex={0}
                       aria-disabled={locked}
-                      onClick={() => {
-                        if (!locked && currentStatus !== 'COMPLETED') router.push(`r${i}/rules`);
-                      }}
+                      onClick={() => handleRoundClick(i, locked, currentStatus)}
                     >
                       <div className={`rounded-[50%] h-15 w-15 ml-1 ${currentStatus === 'LOCKED' || currentStatus === 'COMPLETED'
                         ? currentStatus === 'COMPLETED' 

@@ -1,5 +1,5 @@
 "use client"
-import {useState, useCallback} from 'react';
+import {useState, useCallback, useMemo} from 'react';
 import {useAuth} from "@/contexts/AuthContext";
 import { showErrorToast, showInfoToast, showSuccessToast } from "@/components/shared/CustomToast";
 import {useRouter} from "next/navigation"
@@ -29,13 +29,13 @@ interface Participant {
   username: string;
   rank: number;
   status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
-  [key: string]: unknown; // Allows for additional properties
+  [key: string]: unknown; 
 }
 
 interface GetStateResponse extends SimpleSocketResponse {
     participant?: Participant | null;
     isActive?: boolean;
-    allParticipants?: Participant[]; // Added to correctly type the full list response
+    allParticipants?: Participant[]; 
 }
 
 interface MatchParticipant {
@@ -50,32 +50,73 @@ export default function Admin() {
     const [adminLoading, setAdminLoading] = useState(false);
     const { session, isLoading, userRole } = useAuth();
     const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundData | null>(null);
-    const [participants, setParticipants] = useState<Participant[]>([]);
+    
+    const [participantsData, setParticipantsData] = useState<{
+        allParticipants: Participant[];
+        currentUser: Participant | null;
+    }>({
+        allParticipants: [],
+        currentUser: null,
+    });
+
     const [selectedRoundForUsers, setSelectedRoundForUsers] = useState(0);
     const [showEndRoundConfirm, setShowEndRoundConfirm] = useState(false);
     const [roundToEnd, setRoundToEnd] = useState<number | null>(null);
     const [showResetRedisConfirm, setShowResetRedisConfirm] = useState(false);
     const [roundToReset, setRoundToReset] = useState<number | null>(null);
-    const [matchParticipants, setMatchParticipants] = useState<MatchParticipant[]>([]);
     const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(1);
-    
     const { socket } = useSocket();
     const router = useRouter();
+    const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
+    const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<number | null>(null);
+    const [cooldownTimeRemaining, setCooldownTimeRemaining] = useState(0);
+    const [isRoundActive, setIsRoundActive] = useState(false);
 
-    // Load currentRoundData from localStorage on mount
-    useEffect(() => {
+    // Derived values using useMemo
+    const participants = useMemo(() => 
+        participantsData.allParticipants.filter(p => p.status === 'lobby'),
+        [participantsData.allParticipants]
+    );
 
-        const savedRounds = localStorage.getItem('battlecode_rounds');
-        if (savedRounds) {
-            try {
-                setCurrentRoundData(JSON.parse(savedRounds));
-            } catch {
-                localStorage.removeItem('battlecode_rounds');
-            }
-        }
-
+    const matchParticipants = useMemo(() => {
+        const activeUsers = participantsData.allParticipants.filter(
+            p => p.status === 'waiting' || p.status === 'in-match'
+        );
         
-    }, []);
+        const inMatchUsers = activeUsers.filter(p => p.status === 'in-match');
+        
+        return activeUsers.map((user): MatchParticipant => {
+            const matchData: MatchParticipant = {
+                id: user.id,
+                username: user.username,
+                status: user.status as 'waiting' | 'in-match',
+            };
+            
+            if (user.status === 'in-match') {
+                if (user.opponentId) {
+                    const opponent = participantsData.allParticipants.find(
+                        p => p.id === user.opponentId
+                    );
+                    if (opponent) {
+                        matchData.opponentUsername = opponent.username;
+                    }
+                } else if (inMatchUsers.length === 2) {
+                    const otherUser = inMatchUsers.find(p => p.id !== user.id);
+                    if (otherUser) {
+                        matchData.opponentUsername = otherUser.username;
+                    }
+                }
+            }
+            
+            return matchData;
+        });
+    }, [participantsData.allParticipants]);
+
+    const currentUser = participantsData.currentUser;
+    const allParticipants = participantsData.allParticipants;
+
+
+
 
     const addUserToRound = async (userEmail:string, roundNumber:number) => {
         if (!userEmail || roundNumber === null) {
@@ -95,6 +136,7 @@ export default function Admin() {
         }
     );
     };
+
 
     const removeUserFromRound = async (userEmail:string, roundNumber:number) => {
         if (!userEmail || roundNumber === null) {
@@ -125,8 +167,10 @@ export default function Admin() {
             }
             
             if (response.allParticipants) {
-
-                setParticipants(response.allParticipants.filter(p => p.status === 'lobby'));
+                setParticipantsData(prev => ({
+                    ...prev,
+                    allParticipants: response.allParticipants || []
+                }));
             }
         });
     }, [socket]);
@@ -136,73 +180,6 @@ export default function Admin() {
         
         const eventName = `round${roundNumber}:getState`;
         socket.emit(eventName, {});
-    }, [socket]);
-
-    // Listen for the state response event
-    useEffect(() => {
-        if (!socket) return;
-
-        const handleStateResponse = (response: GetStateResponse) => {
-            console.log('[STATE RESPONSE]', response);
-            if (!response.success) return;
-            
-            if (response.allParticipants) {
-                // Filter for users who are either waiting or in-match
-                const activeUsers = response.allParticipants.filter(
-                    p => p.status === 'waiting' || p.status === 'in-match'
-                );
-                
-                console.log('[ACTIVE USERS]', activeUsers);
-                
-                // Get users who are in-match
-                const inMatchUsers = activeUsers.filter(p => p.status === 'in-match');
-                
-                // Build match info
-                const matchInfo: MatchParticipant[] = activeUsers.map((user) => {
-                    const matchData: MatchParticipant = {
-                        id: user.id,
-                        username: user.username,
-                        status: user.status as 'waiting' | 'in-match',
-                    };
-                    
-                    // If user is in-match, try to find their opponent
-                    if (user.status === 'in-match') {
-                        // First try using opponentId if available
-                        if (user.opponentId) {
-                            const opponent = response.allParticipants?.find(
-                                p => p.id === user.opponentId
-                            );
-                            if (opponent) {
-                                matchData.opponentUsername = opponent.username;
-                            }
-                        } else if (inMatchUsers.length === 2) {
-                            // Fallback: If there are exactly 2 users in-match and no opponentId,
-                            // assume they're matched against each other
-                            const otherUser = inMatchUsers.find(p => p.id !== user.id);
-                            if (otherUser) {
-                                matchData.opponentUsername = otherUser.username;
-                            }
-                        }
-                    }
-                    
-                    return matchData;
-                });
-                
-                console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
-                setMatchParticipants(matchInfo);
-            }
-        };
-
-        // Listen for state responses from all rounds
-        socket.on('round1:state', handleStateResponse);
-        socket.on('round2:state', handleStateResponse);
-        socket.on('round3:state', handleStateResponse);
-
-        return () => {
-            socket.off('round1:state', handleStateResponse);
-            socket.off('round2:state', handleStateResponse);
-            socket.off('round3:state', handleStateResponse);
-        };
     }, [socket]);
 
     const handleStartRound = (roundNumber: number) => {
@@ -216,7 +193,7 @@ export default function Admin() {
         });
     };
 
-      const endRound = (roundNumber: number) => {
+    const endRound = (roundNumber: number) => {
         if (!socket) {
           showErrorToast('Socket not connected');
           return;
@@ -318,9 +295,138 @@ export default function Admin() {
         }
     }, [session?.access_token]);
 
+    const resetAllRounds = async () => {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/reset`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session?.access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Error resetting rounds:', error);
+  }
+};
+const getStatusButtonColor = (currentStatus: string, targetStatus: string) => {
+    const statusColors: { [key: string]: string } = {
+      'LOCKED': 'bg-gray-600 hover:bg-gray-500',
+      'LOBBY': 'bg-orange-600 hover:bg-orange-500',
+      'IN_PROGRESS': 'bg-green-600 hover:bg-green-500',
+      'COMPLETED': 'bg-purple-600'
+    };
+    
+    if (currentStatus === targetStatus) {
+      return statusColors[targetStatus] + ' opacity-50 cursor-not-allowed';
+    }
+    
+    return statusColors[targetStatus];
+  };
+  const canTransition = (currentStatus: string, targetStatus: string) => {
+    const validTransitions: { [key: string]: string[] } = {
+      'LOCKED': ['LOBBY'],
+      'LOBBY': ['IN_PROGRESS', 'LOCKED'],
+      'IN_PROGRESS': ['COMPLETED', 'LOBBY'],
+      'COMPLETED': ['LOBBY']
+    };
+    
+    return validTransitions[currentStatus]?.includes(targetStatus) || false;
+  };
 
-    useEffect(() => {
-        if (isLoading) return;
+
+  const updateRoundStatus = async (roundNumber: number, newStatus: string) => {
+    if (!isAdmin || adminLoading) return;
+    if (!newStatus || roundNumber === null || roundNumber === undefined) return;
+    
+    setAdminLoading(true);
+    
+    if ((newStatus === 'COMPLETED' || newStatus === 'LOCKED') && roundNumber === 0) {
+      localStorage.removeItem(`battlecode-round-0-code-store`);
+    }
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/${roundNumber}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (response){
+        const data = await response.json();
+        if (data.success) {
+          showSuccessToast(`Round ${roundNumber} ${newStatus.toLowerCase()}`);
+          await fetchRoundData();
+        } else {
+          showErrorToast(data.error || 'Failed to update round status');
+        }
+      }
+    } catch (error) {
+      console.error('Error updating round status:', error);
+      showErrorToast('Failed to update round status');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  // Format time helper
+  const formatTime = (seconds: number | null | undefined): string => {
+    if (typeof seconds !== 'number' || seconds < 0 || isNaN(seconds)) return '00:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  const isInCooldown = currentUser?.status === 'cooldown' && cooldownTimeRemaining > 0;
+
+  // --- useEffect Hooks ---
+
+  // Load currentRoundData from localStorage on mount
+  useEffect(() => {
+    const savedRounds = localStorage.getItem('battlecode_rounds');
+    if (savedRounds) {
+      try {
+        setCurrentRoundData(JSON.parse(savedRounds));
+      } catch {
+        localStorage.removeItem('battlecode_rounds');
+      }
+    }
+  }, []);
+
+  // Listen for the state response event
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleStateResponse = (response: GetStateResponse) => {
+      console.log('[STATE RESPONSE]', response);
+      if (!response.success) return;
+      
+      if (response.allParticipants) {
+        setParticipantsData(prev => ({
+          ...prev,
+          allParticipants: response.allParticipants || []
+        }));
+      }
+    };
+
+    // Listen for state responses from all rounds
+    socket.on('round1:state', handleStateResponse);
+    socket.on('round2:state', handleStateResponse);
+    socket.on('round3:state', handleStateResponse);
+
+    return () => {
+      socket.off('round1:state', handleStateResponse);
+      socket.off('round2:state', handleStateResponse);
+      socket.off('round3:state', handleStateResponse);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    if (isLoading) return;
        
         const savedRounds = localStorage.getItem('battlecode_rounds');
         if (savedRounds) {
@@ -387,7 +493,10 @@ export default function Admin() {
         const handleLobbyUpdate = (roundNumber: number) => (data: { participants?: Participant[] }) => {
             // Only update if this is the currently selected round
             if (roundNumber === selectedRoundForUsers && data.participants) {
-                setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                setParticipantsData(prev => ({
+                    ...prev,
+                    allParticipants: data.participants || []
+                }));
             }
         };
 
@@ -404,229 +513,56 @@ export default function Admin() {
         };
     }, [socket, selectedRoundForUsers]);
 
-    // Listen for live match updates - DISABLED to prevent interference
-    // The backend lobby events don't contain reliable match data
-    // We only rely on the initial fetch via round:state events
-    /*
-    useEffect(() => {
-        if (!socket) return;
-
-        const handleMatchUpdate = (roundNumber: number) => (data: { participants?: Participant[] }) => {
-            console.log(`[LOBBY UPDATE round${roundNumber}]`, data);
-            // Only update if this is the currently selected round
-            if (roundNumber === selectedRoundForMatches && data.participants && data.participants.length > 0) {
-                const activeUsers = data.participants.filter(
-                    (p: Participant) => p.status === 'waiting' || p.status === 'in-match'
-                );
-                
-                console.log(`[ACTIVE USERS FROM LOBBY round${roundNumber}]`, activeUsers);
-                
-                // Only update if we have active users to show
-                if (activeUsers.length > 0) {
-                    // Get users who are in-match
-                    const inMatchUsers = activeUsers.filter(p => p.status === 'in-match');
-                    
-                    const matchInfo: MatchParticipant[] = activeUsers.map((user: Participant) => {
-                        const matchData: MatchParticipant = {
-                            id: user.id,
-                            username: user.username,
-                            status: user.status as 'waiting' | 'in-match',
-                        };
-                        
-                        // If user is in-match, try to find their opponent
-                        if (user.status === 'in-match') {
-                            // First try using opponentId if available
-                            if (user.opponentId) {
-                                const opponent = data.participants?.find(
-                                    (p: Participant) => p.id === user.opponentId
-                                );
-                                if (opponent) {
-                                    matchData.opponentUsername = opponent.username;
-                                }
-                            } else if (inMatchUsers.length === 2) {
-                                // Fallback: If there are exactly 2 users in-match and no opponentId,
-                                // assume they're matched against each other
-                                const otherUser = inMatchUsers.find(p => p.id !== user.id);
-                                if (otherUser) {
-                                    matchData.opponentUsername = otherUser.username;
-                                }
-                            }
-                        }
-                        
-                        return matchData;
-                    });
-                    
-                    console.log('[SETTING MATCH PARTICIPANTS FROM LOBBY UPDATE]', matchInfo);
-                    setMatchParticipants(matchInfo);
-                } else {
-                    console.log('[NO ACTIVE USERS - NOT CLEARING STATE]');
-                }
-            }
-        };
-
-        socket.on('lobby:round1', handleMatchUpdate(1));
-        socket.on('lobby:round2', handleMatchUpdate(2));
-        socket.on('lobby:round3', handleMatchUpdate(3));
-
-        return () => {
-            socket.off('lobby:round1', handleMatchUpdate(1));
-            socket.off('lobby:round2', handleMatchUpdate(2));
-            socket.off('lobby:round3', handleMatchUpdate(3));
-        };
-    }, [socket, selectedRoundForMatches]);
-    */
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const resetAllRounds = async () => {
-  try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/reset`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session?.access_token}`,
-        'Content-Type': 'application/json'
+  // Find the admin's participant object (if present)
+  useEffect(() => {
+    if (!socket) return;
+    // Listen for round1:state for admin's own status
+    const handleState = (response: any) => {
+      if (response?.success) {
+        setIsRoundActive(response.isActive ?? false);
+        setGlobalTimeRemaining(response.globalTimeRemaining || 0);
+        setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
+        
+        setParticipantsData(prev => ({
+          currentUser: response.participant || prev.currentUser,
+          allParticipants: Array.isArray(response.allParticipants) 
+            ? response.allParticipants 
+            : prev.allParticipants
+        }));
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-  } catch (error) {
-    console.error('Error resetting rounds:', error);
-  }
-};
-
-    
-    
-
-    const updateRoundStatus = async (roundNumber: number, newStatus: string) => {
-    if (!isAdmin || adminLoading) return;
-    if (!newStatus || roundNumber === null || roundNumber === undefined) return;
-    
-    setAdminLoading(true);
-    
-    if ((newStatus === 'COMPLETED' || newStatus === 'LOCKED') && roundNumber === 0) {
-      localStorage.removeItem(`battlecode-round-0-code-store`);
-    }
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/${roundNumber}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (response){
-        const data = await response.json();
-        if (data.success) {
-        showSuccessToast(`Round ${roundNumber} ${newStatus.toLowerCase()}`);
-        await fetchRoundData();
-      } else {
-        showErrorToast(data.error || 'Failed to update round status');
-      }
-      }
-      
-      
-
-      
-    } catch (error) {
-      console.error('Error updating round status:', error);
-      showErrorToast('Failed to update round status');
-    } finally {
-      setAdminLoading(false);
-    }
-  };
-
-
- 
-
-  const getStatusButtonColor = (currentStatus: string, targetStatus: string) => {
-    const statusColors: { [key: string]: string } = {
-      'LOCKED': 'bg-gray-600 hover:bg-gray-500',
-      'LOBBY': 'bg-orange-600 hover:bg-orange-500',
-      'IN_PROGRESS': 'bg-green-600 hover:bg-green-500',
-      'COMPLETED': 'bg-purple-600'
     };
-    
-    if (currentStatus === targetStatus) {
-      return statusColors[targetStatus] + ' opacity-50 cursor-not-allowed';
-    }
-    
-    return statusColors[targetStatus];
-  };
+    socket.on('round1:state', handleState);
+    // Initial fetch
+    socket.emit('round1:getState');
+    return () => { socket.off('round1:state', handleState); };
+  }, [socket]);
 
-  const canTransition = (currentStatus: string, targetStatus: string) => {
-    const validTransitions: { [key: string]: string[] } = {
-      'LOCKED': ['LOBBY'],
-      'LOBBY': ['IN_PROGRESS', 'LOCKED'],
-      'IN_PROGRESS': ['COMPLETED', 'LOBBY'],
-      'COMPLETED': ['LOBBY']
-    };
-    
-    return validTransitions[currentStatus]?.includes(targetStatus) || false;
-  };
+  // Live decrement timers for globalTimeRemaining and nextMatchmakingCycle
+  useEffect(() => {
+    if (!isRoundActive) return;
+    const interval = setInterval(() => {
+      setGlobalTimeRemaining(prev => (typeof prev === 'number' && prev > 0 ? prev - 1 : 0));
+      setNextMatchmakingCycle(prev => (typeof prev === 'number' && prev > 0 ? prev - 1 : prev));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRoundActive]);
   
-    // --- Round 1 Active Section State ---
-    // Reuse logic from waiting page for timers and cooldown
-    const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
-    const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<number | null>(null);
-    const [cooldownTimeRemaining, setCooldownTimeRemaining] = useState(0);
-    const [isRoundActive, setIsRoundActive] = useState(false);
-    const [currentUser, setCurrentUser] = useState<Participant | null>(null);
-    // --- Leaderboard State ---
-    const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
-    // Find the admin's participant object (if present)
-    useEffect(() => {
-      if (!socket) return;
-      // Listen for round1:state for admin's own status
-      const handleState = (response: any) => {
-        if (response?.success) {
-          setIsRoundActive(response.isActive ?? false);
-          setGlobalTimeRemaining(response.globalTimeRemaining || 0);
-          setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
-          if (response.participant) setCurrentUser(response.participant);
-          if (Array.isArray(response.allParticipants)) setAllParticipants(response.allParticipants);
-        }
-      };
-      socket.on('round1:state', handleState);
-      // Initial fetch
-      socket.emit('round1:getState');
-      return () => { socket.off('round1:state', handleState); };
-    }, [socket]);
-
-    // Live decrement timers for globalTimeRemaining and nextMatchmakingCycle
-    useEffect(() => {
-      if (!isRoundActive) return;
-      const interval = setInterval(() => {
-        setGlobalTimeRemaining(prev => (typeof prev === 'number' && prev > 0 ? prev - 1 : 0));
-        setNextMatchmakingCycle(prev => (typeof prev === 'number' && prev > 0 ? prev - 1 : prev));
-      }, 1000);
-      return () => clearInterval(interval);
-    }, [isRoundActive]);
-    // Cooldown timer logic
-    useEffect(() => {
-      const cooldownInterval = setInterval(() => {
-        if (
-          currentUser?.status === 'cooldown' &&
-          typeof currentUser.cooldownEndTime === 'number' &&
-          !isNaN(currentUser.cooldownEndTime)
-        ) {
-          const remaining = Math.max(0, Math.ceil((currentUser.cooldownEndTime - Date.now()) / 1000));
-          setCooldownTimeRemaining(remaining);
-        } else {
-          if (cooldownTimeRemaining !== 0) setCooldownTimeRemaining(0);
-        }
-      }, 1000);
-      return () => clearInterval(cooldownInterval);
-    }, [currentUser, cooldownTimeRemaining]);
-    // Format time helper
-    const formatTime = (seconds: number | null | undefined): string => {
-      if (typeof seconds !== 'number' || seconds < 0 || isNaN(seconds)) return '00:00';
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-    const isInCooldown = currentUser?.status === 'cooldown' && cooldownTimeRemaining > 0;
+  // Cooldown timer logic
+  useEffect(() => {
+    const cooldownInterval = setInterval(() => {
+      if (
+        currentUser?.status === 'cooldown' &&
+        typeof currentUser.cooldownEndTime === 'number' &&
+        !isNaN(currentUser.cooldownEndTime)
+      ) {
+        const remaining = Math.max(0, Math.ceil((currentUser.cooldownEndTime - Date.now()) / 1000));
+        setCooldownTimeRemaining(remaining);
+      } else {
+        if (cooldownTimeRemaining !== 0) setCooldownTimeRemaining(0);
+      }
+    }, 1000);
+    return () => clearInterval(cooldownInterval);
+  }, [currentUser, cooldownTimeRemaining]);
 
     return (
         <>

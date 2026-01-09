@@ -2,16 +2,16 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useSocket } from "@/contexts/SocketContext";
-import { useAuth } from "@/contexts/AuthContext";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
+import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play } from "lucide-react";
+import { useSocket } from "@/contexts/SocketContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
-import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play } from "lucide-react";
 import SecureWrapper from "@/components/shared/SecureWrapper";
 
-// --- Interfaces ---
+// Interfaces
 interface MatchData {
   opponent: { id: string; rank?: number; };
   question: {
@@ -61,20 +61,17 @@ interface GetStateResponse {
   error?: string;
 }
 
-
-// ============================================================================
-// UI Component (This component is correct, no changes are needed)
-// ============================================================================
+// CodePage Component
 function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const { session } = useAuth();
 
+  // State declarations
   const [problem, setProblem] = useState<MatchData['question'] | null>(null);
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState(() => {
     try { return localStorage.getItem('battlecode-round-1-language') || "python"; }
     catch { return "python"; }
   });
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
@@ -82,7 +79,6 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const [activeTab, setActiveTab] = useState<'testcases' | 'results'>('testcases');
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
-
   const [currentContext, setCurrentContext] = useState<CodeContext | null>(null);
   const [codeStore, setCodeStore] = useState<CodeStore>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -91,11 +87,8 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const codeRef = useRef(code);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-  
 
-  useEffect(() => { codeRef.current = code; }, [code]);
-  useEffect(() => { localStorage.setItem('battlecode-round-1-language', language); }, [language]);
-
+  // Helper Functions & Managers
   const contextManager = useMemo(() => ({
     getStorageKey: (round: string) => `battlecode-round-${round}-code-store`,
     generateContextKey: (round: string, qId: string, lang: string) => `${round}:${qId}:${lang}`,
@@ -129,7 +122,6 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       'java': 'java',
       'cpp': 'cpp',
       'c': 'c',
-
     };
     return languageMap[lang] || 'python';
   };
@@ -152,12 +144,6 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       });
     }, 600);
   }, [currentContext, problem, contextManager]);
-
-  useEffect(() => {
-    if (isContextInitialized && code && currentContext) {
-      scheduleAutoSave();
-    }
-  }, [code, isContextInitialized, currentContext, scheduleAutoSave]);
 
   const handleContextTransition = useCallback((newProblem: MatchData['question'], newLanguage: string) => {
     const newContext = contextManager.createContext('1', newProblem.id, newLanguage);
@@ -183,25 +169,6 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     setSubmissionResults(null);
     setActiveTab('testcases');
   }, [currentContext, problem, codeStore, contextManager]);
-
-  useEffect(() => {
-    if (!matchData?.question || isContextInitialized) return;
-    const loadedStore = contextManager.loadCodeStore('1');
-    setCodeStore(loadedStore);
-    const initialContext = contextManager.createContext('1', matchData.question.id, language);
-    setCurrentContext(initialContext);
-    const savedCode = contextManager.getCodeForContext(loadedStore, initialContext);
-    const boilerplate = contextManager.getBoilerplate(matchData.question, language);
-    setCode(savedCode || boilerplate);
-    setProblem(matchData.question);
-    setIsContextInitialized(true);
-  }, [matchData, language, isContextInitialized, contextManager]);
-
-  useEffect(() => {
-    if (isContextInitialized && matchData?.question) {
-      handleContextTransition(matchData.question, language);
-    }
-  }, [language, isContextInitialized, matchData, handleContextTransition]);
 
   const executeCode = useCallback(async (isFinalSubmission: boolean) => {
     if (!problem || !matchData || (isSubmitting || isRunning)) return;
@@ -261,29 +228,10 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     }
   }, [problem, matchData, isSubmitting, isRunning, session?.access_token, language, code]);
 
-  const monaco = useMonaco();
-  useEffect(() => {
-    if (monaco) {
-      monaco.editor.defineTheme('custom-dark', {
-        base: 'vs-dark', inherit: true,
-        rules: [],
-        colors: {
-          'editor.background': '#0a0a0a', 'editor.foreground': '#ffffff',
-          'editor.lineHighlightBackground': '#1a1a1a', 'editor.selectionBackground': '#264f78',
-          'editorCursor.foreground': '#f97316', 'editorLineNumber.foreground': '#858585',
-          'editorLineNumber.activeForeground': '#f97316',
-        },
-      });
-      monaco.editor.setTheme('custom-dark');
-    }
-  }, [monaco]);
-  const editorOptions = {
-    minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false,
-    automaticLayout: true, wordWrap: 'on' as const,
-  };
-
   const handleMouseDown = (e: React.MouseEvent) => { setIsDragging(true); e.preventDefault(); };
+  
   const handleMouseUp = () => setIsDragging(false);
+  
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     const container = document.querySelector('.code-results-container') as HTMLElement;
@@ -292,26 +240,6 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     const newHeight = Math.max(20, Math.min(80, ((e.clientY - rect.top) / rect.height) * 100));
     setCodeEditorHeight(newHeight);
   }, [isDragging]);
-
-
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-    } else {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, handleMouseMove]);
 
   const resetCodeToBoilerplate = () => {
     if (!problem || !currentContext) return;
@@ -349,6 +277,74 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     if (typeof data === 'object' && data !== null) return JSON.stringify(data, null, 2);
     return String(data);
   };
+
+  // Constants
+  const monaco = useMonaco();
+  const editorOptions = {
+    minimap: { enabled: false }, 
+    fontSize: 14, 
+    scrollBeyondLastLine: false,
+    automaticLayout: true, 
+    wordWrap: 'on' as const,
+  };
+
+  // useEffect Hooks
+  useEffect(() => {
+    if (!matchData?.question || isContextInitialized) return;
+    const loadedStore = contextManager.loadCodeStore('1');
+    setCodeStore(loadedStore);
+    const initialContext = contextManager.createContext('1', matchData.question.id, language);
+    setCurrentContext(initialContext);
+    const savedCode = contextManager.getCodeForContext(loadedStore, initialContext);
+    const boilerplate = contextManager.getBoilerplate(matchData.question, language);
+    setCode(savedCode || boilerplate);
+    setProblem(matchData.question);
+    setIsContextInitialized(true);
+  }, [matchData, language, isContextInitialized, contextManager]);
+
+  useEffect(() => {
+    if (isContextInitialized && matchData?.question) {
+      handleContextTransition(matchData.question, language);
+    }
+  }, [language, isContextInitialized, matchData, handleContextTransition]);
+
+  useEffect(() => {
+    if (monaco) {
+      monaco.editor.defineTheme('custom-dark', {
+        base: 'vs-dark', 
+        inherit: true,
+        rules: [],
+        colors: {
+          'editor.background': '#0a0a0a', 
+          'editor.foreground': '#ffffff',
+          'editor.lineHighlightBackground': '#1a1a1a', 
+          'editor.selectionBackground': '#264f78',
+          'editorCursor.foreground': '#f97316', 
+          'editorLineNumber.foreground': '#858585',
+          'editorLineNumber.activeForeground': '#f97316',
+        },
+      });
+      monaco.editor.setTheme('custom-dark');
+    }
+  }, [monaco]);
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, handleMouseMove]);
 
   if (!problem || !matchData) return <div className="text-white text-center p-8">Initializing editor...</div>;
 

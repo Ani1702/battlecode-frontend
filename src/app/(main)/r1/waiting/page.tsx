@@ -1,4 +1,6 @@
 "use client";
+
+// Imports
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from '@/contexts/SocketContext';
 import { useRouter } from "next/navigation";
@@ -7,7 +9,7 @@ import Image from "next/image";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 
-// --- Interfaces ---
+// Interfaces
 interface Participant {
   id: string;
   username: string;
@@ -20,12 +22,11 @@ interface Participant {
 
 interface MatchFoundData {
   opponent: { id: string; rank?: number };
-  question: { id:string; title: string; };
+  question: { id: string; title: string; };
   startTime: number;
   duration: number;
 }
 
-// ✅ FIX: Define a more specific type for the getState response to ensure type safety.
 interface GetStateResponse {
     success: boolean;
     isActive?: boolean;
@@ -33,19 +34,17 @@ interface GetStateResponse {
     allParticipants?: Participant[];
     nextMatchmakingCycle?: number;
     participant?: Participant;
-    matchData?: MatchFoundData; // Expect matchData for re-joins
+    matchData?: MatchFoundData;
     error?: string;
 }
 
-// ============================================================================
-// Main Waiting Room Component
-// ============================================================================
+// Component
 export default function WaitingRoomR1() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
   const { userId, userRole, isLoading: authLoading } = useAuth();
 
-  // --- State Management ---
+  // State Management
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [currentUser, setCurrentUser] = useState<Participant | null>(null);
   const [isRoundActive, setIsRoundActive] = useState(false);
@@ -57,7 +56,84 @@ export default function WaitingRoomR1() {
   const isAdmin = useMemo(() => userRole === 'ADMIN', [userRole]);
   const isInCooldown = useMemo(() => currentUser?.status === 'cooldown' && cooldownTimeRemaining > 0, [currentUser, cooldownTimeRemaining]);
 
-  // --- Socket Event Listeners ---
+  // Functions
+  const formatTime = (seconds: number | null | undefined): string => {
+    if (typeof seconds !== 'number' || seconds < 0 || isNaN(seconds)) return '00:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getStatusText = (participant: Participant): string => {
+    switch (participant.status) {
+      case 'lobby': return 'In Lobby';
+      case 'waiting':
+        if (nextMatchmakingCycle !== null && isRoundActive) {
+            return `Next Match: ${formatTime(nextMatchmakingCycle)}`;
+        }
+        return 'Waiting for Match';
+      case 'in-match': return 'In Match';
+      case 'cooldown':
+        if (participant.id === userId) {
+             return `Cooldown (${formatTime(cooldownTimeRemaining)})`;
+        }
+        const remaining = participant.cooldownEndTime ? Math.max(0, Math.ceil((participant.cooldownEndTime - Date.now()) / 1000)) : 0;
+        return `Cooldown (${formatTime(remaining)})`;
+      default: return participant.status;
+    }
+  };
+  
+  const getStatusColor = (status: string): string => ({
+      'lobby': 'text-gray-400',
+      'waiting': 'text-yellow-400',
+      'in-match': 'text-green-400',
+      'cooldown': 'text-red-400'
+  }[status] || 'text-gray-400');
+
+  const handleStartRound = () => {
+    if (!isAdmin || !socket) return;
+    socket.emit('round1:ready', {}, (response: { success?: boolean; error?: string }) => {
+      if (response?.success) {
+        showSuccessToast('Round 1 started successfully!');
+      } else {
+        showErrorToast(response?.error || 'Failed to start round');
+      }
+    });
+  };
+
+  const handleState = useCallback((response: GetStateResponse) => {
+      console.log("Ehllo");
+      if (response?.success) {
+        setIsRoundActive(response.isActive ?? false);
+        setGlobalTimeRemaining(response.globalTimeRemaining || 0);
+        setAllParticipants(response.allParticipants || []);
+        setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
+
+        const me = response.participant;
+        if (me) {
+          if (me.status === 'in-match') {
+            if (response.matchData) {
+                showInfoToast('Rejoining your active match...');
+                sessionStorage.setItem('round1_match_data', JSON.stringify(response.matchData));
+                router.push('/r1/code');
+            } else {
+                showErrorToast('Match data missing. Returning to dashboard.');
+                router.push('/dashboard');
+            }
+            return;
+          }
+          setCurrentUser(me);
+        }
+      } else {
+        showErrorToast(response?.error || "Could not get round state.");
+        router.push('/dashboard');
+      }
+      console.log(1);
+      setIsLoading(false);
+    
+    }, [router]);
+
+  // useEffect Hooks
   useEffect(() => {
     if (!socket || !isConnected) return;
 
@@ -114,7 +190,6 @@ export default function WaitingRoomR1() {
     const handleAdminAdded = () => {
       console.log("You have been added to Round 1 by an admin");
       
-      // Check current round status
       socket?.emit("user:current-round", {}, (response: { success: boolean; currentRound?: { currentRoundNumber: number; currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS'; }; error?: string }) => {
         if (!response.success || !response.currentRound) {
           showErrorToast("Failed to check round status");
@@ -167,59 +242,12 @@ export default function WaitingRoomR1() {
     };
   }, [socket, isConnected, router, userId]);
 
-  // --- Initial State Fetch ---
-
-
   useEffect(() => {
     if (!socket || !isConnected || !userId)
         return;
     socket.emit("round1:getState");
-}, [socket, isConnected, userId, router]);
+  }, [socket, isConnected, userId, router]);
 
-const handleState = useCallback((response: GetStateResponse) => {
-      console.log("Ehllo");
-      if (response?.success) {
-        setIsRoundActive(response.isActive ?? false);
-        setGlobalTimeRemaining(response.globalTimeRemaining || 0);
-        setAllParticipants(response.allParticipants || []);
-        setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
-
-        const me = response.participant;
-        if (me) {
-          // ✅ FIX: This is the critical change. If the user is in a match,
-          // we now expect 'matchData' in the response. We must save it to
-          // sessionStorage BEFORE redirecting to prevent the race condition.
-          if (me.status === 'in-match') {
-            if (response.matchData) {
-                showInfoToast('Rejoining your active match...');
-                sessionStorage.setItem('round1_match_data', JSON.stringify(response.matchData));
-                router.push('/r1/code');
-            } else {
-                // This is a fallback in case the backend state is weird.
-                showErrorToast('Match data missing. Returning to dashboard.');
-                router.push('/dashboard');
-            }
-            return;
-          }
-          setCurrentUser(me);
-        }
-      } else {
-        showErrorToast(response?.error || "Could not get round state.");
-        router.push('/dashboard');
-      }
-      console.log(1);
-      setIsLoading(false);
-    
-    }, [router]);
-
-
-
-    
-
-    
-   
-
-    // ✅ FIX: The initial getState call now correctly handles the re-join scenario.
   useEffect(() => {
     if (!socket) return;
     socket.on("round1:state", handleState);
@@ -229,8 +257,6 @@ const handleState = useCallback((response: GetStateResponse) => {
     };
   }, [socket, handleState]);
 
-  // --- Client-Side Timers for Smooth UI ---
-  // Timer for cooldown
   useEffect(() => {
     const cooldownInterval = setInterval(() => {
       if (currentUser?.status === 'cooldown' && currentUser.cooldownEndTime) {
@@ -245,7 +271,6 @@ const handleState = useCallback((response: GetStateResponse) => {
     return () => clearInterval(cooldownInterval);
   }, [currentUser, cooldownTimeRemaining]);
 
-  // Timer for global round time - countdown every second
   useEffect(() => {
     if (!isRoundActive || globalTimeRemaining <= 0) return;
     
@@ -259,7 +284,6 @@ const handleState = useCallback((response: GetStateResponse) => {
     return () => clearInterval(globalTimerInterval);
   }, [isRoundActive, globalTimeRemaining]);
 
-  // Timer for next matchmaking cycle - countdown every second
   useEffect(() => {
     if (!isRoundActive || nextMatchmakingCycle === null || nextMatchmakingCycle <= 0) return;
     
@@ -273,50 +297,7 @@ const handleState = useCallback((response: GetStateResponse) => {
     return () => clearInterval(matchmakingTimerInterval);
   }, [isRoundActive, nextMatchmakingCycle]);
 
-  const handleStartRound = () => {
-    if (!isAdmin || !socket) return;
-    socket.emit('round1:ready', {}, (response: { success?: boolean; error?: string }) => {
-      if (response?.success) {
-        showSuccessToast('Round 1 started successfully!');
-      } else {
-        showErrorToast(response?.error || 'Failed to start round');
-      }
-    });
-  };
-
-  const formatTime = (seconds: number | null | undefined): string => {
-    if (typeof seconds !== 'number' || seconds < 0 || isNaN(seconds)) return '00:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getStatusText = (participant: Participant): string => {
-    switch (participant.status) {
-      case 'lobby': return 'In Lobby';
-      case 'waiting':
-        if (nextMatchmakingCycle !== null && isRoundActive) {
-            return `Next Match: ${formatTime(nextMatchmakingCycle)}`;
-        }
-        return 'Waiting for Match';
-      case 'in-match': return 'In Match';
-      case 'cooldown':
-        if (participant.id === userId) {
-             return `Cooldown (${formatTime(cooldownTimeRemaining)})`;
-        }
-        const remaining = participant.cooldownEndTime ? Math.max(0, Math.ceil((participant.cooldownEndTime - Date.now()) / 1000)) : 0;
-        return `Cooldown (${formatTime(remaining)})`;
-      default: return participant.status;
-    }
-  };
-  
-  const getStatusColor = (status: string): string => ({
-      'lobby': 'text-gray-400',
-      'waiting': 'text-yellow-400',
-      'in-match': 'text-green-400',
-      'cooldown': 'text-red-400'
-  }[status] || 'text-gray-400');
-
+  // Early return
   if (authLoading || isLoading) {
     console.log("auth loading");
     console.log(authLoading);
@@ -325,7 +306,7 @@ const handleState = useCallback((response: GetStateResponse) => {
     return <div className="flex items-center justify-center h-screen bg-black text-white">Loading Waiting Room...</div>;
   }
 
-  // --- UI Rendering ---
+  // JSX Return
   return (
     <div className="flex bg-[url('/bg_code.png')] bg-cover h-screen flex-col overflow-hidden relative">
       <div className="flex-shrink-0 ml-3 mt-0 py-4 relative z-10 orbitron">

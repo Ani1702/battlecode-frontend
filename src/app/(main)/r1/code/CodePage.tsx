@@ -2,15 +2,50 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Editor, { useMonaco } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
-import Editor, { useMonaco } from '@monaco-editor/react';
-import * as monaco from 'monaco-editor';
+import type { editor } from 'monaco-editor';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 
-// FIX: Add the robust useInterval custom hook. This is a standard pattern
-// for creating timers that don't have issues with stale state.
+// Interfaces
+interface SavedMatchState {
+  currentLanguage: string;
+  languages: { [lang: string]: { code: string; } };
+}
+
+interface MatchData {
+  opponent: { id: string; rank?: number; };
+  question: {
+    id: string; title: string; description: string; difficulty: string;
+    duration?: number; constraints?: string[]; boilerplate?: { [key: string]: string };
+    sampleTestCases?: TestCase[]; hints?: string[];
+  };
+  startTime: number; duration: number; difficulty?: string;
+}
+
+interface Problem {
+  id: string; title: string; description: string; difficulty: string;
+  constraints: string[]; boilerplate: { [key: string]: string };
+  sampleTestCases: TestCase[]; hints: string[];
+}
+
+interface TestCase {
+  stdin?: string; expected_output?: string;
+  input?: { stdin?: string; json?: unknown; };
+  output?: { stdout?: string; json?: unknown; };
+  explanation?: string;
+}
+
+interface SubmissionResult {
+  token: string; status: { id: number; description: string; };
+  stdout: string | null; stderr: string | null; compile_output: string | null;
+  time: string | null; memory: string | null; passed?: boolean;
+}
+
+// Custom Hook for interval with proper cleanup
 function useInterval(callback: () => void, delay: number | null) {
   const savedCallback = useRef<() => void>(() => {});
 
@@ -31,42 +66,13 @@ function useInterval(callback: () => void, delay: number | null) {
   }, [delay]);
 }
 
-interface SavedMatchState {
-  currentLanguage: string;
-  languages: { [lang: string]: { code: string; } };
-}
-interface MatchData {
-  opponent: { id: string; rank?: number; };
-  question: {
-    id: string; title: string; description: string; difficulty: string;
-    duration?: number; constraints?: string[]; boilerplate?: { [key: string]: string };
-    sampleTestCases?: TestCase[]; hints?: string[];
-  };
-  startTime: number; duration: number; difficulty?: string;
-}
-interface Problem {
-  id: string; title: string; description: string; difficulty: string;
-  constraints: string[]; boilerplate: { [key: string]: string };
-  sampleTestCases: TestCase[]; hints: string[];
-}
-interface TestCase {
-  stdin?: string; expected_output?: string;
-  input?: { stdin?: string; json?: unknown; };
-  output?: { stdout?: string; json?: unknown; };
-  explanation?: string;
-}
-interface SubmissionResult {
-  token: string; status: { id: number; description: string; };
-  stdout: string | null; stderr: string | null; compile_output: string | null;
-  time: string | null; memory: string | null; passed?: boolean;
-}
-
 export default function R1CodePage() {
   const router = useRouter();
   const { socket } = useSocket();
   const { session, isLoading: authLoading } = useAuth();
   const monaco = useMonaco();
   
+  // State declarations
   const [matchData, setMatchData] = useState<MatchData | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState("");
@@ -80,11 +86,13 @@ export default function R1CodePage() {
   const [matchPaused, setMatchPaused] = useState(false);
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
-  const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [violationModalType, setViolationModalType] = useState<'forfeit' | 'opponentViolated' | null>(null);
+  
+  const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
+  // Constants
   const editorOptions = {
     minimap: { enabled: false }, fontSize: 14, lineNumbers: 'on' as const,
     roundedSelection: false, scrollBeyondLastLine: false, automaticLayout: true,
@@ -92,9 +100,269 @@ export default function R1CodePage() {
     autoIndent: 'full' as const, formatOnPaste: true, formatOnType: true,
   };
 
+  // Helper Functions
   const getMonacoLanguage = (lang: string) => ({
     'python': 'python', 'java': 'java', 'cpp': 'cpp', 'c': 'c'
   }[lang] || 'python');
+
+  const getMatchStorageKey = (problemId: string) => `round1_match_state_${problemId}`;
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getTimerDisplay = (): { time: string; className: string } => {
+    const isWarning = timeRemaining <= 300;
+    const isCritical = timeRemaining <= 60;
+    return {
+      time: formatTime(timeRemaining),
+      className: isCritical ? 'border-red-600 text-red-400' : 
+                 isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
+    };
+  };
+
+  function handleEditorMount(
+      editor: editor.IStandaloneCodeEditor,
+      monacoInstance: typeof import('monaco-editor')
+    ){
+      editorRef.current = editor;
+      // Disable paste via context menu
+      editor.addAction({
+        id: "disable-paste",
+        label: "Paste",
+        keybindings: [],
+        precondition: "false",
+        run: () => {}
+      });
+      // Block DOM paste events
+      const domNode = editor.getDomNode();
+  if (domNode) {
+    domNode.addEventListener("paste", (e: ClipboardEvent) => { // Fixed with the specific event type
+      e.preventDefault();
+      showErrorToast("Paste is disabled");
+    }, true);
+  }
+      // Block keyboard shortcut Ctrl/Cmd+V
+      editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+        showErrorToast("Paste shortcut is disabled");
+      });
+    }
+    
+
+  const formatTestCaseData = (data: unknown): string => {
+    if (typeof data === 'string') return data;
+    if (Array.isArray(data)) return data.join(', ');
+    if (typeof data === 'object' && data !== null) {
+      return Object.entries(data).map(([key, value]) => 
+        Array.isArray(value) ? `${key} = [${value.join(', ')}]` : `${key} = ${value}`
+      ).join('\n');
+    }
+    return String(data);
+  };
+
+  const saveCurrentState = useCallback(() => {
+    if (!problem) return;
+    const key = getMatchStorageKey(problem.id);
+    try {
+      const existingStateStr = localStorage.getItem(key);
+      const state: SavedMatchState = existingStateStr 
+        ? JSON.parse(existingStateStr)
+        : { currentLanguage: language, languages: {} };
+      state.currentLanguage = language;
+      if (!state.languages) state.languages = {};
+      state.languages[language] = { code };
+      localStorage.setItem(key, JSON.stringify(state));
+    } catch (e) { console.error("Failed to save state:", e); }
+  }, [problem, language, code]);
+
+  const handleLanguageChange = (newLanguage: string) => {
+    if (!problem || language === newLanguage) return;
+    saveCurrentState();
+    const key = getMatchStorageKey(problem.id);
+    const savedStateStr = localStorage.getItem(key);
+    let newCode = problem.boilerplate?.[newLanguage] || '';
+    if (savedStateStr) {
+      try {
+        const state: SavedMatchState = JSON.parse(savedStateStr);
+        newCode = state.languages?.[newLanguage]?.code || problem.boilerplate?.[newLanguage] || '';
+      } catch(e) { console.error("Failed to parse saved state on language change", e); }
+    }
+    setCode(newCode);
+    setLanguage(newLanguage);
+  };
+
+  const handleSubmit = useCallback(async () => {
+    if (!problem || !matchData || isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmissionResults(null);
+    showInfoToast('Submitting your solution for final judging...');
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ language, source_code: code, problemId: problem.id, roundNumber: 1 })
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setSubmissionResults(result.results || []);
+        const { summary, submission } = result;
+        if (submission && submission.status === 'ACCEPTED') {
+          showSuccessToast(`🎉 All ${summary.total} test cases passed! You won the match!`);
+        } else {
+          showErrorToast(`${summary.passed}/${summary.total} test cases passed. Keep trying!`);
+        }
+      } else {
+        showErrorToast(result.message || 'Submission failed');
+        if (result.results) setSubmissionResults(result.results);
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      showErrorToast(`Failed to submit: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [problem, matchData, session, language, code, isSubmitting]);
+
+  const executeCode = async () => {
+    if (!problem) { showErrorToast('No problem loaded'); return; }
+    setIsRunning(true);
+    setSubmissionResults(null);
+    showInfoToast('Running your code against sample cases...');
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ language, source_code: code, problemId: problem.id })
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      if (result.success) {
+        setSubmissionResults(result.results || []);
+        showInfoToast(`Test run completed: ${result.summary.passed}/${result.summary.total} passed`);
+      } else {
+        throw new Error(result.error || 'Failed to run code');
+      }
+    } catch (error) {
+      console.error('Run error:', error);
+      showErrorToast(`Failed to run code: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const timerTick = useCallback(() => {
+    if (!matchData?.startTime || !matchData?.duration) return;
+    const elapsed = Date.now() - matchData.startTime;
+    const remaining = Math.max(0, matchData.duration - elapsed);
+    const remainingSeconds = Math.floor(remaining / 1000);
+    setTimeRemaining(remainingSeconds);
+    if (remainingSeconds <= 0) {
+      handleSubmit();
+    }
+  }, [matchData, handleSubmit]);
+
+  const handleMouseDown = (e: React.MouseEvent) => { 
+    setIsDragging(true); 
+    e.preventDefault(); 
+  };
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+    const container = document.querySelector('.code-results-container') as HTMLElement;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const containerHeight = rect.height;
+    const mouseY = e.clientY - rect.top;
+    const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
+    setCodeEditorHeight(newHeightPercentage);
+  }, [isDragging]);
+
+  const handleMouseUp = () => { setIsDragging(false); };
+
+  const handleViolationModalClose = () => {
+    setShowViolationModal(false);
+    setViolationModalType(null);
+    router.push('/r1/waiting');
+  };
+
+  const handleMatchPause = (data: { message?: string }) => {
+    setMatchPaused(true);
+    showInfoToast(data.message || 'Match paused - opponent disconnected');
+  };
+
+  const handleMatchResume = (data: { message?: string; startTime?: number; duration?: number }) => {
+    setMatchPaused(false);
+    showSuccessToast(data.message || 'Match resumed - opponent reconnected');
+    if (data.startTime && data.duration) {
+      setMatchData(prev => prev ? { ...prev, startTime: data.startTime!, duration: data.duration! } : null);
+    }
+  };
+
+  const handleCooldown = () => {
+    if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
+    showSuccessToast('Match completed! Entering cooldown period...');
+    router.push('/r1/waiting');
+  };
+
+  const handleRoundEnd = () => {
+    if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
+    showInfoToast('Round 1 has ended');
+    router.push('/');
+  };
+
+  const handleTimerUpdate = (data: { timeRemaining: number }) => {
+    setTimeRemaining(data.timeRemaining);
+    
+    // If timer is very low, warn user
+    if (data.timeRemaining <= 60 && data.timeRemaining > 0) {
+      showErrorToast(`Only ${data.timeRemaining} seconds remaining!`);
+    }
+    
+    // Auto-submit when time is up
+    if (data.timeRemaining <= 0) {
+      showErrorToast('Time\'s up! Auto-submitting your solution...');
+      handleSubmit();
+    }
+  };
+
+  const handleAdminRemoved = () => {
+    if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
+    showErrorToast('You have been removed from Round 1 by an admin');
+    router.push('/');
+  };
+
+  const handleViolationForfeit = () => {
+    if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
+    setViolationModalType('forfeit');
+    setShowViolationModal(true);
+  };
+
+  const handleOpponentViolated = () => {
+    if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
+    setViolationModalType('opponentViolated');
+    setShowViolationModal(true);
+  };
+
+  const handleState = (data: { success?: boolean; matchData?: MatchData; globalTimeRemaining?: number }) => {
+    if (!data.success) return;
+
+    if (data.matchData) {
+      setMatchData(prev => prev ? { ...prev, ...data.matchData } : (data.matchData ?? null));
+    }
+
+    if (typeof data.globalTimeRemaining === "number") {
+      setTimeRemaining(data.globalTimeRemaining);
+    }
+  };
+
+  // useEffect Hooks
   
   useEffect(() => {
     if (monaco) {
@@ -162,25 +430,6 @@ export default function R1CodePage() {
     }
   }, [monaco]);
 
-  
-
-  const getMatchStorageKey = (problemId: string) => `round1_match_state_${problemId}`;
-
-  const saveCurrentState = useCallback(() => {
-    if (!problem) return;
-    const key = getMatchStorageKey(problem.id);
-    try {
-      const existingStateStr = localStorage.getItem(key);
-      const state: SavedMatchState = existingStateStr 
-        ? JSON.parse(existingStateStr)
-        : { currentLanguage: language, languages: {} };
-      state.currentLanguage = language;
-      if (!state.languages) state.languages = {};
-      state.languages[language] = { code };
-      localStorage.setItem(key, JSON.stringify(state));
-    } catch (e) { console.error("Failed to save state:", e); }
-  }, [problem, language, code]);
-  
   useEffect(() => {
     const savedMatchData = sessionStorage.getItem('round1_match_data');
     if (savedMatchData) {
@@ -235,128 +484,8 @@ export default function R1CodePage() {
     };
   }, [saveCurrentState]);
 
-  const handleLanguageChange = (newLanguage: string) => {
-    if (!problem || language === newLanguage) return;
-    saveCurrentState();
-    const key = getMatchStorageKey(problem.id);
-    const savedStateStr = localStorage.getItem(key);
-    let newCode = problem.boilerplate?.[newLanguage] || '';
-    if (savedStateStr) {
-        try {
-            const state: SavedMatchState = JSON.parse(savedStateStr);
-            newCode = state.languages?.[newLanguage]?.code || problem.boilerplate?.[newLanguage] || '';
-        } catch(e) { console.error("Failed to parse saved state on language change", e); }
-    }
-    setCode(newCode);
-    setLanguage(newLanguage);
-  };
-
-  const handleSubmit = useCallback(async () => {
-    if (!problem || !matchData || isSubmitting) return;
-    setIsSubmitting(true);
-    setSubmissionResults(null);
-    showInfoToast('Submitting your solution for final judging...');
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ language, source_code: code, problemId: problem.id, roundNumber: 1 })
-      });
-
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setSubmissionResults(result.results || []);
-        const { summary, submission } = result;
-        if (submission && submission.status === 'ACCEPTED') {
-          showSuccessToast(`🎉 All ${summary.total} test cases passed! You won the match!`);
-        } else {
-          showErrorToast(`${summary.passed}/${summary.total} test cases passed. Keep trying!`);
-        }
-      } else {
-        showErrorToast(result.message || 'Submission failed');
-        if (result.results) setSubmissionResults(result.results);
-      }
-    } catch (error) {
-      console.error('Submit error:', error);
-      showErrorToast(`Failed to submit: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [problem, matchData, session, language, code, isSubmitting]);
-
-  const timerTick = useCallback(() => {
-    if (!matchData?.startTime || !matchData?.duration) return;
-    const elapsed = Date.now() - matchData.startTime;
-    const remaining = Math.max(0, matchData.duration - elapsed);
-    const remainingSeconds = Math.floor(remaining / 1000);
-    setTimeRemaining(remainingSeconds);
-    if (remainingSeconds <= 0) {
-      handleSubmit();
-    }
-  }, [matchData, handleSubmit]);
-
-  useInterval(timerTick, matchPaused || (matchData && timeRemaining <= 0) ? null : 1000);
-
   useEffect(() => {
     if (!socket) return;
-    const handleMatchPause = (data: { message?: string }) => {
-      setMatchPaused(true);
-      showInfoToast(data.message || 'Match paused - opponent disconnected');
-    };
-    const handleMatchResume = (data: { message?: string; startTime?: number; duration?: number }) => {
-      setMatchPaused(false);
-      showSuccessToast(data.message || 'Match resumed - opponent reconnected');
-      if (data.startTime && data.duration) {
-        setMatchData(prev => prev ? { ...prev, startTime: data.startTime!, duration: data.duration! } : null);
-      }
-    };
-    const handleCooldown = () => {
-      if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
-      showSuccessToast('Match completed! Entering cooldown period...');
-      router.push('/r1/waiting');
-    };
-    const handleRoundEnd = () => {
-        if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
-        showInfoToast('Round 1 has ended');
-        router.push('/');
-    };
-    const handleTimerUpdate = (data: { timeRemaining: number }) => {
-
-        setTimeRemaining(data.timeRemaining);
-        
-        // If timer is very low, warn user
-        if (data.timeRemaining <= 60 && data.timeRemaining > 0) {
-            showErrorToast(`Only ${data.timeRemaining} seconds remaining!`);
-        }
-        
-        // Auto-submit when time is up
-        if (data.timeRemaining <= 0) {
-            showErrorToast('Time\'s up! Auto-submitting your solution...');
-            handleSubmit();
-        }
-    };
-    
-    const handleAdminRemoved = () => {
-      if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
-      showErrorToast('You have been removed from Round 1 by an admin');
-      router.push('/');
-    };
-
-    const handleViolationForfeit = () => {
-      if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
-      setViolationModalType('forfeit');
-      setShowViolationModal(true);
-    };
-
-    const handleOpponentViolated = () => {
-      if (problem) localStorage.removeItem(getMatchStorageKey(problem.id));
-      setViolationModalType('opponentViolated');
-      setShowViolationModal(true);
-    };
 
     socket.on('match:pause', handleMatchPause);
     socket.on('match:resume', handleMatchResume);
@@ -406,74 +535,16 @@ export default function R1CodePage() {
     }
   }, [socket, matchData, isLoading]);
 
-  const executeCode = async () => {
-    if (!problem) { showErrorToast('No problem loaded'); return; }
-    setIsRunning(true);
-    setSubmissionResults(null);
-    showInfoToast('Running your code against sample cases...');
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ language, source_code: code, problemId: problem.id })
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const result = await response.json();
-      if (result.success) {
-        setSubmissionResults(result.results || []);
-        showInfoToast(`Test run completed: ${result.summary.passed}/${result.summary.total} passed`);
-      } else {
-        throw new Error(result.error || 'Failed to run code');
-      }
-    } catch (error) {
-      console.error('Run error:', error);
-      showErrorToast(`Failed to run code: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsRunning(false);
-    }
-  };
-  
-  const handleMouseDown = (e: React.MouseEvent) => { setIsDragging(true); e.preventDefault(); };
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    const container = document.querySelector('.code-results-container') as HTMLElement;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const containerHeight = rect.height;
-    const mouseY = e.clientY - rect.top;
-    const newHeightPercentage = Math.max(20, Math.min(80, (mouseY / containerHeight) * 100));
-    setCodeEditorHeight(newHeightPercentage);
-   }, [isDragging]);
-  const handleMouseUp = () => { setIsDragging(false); };
-
-  const handleViolationModalClose = () => {
-    setShowViolationModal(false);
-    setViolationModalType(null);
-    router.push('/r1/waiting');
-  };
-
   useEffect(() => {
-  if (!socket) return;
+    if (!socket) return;
 
-  const handleState = (data: { success?: boolean; matchData?: MatchData; globalTimeRemaining?: number }) => {
-    if (!data.success) return;
+    socket.on("round1:state", handleState);
+    socket.emit("round1:getState"); // request once on mount
 
-    if (data.matchData) {
-      setMatchData(prev => prev ? { ...prev, ...data.matchData } : (data.matchData ?? null));
-    }
-
-    if (typeof data.globalTimeRemaining === "number") {
-      setTimeRemaining(data.globalTimeRemaining);
-    }
-  };
-
-  socket.on("round1:state", handleState);
-  socket.emit("round1:getState"); // request once on mount
-
-  return () => {
-    socket.off("round1:state", handleState);
-  };
-}, [socket]);
+    return () => {
+      socket.off("round1:state", handleState);
+    };
+  }, [socket]);
 
 
   useEffect(() => {
@@ -493,31 +564,10 @@ export default function R1CodePage() {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDragging, handleMouseMove]);
+
+  // Timer interval
+  useInterval(timerTick, matchPaused || (matchData && timeRemaining <= 0) ? null : 1000);
   
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getTimerDisplay = (): { time: string; className: string } => {
-    const isWarning = timeRemaining <= 300;
-    const isCritical = timeRemaining <= 60;
-    return {
-      time: formatTime(timeRemaining),
-      className: isCritical ? 'border-red-600 text-red-400' : 
-                 isWarning ? 'border-yellow-600 text-yellow-400' : 'border-amber-600'
-    };
-  };
-  const formatTestCaseData = (data: unknown): string => {
-    if (typeof data === 'string') return data;
-    if (Array.isArray(data)) return data.join(', ');
-    if (typeof data === 'object' && data !== null) {
-      return Object.entries(data).map(([key, value]) => Array.isArray(value) ? `${key} = [${value.join(', ')}]` : `${key} = ${value}`).join('\n');
-    }
-    return String(data);
-  };
-
   if (authLoading || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-black/40 text-white">

@@ -64,6 +64,15 @@ interface StateResponse {
   lockedQuestionIds?: string[];
 }
 
+interface GetStateResponse {
+  success: boolean;
+  questions?: Problem[];
+  globalTimeRemaining?: number;
+  isHackingPhase?: boolean;
+  lockedQuestionIds?: string[];
+  error?: string;
+}
+
 interface CodeContext {
   round: string;
   questionId: string;
@@ -279,7 +288,14 @@ export default function Round3Page() {
     if (!socket || !isConnected) return;
 
     const handleTimerUpdate = (data: { timeRemaining?: number }) => {
-      if (isMountedRef.current) setTimeRemaining(data.timeRemaining || 0);
+      if (isMountedRef.current) {
+        setTimeRemaining(data.timeRemaining || 0);
+        
+        // Warn user when time is low
+        if (data.timeRemaining && data.timeRemaining <= 60 && data.timeRemaining > 0) {
+          showErrorToast(`Only ${data.timeRemaining} seconds remaining!`);
+        }
+      }
     };
     
     const handleRoundEnd = () => {
@@ -313,20 +329,66 @@ export default function Round3Page() {
       setPageIsLoading(false);
     };
 
+    const handleAdminRemoved = () => {
+      if (!isMountedRef.current) return;
+      showErrorToast('You have been removed from Round 3 by an admin');
+      clearMatchContext(round);
+      router.push('/dashboard');
+    };
+
+    const handleAdminAdded = () => {
+      if (!isMountedRef.current) return;
+      showSuccessToast('You have been added back to Round 3 by an admin');
+      // Reload the page to get fresh state
+      router.refresh();
+    };
+
+    const handleState = (data: GetStateResponse) => {
+      if (!isMountedRef.current || !data.success) return;
+
+      if (data.questions) {
+        setProblems(data.questions);
+        if (data.questions.length > 0 && !currentProblem) {
+          setCurrentProblem(data.questions[0]);
+          setCurrentProblemIndex(0);
+        }
+      }
+
+      if (typeof data.globalTimeRemaining === "number") {
+        setTimeRemaining(data.globalTimeRemaining);
+      }
+
+      if (typeof data.isHackingPhase === "boolean") {
+        setIsHackingPhase(data.isHackingPhase);
+      }
+
+      if (data.lockedQuestionIds) {
+        setLockedQuestionIds(data.lockedQuestionIds);
+      }
+    };
+
     socket.on('round3:timer', handleTimerUpdate);
+    socket.on('round3:timerUpdate', handleTimerUpdate);
     socket.on('round3:ended', handleRoundEnd);
     socket.on('round3:hackingPhaseStart', handleHackingPhaseStart);
     socket.on('round3:viewSubmissions', handleViewSubmissions);
     socket.on('round3:start', handleRoundStart);
+    socket.on('round3:adminRemoved', handleAdminRemoved);
+    socket.on('round3:adminAdded', handleAdminAdded);
+    socket.on('round3:state', handleState);
 
     return () => {
       socket.off('round3:timer', handleTimerUpdate);
+      socket.off('round3:timerUpdate', handleTimerUpdate);
       socket.off('round3:ended', handleRoundEnd);
       socket.off('round3:hackingPhaseStart', handleHackingPhaseStart);
       socket.off('round3:viewSubmissions', handleViewSubmissions);
       socket.off('round3:start', handleRoundStart);
+      socket.off('round3:adminRemoved', handleAdminRemoved);
+      socket.off('round3:adminAdded', handleAdminAdded);
+      socket.off('round3:state', handleState);
     };
-  }, [socket, isConnected, router, round, clearMatchContext]);
+  }, [socket, isConnected, router, round, clearMatchContext, currentProblem]);
 
   // --- Initial State Fetch ---
   useEffect(() => {
@@ -350,6 +412,41 @@ export default function Round3Page() {
       setPageIsLoading(false);
     });
   }, [isAuthLoading, isSocketLoading, user, socket, isConnected, router]);
+
+  // Request timer sync and state updates when socket and problems are available
+  useEffect(() => {
+    if (socket && problems.length > 0 && !pageIsLoading) {
+      // Request initial timer state
+      socket.emit('round3:getTimerState', {});
+
+      // Set up periodic timer sync (every 30 seconds)
+      const syncInterval = setInterval(() => {
+        socket.emit('round3:getTimerState', {});
+      }, 30000);
+
+      // Also request state update periodically
+      const stateInterval = setInterval(() => {
+        socket.emit('round3:getState', {});
+      }, 15000);
+
+      return () => {
+        clearInterval(syncInterval);
+        clearInterval(stateInterval);
+      };
+    }
+  }, [socket, problems, pageIsLoading]);
+
+  // Listen for state updates
+  useEffect(() => {
+    if (!socket) return;
+
+    // Request state once on mount
+    socket.emit("round3:getState", {});
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [socket]);
 
   // --- Editor and Resizing Logic ---
   const monaco = useMonaco();

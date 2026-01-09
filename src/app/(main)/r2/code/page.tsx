@@ -50,6 +50,13 @@ interface GetCodePageStateResponse {
     message?: string;
 }
 
+interface GetStateResponse {
+  success: boolean;
+  sessionData?: SessionData;
+  globalTimeRemaining?: number;
+  error?: string;
+}
+
 interface MatchResultData {
     winnerId: string;
     loserId: string;
@@ -71,7 +78,7 @@ interface SubmissionApiResponse {
 }
 
 interface EndPopupData {
-  type: 'win' | 'lose' | 'timeout' | 'bounty-win' | 'bounty-fail' | 'bounty-timeout';
+  type: 'win' | 'lose' | 'timeout' | 'bounty-win' | 'bounty-fail' | 'bounty-timeout' | 'admin-end';
   newRole: 'elite' | 'challenger';
 }
 
@@ -367,6 +374,51 @@ if (domNode) {
     setShowEndPopup(true);
   }, [router]);
 
+  // --- Socket Event Handlers ---
+  const handleTimerUpdate = useCallback((data: { timeRemaining: number }) => {
+    const remaining = data.timeRemaining * 1000; // Convert to milliseconds
+    setTimeRemaining(remaining);
+    
+    // Warn user when time is low
+    if (data.timeRemaining <= 60 && data.timeRemaining > 0) {
+      showErrorToast(`Only ${data.timeRemaining} seconds remaining!`);
+    }
+    
+    // Auto-submit when time is up
+    if (data.timeRemaining <= 0) {
+      showErrorToast('Time\'s up! Your session has ended.');
+      const userRole = (sessionStorage.getItem('r2_user_role') as 'elite' | 'challenger') || 'challenger';
+      const type = sessionData?.type === 'bounty' ? 'bounty-timeout' : 'timeout';
+      triggerSessionEnd(type, userRole);
+    }
+  }, [sessionData?.type, triggerSessionEnd]);
+
+  const handleAdminRemoved = useCallback(() => {
+    showErrorToast('You have been removed from Round 2 by an admin');
+    sessionStorage.removeItem('r2_session_type');
+    sessionStorage.removeItem('r2_context_id');
+    sessionStorage.removeItem('r2_user_role');
+    router.push('/dashboard');
+  }, [router]);
+
+  const handleAdminAdded = useCallback(() => {
+    showSuccessToast('You have been added back to Round 2 by an admin');
+    // Reload the page to get fresh state
+    router.refresh();
+  }, [router]);
+
+  const handleState = useCallback((data: GetStateResponse) => {
+    if (!data.success) return;
+
+    if (data.sessionData) {
+      setSessionData(prev => prev ? { ...prev, ...data.sessionData } : (data.sessionData ?? null));
+    }
+
+    if (typeof data.globalTimeRemaining === "number") {
+      setTimeRemaining(data.globalTimeRemaining * 1000); // Convert to milliseconds
+    }
+  }, []);
+
   useEffect(() => {
     if (!sessionData?.endTime || showEndPopup) return;
 
@@ -439,14 +491,69 @@ if (domNode) {
     socket.on('round2:matchResult', handleMatchResult);
     socket.on('round2:bountyEnded', handleBountyEnded);
     socket.on('round2:ended', handleRoundEnd);
+    socket.on('round2:timerUpdate', handleTimerUpdate);
+    socket.on('round2:adminRemoved', handleAdminRemoved);
+    socket.on('round2:adminAdded', handleAdminAdded);
 
     return () => {
         socket.off('round2:matchResult', handleMatchResult);
         socket.off('round2:bountyEnded', handleBountyEnded);
         socket.off('round2:ended', handleRoundEnd);
+        socket.off('round2:timerUpdate', handleTimerUpdate);
+        socket.off('round2:adminRemoved', handleAdminRemoved);
+        socket.off('round2:adminAdded', handleAdminAdded);
     };
   // --- FIX: Added triggerSessionEnd to dependency array ---
-  }, [socket, router, session?.user?.email, triggerSessionEnd]);
+  }, [socket, router, session?.user?.email, triggerSessionEnd, handleTimerUpdate, handleAdminRemoved, handleAdminAdded]);
+
+  // Request timer sync when socket and sessionData are available
+  useEffect(() => {
+    if (socket && sessionData && sessionData.question && !pageIsLoading) {
+      // Request timer state from server
+      socket.emit('round2:getTimerState', { 
+        questionId: sessionData.question.id,
+        sessionType: sessionStorage.getItem('r2_session_type'),
+        contextId: sessionStorage.getItem('r2_context_id')
+      });
+
+      // Set up periodic timer sync (every 30 seconds)
+      const syncInterval = setInterval(() => {
+        socket.emit('round2:getTimerState', { 
+          questionId: sessionData.question.id,
+          sessionType: sessionStorage.getItem('r2_session_type'),
+          contextId: sessionStorage.getItem('r2_context_id')
+        });
+      }, 30000);
+
+      // Also request state update
+      const stateInterval = setInterval(() => {
+        socket.emit('round2:getState', {
+          contextId: sessionStorage.getItem('r2_context_id'),
+          sessionType: sessionStorage.getItem('r2_session_type')
+        });
+      }, 15000);
+
+      return () => {
+        clearInterval(syncInterval);
+        clearInterval(stateInterval);
+      };
+    }
+  }, [socket, sessionData, pageIsLoading]);
+
+  // Listen for state updates
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("round2:state", handleState);
+    socket.emit("round2:getState", {
+      contextId: sessionStorage.getItem('r2_context_id'),
+      sessionType: sessionStorage.getItem('r2_session_type')
+    }); // request once on mount
+
+    return () => {
+      socket.off("round2:state", handleState);
+    };
+  }, [socket, handleState]);
 
   useEffect(() => {
     if (showEndPopup && endPopupData?.newRole) {
@@ -473,6 +580,7 @@ if (domNode) {
         case 'bounty-win': return { title: '🏆 Bounty Claimed!', message: `You solved the bounty! Your new role is ${data.newRole}.`, className: 'text-green-400' };
         case 'bounty-fail': return { title: '💡 Attempt Logged', message: 'Your solution was incorrect. You will be redirected.', className: 'text-yellow-400' };
         case 'bounty-timeout': return { title: "⏳ Time's Up!", message: 'Your bounty attempt timed out. You will be redirected.', className: 'text-yellow-400' };
+        case 'admin-end': return { title: '🛑 Session Ended', message: 'The session was ended by an admin. You will be redirected.', className: 'text-orange-400' };
         default: return null;
     }
   };
