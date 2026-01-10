@@ -59,5 +59,5 @@ export default function Rules() {
         "Stay tuned for more details."
     ];
 
-    return <RulesPage rules={rules} round="Round 0" />;
+    return <RulesPage rules={rules} round="0" />;
 }
