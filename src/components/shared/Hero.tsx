@@ -17,7 +17,7 @@ const Hero = () => {
     setIsExiting(true);
     setTimeout(() => {
       socket?.emit("client:join");
-      router.push("/r1/rules");
+      router.push("/dashboard");
     }, 1000);
   };
 
@@ -35,7 +35,7 @@ const Hero = () => {
       setIsExiting(true);
       setTimeout(() => {
 
-        router.push('/r1/rules');
+        router.push('/dashboard');
       }, 1000); // Wait for animation to complete
     }
   }, [user, router]);
