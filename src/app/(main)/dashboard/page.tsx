@@ -89,7 +89,6 @@ export default function Dashboard() {
 
   // useEffect Hooks
   useEffect(() => {
-    router.push("/");
     const prevUser = prevUserRef.current;
     
     // Only redirect if we're done loading AND have no session at all
