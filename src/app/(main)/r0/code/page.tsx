@@ -1,5 +1,3 @@
-
-
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -194,29 +192,47 @@ export default function R0Code() {
 
     // FALLBACK METHOD: Only runs if sessionStorage is empty (e.g., on page refresh)
     
-    socket.emit('round0:getState', {}, (response: StateResponse) => {
-      if (!isMountedRef.current) return;
-      try {
-        if (response?.success && response?.currentProblem) {
-          setCurrentProblem(response.currentProblem);
-          setCurrentProblemIndex(response.problemIndex || 0);
-          setTimeRemaining(response.timeRemaining || 0);
-          setProblems(response.problems || [response.currentProblem]);
-          setIsRoundActive(true);
-        } else {
-          const errorMessage = typeof response?.error === 'string' ? response.error : 
-                              (response?.error?.message || 'No active round found.');
-          showErrorToast(errorMessage);
-          localStorage.removeItem(`battlecode-round-0-code-store`);
-          router.push('/dashboard');
-        }
-      } catch (error) {
-        console.error('Error processing round state:', error);
-        showErrorToast('Failed to load round data. Please try again.');
+  const handleState = (response: StateResponse) => {
+    if (!isMountedRef.current) return;
+
+    try {
+      if (response?.currentProblem) {
+        setCurrentProblem(response.currentProblem);
+        setCurrentProblemIndex(response.problemIndex || 0);
+        setTimeRemaining(response.timeRemaining || 0);
+        setProblems(response.problems || [response.currentProblem]);
+        setIsRoundActive(true);
+      } else {
+        const errorMessage =
+          typeof response?.error === 'string'
+            ? response.error
+            : (response?.error?.message || 'No active round found.');
+
+        showErrorToast(errorMessage);
+        localStorage.removeItem(`battlecode-round-0-code-store`);
         router.push('/dashboard');
       }
+    } catch (error) {
+      console.error('Error processing round state:', error);
+      showErrorToast('Failed to load round data. Please try again.');
+      router.push('/dashboard');
+    } finally {
       setPageIsLoading(false);
-    });
+    }
+  };
+
+  const handleStateError = (err: { error?: string }) => {
+    if (!isMountedRef.current) return;
+
+    showErrorToast(err?.error || 'Failed to fetch round state');
+    setPageIsLoading(false);
+    router.push('/dashboard');
+  };
+
+  socket.once('round0:state', handleState);
+  socket.once('round0:state:error', handleStateError);
+  socket.emit('round0:getState');
+
 
   }, [isAuthLoading, isSocketLoading, user, socket, isConnected, router]);
   
@@ -228,38 +244,45 @@ export default function R0Code() {
     }
 
     setPageIsLoading(true);
+
     try {
-      const response: NextQuestionResponse = await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Request timeout')), 10000);
-          socket.emit('round0:nextQuestion', {}, (res: NextQuestionResponse) => {
-              clearTimeout(timeout);
-              resolve(res);
-          });
-      });
+      const handleNext = (response: NextQuestionResponse) => {
+        if (!isMountedRef.current) return;
 
-      if (!isMountedRef.current) return;
-
-      if (response?.success) {
         if (response.problem) setCurrentProblem(response.problem);
-        if (response.problemIndex !== undefined) setCurrentProblemIndex(response.problemIndex);
+        if (response.problemIndex !== undefined)
+          setCurrentProblemIndex(response.problemIndex);
+
         setTimeRemaining(response.timeRemaining || 0);
-        showSuccessToast(`Moved to question ${(response.problemIndex || 0) + 1}`);
-      } else {
-        const errorMessage = typeof response?.error === 'string' ? response.error : 
-                            (response?.error?.message || 'Failed to get next question');
-        showErrorToast(errorMessage);
-      }
+
+        showSuccessToast(
+          `Moved to question ${(response.problemIndex ?? 0) + 1}`
+        );
+
+        setPageIsLoading(false);
+      };
+
+      const handleNextError = (err: { error?: string }) => {
+        if (!isMountedRef.current) return;
+
+        showErrorToast(err?.error || 'Failed to get next question');
+        setPageIsLoading(false);
+      };
+
+      socket.once('round0:next', handleNext);
+      socket.once('round0:next:error', handleNextError);
+      socket.emit('round0:nextQuestion');
+
     } catch (error) {
       if (isMountedRef.current) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          showErrorToast(`Error getting next question: ${errorMessage}`);
-      }
-    } finally {
-      if (isMountedRef.current) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        showErrorToast(`Error getting next question: ${errorMessage}`);
         setPageIsLoading(false);
       }
     }
   };
+
 
   const handleReturnToLobby = () => {
     showInfoToast('Round-0 has ended.');

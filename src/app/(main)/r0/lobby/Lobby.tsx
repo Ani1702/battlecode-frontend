@@ -134,15 +134,9 @@ export default function Lobbyr0() {
       if (response.participant.status === "IN_MATCH") {
         router.push("/r0/code");
       }
-    } else {
-      socket?.emit("round0:join", { userId, username: user?.user_metadata?.full_name || user?.id }, (joinResponse: SimpleSocketResponse) => {
-        if (joinResponse.success) {
-          showSuccessToast("Successfully joined Round 0 lobby");
-        } else {
-          showErrorToast(joinResponse.error || "Failed to join lobby");
-        }
-      });
-    }
+    } 
+
+    
   }, [router, socket, userId, user]);
 
   // Authentication check useEffect
@@ -191,6 +185,15 @@ export default function Lobbyr0() {
       console.log("Round status valid, proceeding to get state");
     });
   }, [socket, isConnected, authenticationChecked, router]);
+
+  useEffect(() => {
+  if (!socket || !isConnected || !authenticationChecked || isCheckingRound) return;
+
+  console.log("Emitting round0:join");
+  socket.emit("round0:join");
+
+}, [socket, isConnected, authenticationChecked, isCheckingRound]);
+
 
   // Emit getState useEffect
   useEffect(() => {
