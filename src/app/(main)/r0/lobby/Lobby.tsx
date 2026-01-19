@@ -270,7 +270,7 @@ export default function Lobbyr0() {
       showErrorToast("You have been removed from Round 0 by an admin");
       localStorage.removeItem('battlecode-round-0-code-store');
       sessionStorage.removeItem('round0_data');
-      router.push('/');
+      router.push('/dashboard');
     };
 
     const handleAdminAdded = () => {

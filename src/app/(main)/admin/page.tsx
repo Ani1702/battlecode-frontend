@@ -36,6 +36,8 @@ interface GetStateResponse extends SimpleSocketResponse {
     participant?: Participant | null;
     isActive?: boolean;
     allParticipants?: Participant[]; // Added to correctly type the full list response
+    globalTimeRemaining?: number;
+    nextMatchmakingCycle?: number | null;
 }
 
 interface MatchParticipant {
@@ -55,9 +57,17 @@ export default function Admin() {
     const [showEndRoundConfirm, setShowEndRoundConfirm] = useState(false);
     const [roundToEnd, setRoundToEnd] = useState<number | null>(null);
     const [showResetRedisConfirm, setShowResetRedisConfirm] = useState(false);
-    const [roundToReset, setRoundToReset] = useState<number | null>(null);
     const [matchParticipants, setMatchParticipants] = useState<MatchParticipant[]>([]);
-    const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(1);
+    const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(0);
+    
+    // --- Active Round Section State (generalized for any round) ---
+    const [activeRoundNumber, setActiveRoundNumber] = useState<number | null>(null);
+    const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
+    const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<number | null>(null);
+    const [cooldownTimeRemaining, setCooldownTimeRemaining] = useState(0);
+    const [isRoundActive, setIsRoundActive] = useState(false);
+    const [currentUser, setCurrentUser] = useState<Participant | null>(null);
+    const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
     
     const { socket } = useSocket();
     const router = useRouter();
@@ -138,13 +148,26 @@ export default function Admin() {
         socket.emit(eventName, {});
     }, [socket]);
 
-    // Listen for the state response event
+    // Listen for the state response event - consolidated for both match participants and active round detection
     useEffect(() => {
         if (!socket) return;
 
-        const handleStateResponse = (response: GetStateResponse) => {
-            console.log('[STATE RESPONSE]', response);
+        const handleStateResponse = (roundNum: number) => (response: GetStateResponse) => {
+            console.log(`[STATE RESPONSE Round ${roundNum}]`, response);
             if (!response.success) return;
+            
+            // Check if this round is active and update active round state
+            if (response.isActive) {
+                setActiveRoundNumber(roundNum);
+                setIsRoundActive(true);
+                setGlobalTimeRemaining(response.globalTimeRemaining || 0);
+                setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
+                if (response.participant) setCurrentUser(response.participant);
+            } else if (!response.isActive && activeRoundNumber === roundNum) {
+                // If this round was active but is no longer, clear it
+                setIsRoundActive(false);
+                setActiveRoundNumber(null);
+            }
             
             if (response.allParticipants) {
                 // Filter for users who are either waiting or in-match
@@ -190,20 +213,25 @@ export default function Admin() {
                 
                 console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
                 setMatchParticipants(matchInfo);
+                
+                // Also set all participants for leaderboard/other uses
+                setAllParticipants(response.allParticipants);
             }
         };
 
         // Listen for state responses from all rounds
-        socket.on('round1:state', handleStateResponse);
-        socket.on('round2:state', handleStateResponse);
-        socket.on('round3:state', handleStateResponse);
+        socket.on('round0:state', handleStateResponse(0));
+        socket.on('round1:state', handleStateResponse(1));
+        socket.on('round2:state', handleStateResponse(2));
+        socket.on('round3:state', handleStateResponse(3));
 
         return () => {
-            socket.off('round1:state', handleStateResponse);
-            socket.off('round2:state', handleStateResponse);
-            socket.off('round3:state', handleStateResponse);
+            socket.off('round0:state', handleStateResponse(0));
+            socket.off('round1:state', handleStateResponse(1));
+            socket.off('round2:state', handleStateResponse(2));
+            socket.off('round3:state', handleStateResponse(3));
         };
-    }, [socket]);
+    }, [socket, activeRoundNumber]);
 
     const handleStartRound = (roundNumber: number) => {
         if (!socket || participants.length === 0) return;
@@ -258,33 +286,27 @@ export default function Admin() {
         }
       };
 
-    const resetRoundRedis = (roundNumber: number) => {
+    const resetAllRedis = () => {
         if (!socket) {
             showErrorToast('Socket not connected');
             return;
         }
 
-        const eventName = `round${roundNumber}:reset`;
-        socket.emit(eventName);
-        showSuccessToast(`Reset Redis for Round ${roundNumber}`);
+        socket.emit('admin:reset');
+        showInfoToast('Resetting Redis...');
         setShowResetRedisConfirm(false);
-        setRoundToReset(null);
     };
 
-    const handleResetRedisClick = (roundNumber: number) => {
-        setRoundToReset(roundNumber);
+    const handleResetRedisClick = () => {
         setShowResetRedisConfirm(true);
     };
 
     const handleCancelResetRedis = () => {
         setShowResetRedisConfirm(false);
-        setRoundToReset(null);
     };
 
     const handleConfirmResetRedis = () => {
-        if (roundToReset !== null) {
-            resetRoundRedis(roundToReset);
-        }
+        resetAllRedis();
     };
 
     const fetchRoundData = useCallback(async () => {
@@ -358,13 +380,19 @@ export default function Admin() {
             setCurrentRoundData(data);
         };
 
+        const handleRedisResetSuccess = () => {
+            showSuccessToast('Redis cleared successfully');
+        };
+
         socket.on('server:currentRound', handleCurrentRound);
+        socket.on('admin:reset:success', handleRedisResetSuccess);
         
         // Request initial round data
         socket.emit('client:getCurrentRound');
 
         return () => {
             socket.off('server:currentRound', handleCurrentRound);
+            socket.off('admin:reset:success', handleRedisResetSuccess);
         };
     }, [socket]);
 
@@ -565,34 +593,6 @@ export default function Admin() {
     
     return validTransitions[currentStatus]?.includes(targetStatus) || false;
   };
-  
-    // --- Round 1 Active Section State ---
-    // Reuse logic from waiting page for timers and cooldown
-    const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
-    const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<number | null>(null);
-    const [cooldownTimeRemaining, setCooldownTimeRemaining] = useState(0);
-    const [isRoundActive, setIsRoundActive] = useState(false);
-    const [currentUser, setCurrentUser] = useState<Participant | null>(null);
-    // --- Leaderboard State ---
-    const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
-    // Find the admin's participant object (if present)
-    useEffect(() => {
-      if (!socket) return;
-      // Listen for round1:state for admin's own status
-      const handleState = (response: any) => {
-        if (response?.success) {
-          setIsRoundActive(response.isActive ?? false);
-          setGlobalTimeRemaining(response.globalTimeRemaining || 0);
-          setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
-          if (response.participant) setCurrentUser(response.participant);
-          if (Array.isArray(response.allParticipants)) setAllParticipants(response.allParticipants);
-        }
-      };
-      socket.on('round1:state', handleState);
-      // Initial fetch
-      socket.emit('round1:getState');
-      return () => { socket.off('round1:state', handleState); };
-    }, [socket]);
 
     // Live decrement timers for globalTimeRemaining and nextMatchmakingCycle
     useEffect(() => {
@@ -664,14 +664,14 @@ export default function Admin() {
               <div className="bg-gray-900 border-2 border-yellow-500 rounded-lg p-6 max-w-md w-full">
                 <h3 className="text-xl font-bold text-yellow-500 mb-4">Confirm Reset Redis</h3>
                 <p className="text-white mb-6">
-                  Are you sure you want to reset Redis for Round {roundToReset}? This will clear all cached data for this round.
+                  Are you sure you want to reset Redis for ALL rounds? This will clear all cached data for all rounds (0, 1, 2, 3).
                 </p>
                 <div className="flex gap-3">
                   <button
                     onClick={handleConfirmResetRedis}
                     className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded font-medium transition-all"
                   >
-                    Yes, Reset Redis
+                    Yes, Reset All Redis
                   </button>
                   <button
                     onClick={handleCancelResetRedis}
@@ -685,11 +685,11 @@ export default function Admin() {
           )}
 
           <div className="w-full max-w-6xl rounded-lg border-2 border-orange-500/50 glass-box p-6">
-            {/* --- Round 1 Active Section (from waiting page) --- */}
+            {/* --- Active Round Section (generalized for any round) --- */}
             <div className="mb-8">
-              {isRoundActive && (
+              {isRoundActive && activeRoundNumber !== null && (
                 <>
-                  <div className="text-4xl text-center text-green-400">Round 1 Active</div>
+                  <div className="text-4xl text-center text-green-400">Round {activeRoundNumber} Active</div>
                   <div className="text-gray-200 text-center space-y-3">
                     <div className="bg-black/40 rounded-lg p-4 border border-amber-600">
                       <p className="text-amber-400 font-bold text-xl">
@@ -861,24 +861,21 @@ export default function Admin() {
             {/* Reset Redis Section */}
             <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
               <h4 className="text-orange-400 font-medium mb-4">Reset Redis Controls</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[1, 2, 3].map((roundNum) => (
-                  <button
-                    key={roundNum}
-                    onClick={() => handleResetRedisClick(roundNum)}
-                    disabled={!socket}
-                    className={`px-4 py-3 rounded text-sm font-medium transition-all ${
-                      !socket
-                        ? 'bg-gray-600 cursor-not-allowed opacity-50'
-                        : 'bg-yellow-600 hover:bg-yellow-500 hover:scale-105'
-                    } text-white`}
-                  >
-                    Reset Round {roundNum}
-                  </button>
-                ))}
+              <div className="flex justify-center">
+                <button
+                  onClick={handleResetRedisClick}
+                  disabled={!socket}
+                  className={`px-6 py-3 rounded text-sm font-medium transition-all ${
+                    !socket
+                      ? 'bg-gray-600 cursor-not-allowed opacity-50'
+                      : 'bg-yellow-600 hover:bg-yellow-500 hover:scale-105'
+                  } text-white`}
+                >
+                  Reset All Redis Data
+                </button>
               </div>
-              <p className="text-xs text-gray-400 mt-3">
-                Note: This will reset the Redis data for the selected round.
+              <p className="text-xs text-gray-400 mt-3 text-center">
+                Note: This will reset the Redis data for all rounds (0, 1, 2, 3).
               </p>
             </div>
 
@@ -955,7 +952,7 @@ export default function Admin() {
               </div>
               <div className="space-y-4">
                 <div className="flex gap-2">
-                  {[1, 2, 3].map((round) => (
+                  {[0, 1, 2, 3].map((round) => (
                     <button
                       key={round}
                       onClick={() => {
