@@ -120,7 +120,10 @@ export default function Lobbyr0() {
     setHasAttemptedJoin(true);
 
     if (!response.success) {
-      showErrorToast(response.error || "Could not sync with the server.");
+      // Don't show error toast for "User state not found" - this is expected in lobby
+      if (response.error && !response.error.includes('User state not found')) {
+        showErrorToast(response.error);
+      }
       return;
     }
 
@@ -134,10 +137,8 @@ export default function Lobbyr0() {
       if (response.participant.status === "IN_MATCH") {
         router.push("/r0/code");
       }
-    } 
-
-    
-  }, [router, socket, userId, user]);
+    }
+  }, [router]);
 
   // Authentication check useEffect
   useEffect(() => {
@@ -190,18 +191,11 @@ export default function Lobbyr0() {
   if (!socket || !isConnected || !authenticationChecked || isCheckingRound) return;
 
   console.log("Emitting round0:join");
-  socket.emit("round0:join");
+  socket.emit("round0:join",{}, (response: GetStateResponse) => {
+    console.log("round0:join response:", response);
+  });
 
 }, [socket, isConnected, authenticationChecked, isCheckingRound]);
-
-
-  // Emit getState useEffect
-  useEffect(() => {
-    if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin || isCheckingRound)
-      return;
-
-    socket.emit("round0:getState");
-  }, [socket, isConnected, authenticationChecked, hasAttemptedJoin, isCheckingRound]);
 
   // Listen to state response useEffect
   useEffect(() => {

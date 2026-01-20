@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,6 +32,25 @@ interface CurrentRoundData {
   currentRoundStatus: string;
   rounds: RoundStatus[];
 }
+interface RoundInfo {
+  roundNumber: number;
+  status: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+  isActive: boolean;
+  isLocked: boolean;
+}
+
+interface SimpleSocketResponse {
+  success: boolean;
+  error?: string;
+}
+
+interface CurrentRoundResponse extends SimpleSocketResponse {
+  currentRound?: {
+    currentRoundNumber: number;
+    currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+    rounds: RoundInfo[];
+  };
+}
 
 export default function Dashboard() {
   const { user, session, isLoading, userRole, userName } = useAuth();
@@ -49,6 +68,78 @@ export default function Dashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const prevUserRef = useRef(user);
+
+  
+  const handleLeaderboard = useCallback((data: { leaderboard: LeaderboardEntry[] }) => {
+    setLeaderboard(data.leaderboard);
+    if (isClient) {
+      localStorage.setItem('battlecode_leaderboard', JSON.stringify(data.leaderboard));
+    }
+  }, [isClient]);
+
+  const handleCurrentRound = useCallback((data: CurrentRoundData) => {
+    setCurrentRoundData(data);
+
+    const newLockedStatus = [true, true, true, true];
+    data.rounds.forEach((round) => {
+      if (round.roundNumber >= 0 && round.roundNumber <= 3) {
+        newLockedStatus[round.roundNumber] = round.isLocked;
+      }
+    });
+    
+    setIsLocked(newLockedStatus);
+
+    if (isClient) {
+      localStorage.setItem('battlecode_rounds', JSON.stringify(data));
+      localStorage.setItem('battlecode_locks', JSON.stringify(newLockedStatus));
+    }
+  }, [isClient]);
+
+  const handleAdminAdded = useCallback((roundNumber: number) => {
+    console.log(`You have been added to Round ${roundNumber} by an admin`);
+    
+    // Get current data synchronously - no state update needed
+    const currentData = currentRoundData;
+    
+    if (!currentData) {
+      showErrorToast("Round data not available");
+      return;
+    }
+
+    const { currentRoundNumber, currentRoundStatus } = currentData;
+
+    if (currentRoundNumber !== roundNumber) {
+      showErrorToast(`Round ${roundNumber} is not the current round`);
+      return;
+    }
+
+    if (currentRoundStatus === 'COMPLETED') {
+      showErrorToast(`Round ${roundNumber} has already completed`);
+      return;
+    }
+    
+    if (currentRoundStatus === 'LOCKED') {
+      showErrorToast(`Round ${roundNumber} is currently locked`);
+      return;
+    }
+
+    // Handle different rounds based on status
+    if (currentRoundStatus === 'LOBBY') {
+      // Always redirect to lobby for any round in LOBBY status
+      showSuccessToast(`You have been added to Round ${roundNumber}! Redirecting to lobby...`);
+      setTimeout(() => router.push(`/r${roundNumber}/lobby`), 1500);
+    } else if (currentRoundStatus === 'IN_PROGRESS') {
+      if (roundNumber === 1) {
+        showSuccessToast("You have been added to Round 1! Redirecting to waiting room...");
+        setTimeout(() => router.push('/r1/waiting'), 1500);
+      } else if (roundNumber === 2) {
+        showSuccessToast("You have been added to Round 2! Round in progress.");
+      } else {
+        showSuccessToast(`You have been added to Round ${roundNumber}! Redirecting to coding environment...`);
+        setTimeout(() => router.push(`/r${roundNumber}/code`), 1500);
+      }
+    }
+  }, [currentRoundData, router]);
 
   // Helper Functions
   const getBorderColor = (status: string) => {
@@ -179,99 +270,32 @@ export default function Dashboard() {
     }
 
     if (!socket || !isConnected) {
-    
       return;
     }
 
- 
-
-    // Listen for leaderboard updates
-    const handleLeaderboard = (data: { leaderboard: LeaderboardEntry[] }) => {
-      
-      setLeaderboard(data.leaderboard);
-      // Persist to localStorage
-      if (isClient) {
-        localStorage.setItem('battlecode_leaderboard', JSON.stringify(data.leaderboard));
-      }
-    };
-
-    // Listen for current round updates
-    const handleCurrentRound = (data: CurrentRoundData) => {
-     
-      setCurrentRoundData(data);
-
-      // Update locked status based on round data
-      const newLockedStatus = [true, true, true, true];
-      data.rounds.forEach((round) => {
-        if (round.roundNumber >= 0 && round.roundNumber <= 3) {
-          newLockedStatus[round.roundNumber] = round.isLocked;
-        }
-      });
-      
-      setIsLocked(newLockedStatus);
-
-      // Persist to localStorage
-      if (isClient) {
-        localStorage.setItem('battlecode_rounds', JSON.stringify(data));
-        localStorage.setItem('battlecode_locks', JSON.stringify(newLockedStatus));
-      }
-    };
-
-    // Handle admin adding user to Round 1
-    const handleAdminAdded = () => {
-      console.log("You have been added to Round 1 by an admin");
-      
-      // Check current round status
-      socket?.emit("user:current-round", {}, (response: { success: boolean; currentRound?: { currentRoundNumber: number; currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS'; }; error?: string }) => {
-        if (!response.success || !response.currentRound) {
-          showErrorToast("Failed to check round status");
-          return;
-        }
-
-        const { currentRoundNumber, currentRoundStatus } = response.currentRound;
-
-        if (currentRoundNumber !== 1) {
-          showErrorToast("Round 1 is not the current round");
-          return;
-        }
-
-        if (currentRoundStatus === 'LOBBY') {
-          showSuccessToast("You have been added to Round 1! Redirecting to lobby...");
-          setTimeout(() => router.push('/r1/lobby'), 1500);
-        } else if (currentRoundStatus === 'IN_PROGRESS') {
-          showSuccessToast("You have been added to Round 1! Redirecting to waiting room...");
-          setTimeout(() => router.push('/r1/waiting'), 1500);
-        } else if (currentRoundStatus === 'COMPLETED') {
-          showErrorToast("Round 1 has already completed");
-        } else if (currentRoundStatus === 'LOCKED') {
-          showErrorToast("Round 1 is currently locked");
-        }
-      });
-    };
-
-    // Set up event listeners
+    // Set up event listeners - just pass the function references
     socket.on("server:leaderboard", handleLeaderboard);
     socket.on("server:currentRound", handleCurrentRound);
-    socket.on('round1:adminAdded', handleAdminAdded);
+    socket.on('round0:adminAdded', () => handleAdminAdded(0));
+    socket.on('round1:adminAdded', () => handleAdminAdded(1));
+    socket.on('round2:adminAdded', () => handleAdminAdded(2));
+    socket.on('round3:adminAdded', () => handleAdminAdded(3));
 
     // Request initial data when socket connects
-   
     socket.emit("client:join");
-
-
-
-
     socket.emit("client:getLeaderboard");
     socket.emit("client:getCurrentRound");
 
     // Cleanup function
     return () => {
-  
       socket.off("server:leaderboard", handleLeaderboard);
       socket.off("server:currentRound", handleCurrentRound);
-      socket.off('round1:adminAdded', handleAdminAdded);
+      socket.off('round0:adminAdded');
+      socket.off('round1:adminAdded');
+      socket.off('round2:adminAdded');
+      socket.off('round3:adminAdded');
     };
-  }, [socket, isConnected, isClient]);
+  }, [socket, isConnected, handleLeaderboard, handleCurrentRound, handleAdminAdded]);
 
   return (
     <>
