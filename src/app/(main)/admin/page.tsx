@@ -28,14 +28,22 @@ interface Participant {
   id: string;
   username: string;
   rank: number;
-  status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
+  status: 'lobby' | 'waiting' | 'in_match' | 'disconnected' | 'finished' | 'cooldown'; // Redis participant status (lowercase)
   [key: string]: unknown; // Allows for additional properties
 }
 
 interface GetStateResponse extends SimpleSocketResponse {
     participant?: Participant | null;
+    currentProblem?: unknown;
+    problemIndex?: number;
+    problems?: unknown[];
+    totalProblems?: number;
     isActive?: boolean;
-    allParticipants?: Participant[]; // Added to correctly type the full list response
+    timeRemaining?: number;
+    progress?: unknown;
+    allParticipants?: Participant[];
+    totalParticipants?: number;
+    message?: string;
     globalTimeRemaining?: number;
     nextMatchmakingCycle?: number | null;
 }
@@ -43,7 +51,7 @@ interface GetStateResponse extends SimpleSocketResponse {
 interface MatchParticipant {
   id: string;
   username: string;
-  status: 'waiting' | 'in-match';
+  status: 'waiting' | 'in_match'; // Redis participant status (lowercase with underscore)
   opponentUsername?: string;
 }
 
@@ -127,18 +135,9 @@ export default function Admin() {
     const fetchLobbyUsers = useCallback((roundNumber: number) => {
         if (!socket) return;
         
+        console.log(`[FETCH LOBBY] Requesting state for round ${roundNumber}`);
         const eventName = `round${roundNumber}:getState`;
-        socket?.emit(eventName, {}, (response: GetStateResponse) => {
-            if (!response.success) {
-                showErrorToast(response.error || "Could not sync with the server.");
-                return;
-            }
-            
-            if (response.allParticipants) {
-
-                setParticipants(response.allParticipants.filter(p => p.status === 'lobby'));
-            }
-        });
+        socket.emit(eventName, {});
     }, [socket]);
 
     const fetchMatchUsers = useCallback((roundNumber: number) => {
@@ -160,78 +159,99 @@ export default function Admin() {
             if (response.isActive) {
                 setActiveRoundNumber(roundNum);
                 setIsRoundActive(true);
-                setGlobalTimeRemaining(response.globalTimeRemaining || 0);
+                setGlobalTimeRemaining(response.timeRemaining || response.globalTimeRemaining || 0);
                 setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
                 if (response.participant) setCurrentUser(response.participant);
             } else if (!response.isActive && activeRoundNumber === roundNum) {
-                // If this round was active but is no longer, clear it
+
                 setIsRoundActive(false);
                 setActiveRoundNumber(null);
             }
             
             if (response.allParticipants) {
-                // Filter for users who are either waiting or in-match
-                const activeUsers = response.allParticipants.filter(
-                    p => p.status === 'waiting' || p.status === 'in-match'
-                );
-                
-                console.log('[ACTIVE USERS]', activeUsers);
-                
-                // Get users who are in-match
-                const inMatchUsers = activeUsers.filter(p => p.status === 'in-match');
-                
-                // Build match info
-                const matchInfo: MatchParticipant[] = activeUsers.map((user) => {
-                    const matchData: MatchParticipant = {
-                        id: user.id,
-                        username: user.username,
-                        status: user.status as 'waiting' | 'in-match',
-                    };
+                // ONLY filter for waiting/in_match users if the round is actually active (IN_PROGRESS)
+                if (response.isActive && roundNum === selectedRoundForMatches) {
+                    const activeUsers = response.allParticipants.filter(
+                        p => p.status === 'waiting' || p.status === 'in_match'
+                    );
                     
-                    // If user is in-match, try to find their opponent
-                    if (user.status === 'in-match') {
-                        // First try using opponentId if available
-                        if (user.opponentId) {
-                            const opponent = response.allParticipants?.find(
-                                p => p.id === user.opponentId
-                            );
-                            if (opponent) {
-                                matchData.opponentUsername = opponent.username;
-                            }
-                        } else if (inMatchUsers.length === 2) {
-                            // Fallback: If there are exactly 2 users in-match and no opponentId,
-                            // assume they're matched against each other
-                            const otherUser = inMatchUsers.find(p => p.id !== user.id);
-                            if (otherUser) {
-                                matchData.opponentUsername = otherUser.username;
+                    console.log('[ACTIVE USERS]', activeUsers);
+                    
+                    // Get users who are in-match
+                    const inMatchUsers = activeUsers.filter(p => p.status === 'in_match');
+                    
+                    // Build match info
+                    const matchInfo: MatchParticipant[] = activeUsers.map((user) => {
+                        const matchData: MatchParticipant = {
+                            id: user.id,
+                            username: user.username,
+                            status: user.status as 'waiting' | 'in_match',
+                        };
+                        
+                        // If user is in-match, try to find their opponent
+                        if (user.status === 'in_match') {
+                            // First try using opponentId if available
+                            if (user.opponentId) {
+                                const opponent = response.allParticipants?.find(
+                                    p => p.id === user.opponentId
+                                );
+                                if (opponent) {
+                                    matchData.opponentUsername = opponent.username;
+                                }
+                            } else if (inMatchUsers.length === 2) {
+                                // Fallback: If there are exactly 2 users in-match and no opponentId,
+                                // assume they're matched against each other
+                                const otherUser = inMatchUsers.find(p => p.id !== user.id);
+                                if (otherUser) {
+                                    matchData.opponentUsername = otherUser.username;
+                                }
                             }
                         }
-                    }
+                        
+                        return matchData;
+                    });
                     
-                    return matchData;
-                });
-                
-                console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
-                setMatchParticipants(matchInfo);
+                    console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
+                    setMatchParticipants(matchInfo);
+                } else if (!response.isActive && roundNum === selectedRoundForMatches) {
+                    // Round is NOT active - clear match participants for this round
+                    console.log('[ROUND NOT ACTIVE - CLEARING MATCH PARTICIPANTS]');
+                    setMatchParticipants([]);
+                }
                 
                 // Also set all participants for leaderboard/other uses
                 setAllParticipants(response.allParticipants);
+                
+                // Update lobby participants if this is the selected round for users
+                if (roundNum === selectedRoundForUsers) {
+                    // Show all participants with 'lobby' status, even if disconnected
+                    // This ensures the lobby displays all users who are part of participants
+                    const lobbyUsers = response.allParticipants.filter(p => p.status === 'lobby');
+                    console.log(`[UPDATING LOBBY USERS for round ${roundNum}]`, lobbyUsers);
+                    console.log('[ALL PARTICIPANTS WITH STATUS]', response.allParticipants.map(p => ({ username: p.username, status: p.status })));
+                    setParticipants(lobbyUsers);
+                }
             }
         };
 
         // Listen for state responses from all rounds
-        socket.on('round0:state', handleStateResponse(0));
-        socket.on('round1:state', handleStateResponse(1));
-        socket.on('round2:state', handleStateResponse(2));
-        socket.on('round3:state', handleStateResponse(3));
+        const handleStateResponse0 = handleStateResponse(0);
+        const handleStateResponse1 = handleStateResponse(1);
+        const handleStateResponse2 = handleStateResponse(2);
+        const handleStateResponse3 = handleStateResponse(3);
+
+        socket.on('round0:state', handleStateResponse0);
+        socket.on('round1:state', handleStateResponse1);
+        socket.on('round2:state', handleStateResponse2);
+        socket.on('round3:state', handleStateResponse3);
 
         return () => {
-            socket.off('round0:state', handleStateResponse(0));
-            socket.off('round1:state', handleStateResponse(1));
-            socket.off('round2:state', handleStateResponse(2));
-            socket.off('round3:state', handleStateResponse(3));
+            socket.off('round0:state', handleStateResponse0);
+            socket.off('round1:state', handleStateResponse1);
+            socket.off('round2:state', handleStateResponse2);
+            socket.off('round3:state', handleStateResponse3);
         };
-    }, [socket, activeRoundNumber]);
+    }, [socket, activeRoundNumber, selectedRoundForUsers, selectedRoundForMatches]);
 
     const handleStartRound = (roundNumber: number) => {
         if (!socket || participants.length === 0) return;
@@ -412,23 +432,52 @@ export default function Admin() {
     useEffect(() => {
         if (!socket) return;
 
-        const handleLobbyUpdate = (roundNumber: number) => (data: { participants?: Participant[] }) => {
-            // Only update if this is the currently selected round
-            if (roundNumber === selectedRoundForUsers && data.participants) {
-                setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+        const handleLobbyUpdate0 = (data: { participants?: Participant[] }) => {
+            if (0 === selectedRoundForUsers) {
+                console.log('[LOBBY UPDATE Round 0]', data);
+                if (data.participants) {
+                    setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                }
             }
         };
 
-        socket.on('lobby:round0', handleLobbyUpdate(0));
-        socket.on('lobby:round1', handleLobbyUpdate(1));
-        socket.on('lobby:round2', handleLobbyUpdate(2));
-        socket.on('lobby:round3', handleLobbyUpdate(3));
+        const handleLobbyUpdate1 = (data: { participants?: Participant[] }) => {
+            if (1 === selectedRoundForUsers) {
+                console.log('[LOBBY UPDATE Round 1]', data);
+                if (data.participants) {
+                    setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                }
+            }
+        };
+
+        const handleLobbyUpdate2 = (data: { participants?: Participant[] }) => {
+            if (2 === selectedRoundForUsers) {
+                console.log('[LOBBY UPDATE Round 2]', data);
+                if (data.participants) {
+                    setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                }
+            }
+        };
+
+        const handleLobbyUpdate3 = (data: { participants?: Participant[] }) => {
+            if (3 === selectedRoundForUsers) {
+                console.log('[LOBBY UPDATE Round 3]', data);
+                if (data.participants) {
+                    setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                }
+            }
+        };
+
+        socket.on('lobby:round0', handleLobbyUpdate0);
+        socket.on('lobby:round1', handleLobbyUpdate1);
+        socket.on('lobby:round2', handleLobbyUpdate2);
+        socket.on('lobby:round3', handleLobbyUpdate3);
 
         return () => {
-            socket.off('lobby:round0', handleLobbyUpdate(0));
-            socket.off('lobby:round1', handleLobbyUpdate(1));
-            socket.off('lobby:round2', handleLobbyUpdate(2));
-            socket.off('lobby:round3', handleLobbyUpdate(3));
+            socket.off('lobby:round0', handleLobbyUpdate0);
+            socket.off('lobby:round1', handleLobbyUpdate1);
+            socket.off('lobby:round2', handleLobbyUpdate2);
+            socket.off('lobby:round3', handleLobbyUpdate3);
         };
     }, [socket, selectedRoundForUsers]);
 
@@ -924,9 +973,9 @@ export default function Admin() {
                         {participants.length} user{participants.length !== 1 ? 's' : ''} in lobby
                       </p>
                       <div className="max-h-64 overflow-y-auto space-y-2">
-                        {participants.map((participant) => (
+                        {participants.map((participant, idx) => (
                           <div
-                            key={participant.id}
+                            key={`participant-${participant.id}-${idx}`}
                             className="flex items-center justify-between bg-gray-600/50 px-3 py-2 rounded text-sm"
                           >
                             <div className="flex items-center gap-3">
@@ -977,27 +1026,27 @@ export default function Admin() {
                         {matchParticipants.length} active user{matchParticipants.length !== 1 ? 's' : ''}
                       </p>
                       <div className="max-h-96 overflow-y-auto space-y-2">
-                        {matchParticipants.map((participant) => (
+                        {matchParticipants.map((participant, idx) => (
                           <div
-                            key={participant.id}
+                            key={`match-${participant.id}-${idx}`}
                             className={`bg-gray-600/50 px-4 py-3 rounded border-l-4 ${
-                              participant.status === 'in-match' ? 'border-blue-500' : 'border-yellow-500'
+                              participant.status === 'in_match' ? 'border-blue-500' : 'border-yellow-500'
                             }`}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className={`w-2 h-2 rounded-full ${
-                                  participant.status === 'in-match' ? 'bg-blue-500' : 'bg-yellow-500'
+                                  participant.status === 'in_match' ? 'bg-blue-500' : 'bg-yellow-500'
                                 }`}></div>
                                 <span className="text-white font-medium">{participant.username}</span>
                               </div>
                               <span className={`text-xs font-semibold uppercase ${
-                                participant.status === 'in-match' ? 'text-blue-400' : 'text-yellow-400'
+                                participant.status === 'in_match' ? 'text-blue-400' : 'text-yellow-400'
                               }`}>
-                                {participant.status === 'in-match' ? 'In Match' : 'Waiting'}
+                                {participant.status === 'in_match' ? 'In Match' : 'Waiting'}
                               </span>
                             </div>
-                            {participant.status === 'in-match' && participant.opponentUsername && (
+                            {participant.status === 'in_match' && participant.opponentUsername && (
                               <div className="text-sm text-gray-300 mt-2 ml-5">
                                 vs <span className="font-medium">{participant.opponentUsername}</span>
                               </div>
@@ -1041,7 +1090,7 @@ export default function Admin() {
                           return bScore - aScore;
                         })
                         .map((p, idx) => (
-                          <tr key={p.id} className="border-gray-800 hover:bg-white/5 transition">
+                          <tr key={`${p.id}-${idx}`} className="border-gray-800 hover:bg-white/5 transition">
                             <td className="py-2 px-3">{idx + 1}</td>
                             <td className="py-2 px-3 max-w-[100px] truncate">{p.username}</td>
                             <td className="py-2 px-3 font-mono text-cyan-400">{typeof p.eventScore === 'number' ? p.eventScore : '...'}</td>
