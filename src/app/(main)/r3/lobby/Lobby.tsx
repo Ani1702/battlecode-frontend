@@ -106,8 +106,6 @@ export default function Lobbyr3() {
   };
 
   const handleState = useCallback((response: GetStateResponse) => {
-    console.log("Round 3 state response:", response);
-
     setIsLoading(false);
     setHasAttemptedJoin(true);
 
@@ -213,7 +211,6 @@ export default function Lobbyr3() {
     };
 
     const handleRoundStart = (data: RoundStartData) => {
-      console.log('Round 3 started! Data received:', data);
       if (data && typeof data === 'object' && data.questions && data.startTime) {
         try {
           const dataToStore = {
@@ -222,7 +219,6 @@ export default function Lobbyr3() {
             duration: data.duration || 1200
           };
           sessionStorage.setItem('round3_data', JSON.stringify(dataToStore));
-          console.log('Stored round data in sessionStorage:', dataToStore);
         } catch (error) {
           console.error("Failed to save round data to sessionStorage:", error);
           showErrorToast("Error preparing round. Please try again.");

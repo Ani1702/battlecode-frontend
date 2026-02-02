@@ -365,6 +365,11 @@ export default function Round3Page() {
       if (data.lockedQuestionIds) {
         setLockedQuestionIds(data.lockedQuestionIds);
       }
+      
+      // Ensure page loading is complete when state is received
+      if (pageIsLoading) {
+        setPageIsLoading(false);
+      }
     };
 
     socket.on('round3:timer', handleTimerUpdate);
@@ -388,15 +393,26 @@ export default function Round3Page() {
       socket.off('round3:adminAdded', handleAdminAdded);
       socket.off('round3:state', handleState);
     };
-  }, [socket, isConnected, router, round, clearMatchContext, currentProblem]);
+  }, [socket, isConnected, router, round, clearMatchContext, currentProblem, pageIsLoading]);
 
   // --- Initial State Fetch ---
   useEffect(() => {
     if (isAuthLoading || isSocketLoading || !user || !socket || !isConnected || hasInitialized.current) return;
     hasInitialized.current = true;
 
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (pageIsLoading) {
+        showErrorToast('Failed to load round data. Please refresh or return to lobby.');
+        setPageIsLoading(false);
+      }
+    }, 5000);
+
     socket.emit('round3:getState', {}, (response: StateResponse) => {
+      clearTimeout(timeoutId);
+      
       if (!isMountedRef.current) return;
+      
       if (response?.success && response?.questions && response.questions.length > 0) {
         setProblems(response.questions);
         setCurrentProblem(response.questions[0]);
@@ -409,9 +425,14 @@ export default function Round3Page() {
         showErrorToast(errorMessage);
         router.push('/r3/lobby');
       }
+      
       setPageIsLoading(false);
     });
-  }, [isAuthLoading, isSocketLoading, user, socket, isConnected, router]);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [isAuthLoading, isSocketLoading, user, socket, isConnected, router, pageIsLoading]);
 
   // Request timer sync and state updates when socket and problems are available
   useEffect(() => {
@@ -835,6 +856,15 @@ if (domNode) {
                                 {result.memory && <span className="flex items-center gap-1"><MemoryStick size={12} />{result.memory} KB</span>}
                               </div>
                             </div>
+                            
+                            {/* Display stdout if available */}
+                            {result.stdout && (
+                              <div className="mt-2">
+                                <p className="text-xs font-semibold text-gray-300 mb-1">Output:</p>
+                                <pre className="text-xs text-gray-200 whitespace-pre-wrap bg-black/40 p-2 rounded border border-gray-600 max-h-32 overflow-y-auto">{result.stdout}</pre>
+                              </div>
+                            )}
+                            
                             {(result.stderr || result.compile_output) && (
                               <details className="mt-2 text-xs">
                                 <summary className="cursor-pointer text-yellow-400">Show Error Details</summary>
