@@ -23,29 +23,37 @@ interface CurrentRoundData {
 interface SimpleSocketResponse {
     success: boolean;
     error?: string;
+    timestamp?: number;
+    roundNumber?: number;
+    round?: {
+      isActive: boolean;
+      status: 'LOCKED' | 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED';
+      endTime: number | null;
+      timeRemaining: number;
+      nextMatchmakingCycle: number | null;
+    };
+    participants?: {
+      total: number;
+      byStatus: {
+        lobby: Participant[];
+        waiting: Participant[];
+        in_match: Participant[];
+        finished: Participant[];
+        disconnected: Participant[];
+        cooldown: Participant[];
+      };
+      all: Participant[];
+    };
+    currentUser?: Participant | null;
 }
+
 interface Participant {
   id: string;
   username: string;
   rank: number;
-  status: 'lobby' | 'waiting' | 'in_match' | 'disconnected' | 'finished' | 'cooldown'; // Redis participant status (lowercase)
-  [key: string]: unknown; // Allows for additional properties
-}
-
-interface GetStateResponse extends SimpleSocketResponse {
-    participant?: Participant | null;
-    currentProblem?: unknown;
-    problemIndex?: number;
-    problems?: unknown[];
-    totalProblems?: number;
-    isActive?: boolean;
-    timeRemaining?: number;
-    progress?: unknown;
-    allParticipants?: Participant[];
-    totalParticipants?: number;
-    message?: string;
-    globalTimeRemaining?: number;
-    nextMatchmakingCycle?: number | null;
+  status: 'lobby' | 'waiting' | 'in_match' | 'disconnected' | 'finished' | 'cooldown';
+  opponentUsername?: string; // Included by backend for matched users
+  [key: string]: unknown;
 }
 
 interface MatchParticipant {
@@ -133,10 +141,15 @@ export default function Admin() {
     };
 
     const fetchLobbyUsers = useCallback((roundNumber: number) => {
-        if (!socket) return;
+        console.log(`[FETCH LOBBY CALLED] roundNumber: ${roundNumber}, socket: ${socket ? 'connected' : 'null'}`);
+        if (!socket) {
+            console.log('[FETCH LOBBY] Socket is null, returning early');
+            return;
+        }
         
         console.log(`[FETCH LOBBY] Requesting state for round ${roundNumber}`);
         const eventName = `round${roundNumber}:getState`;
+        console.log(`[FETCH LOBBY] Emitting event: ${eventName}`);
         socket.emit(eventName, {});
     }, [socket]);
 
@@ -151,105 +164,86 @@ export default function Admin() {
     useEffect(() => {
         if (!socket) return;
 
-        const handleStateResponse = (roundNum: number) => (response: GetStateResponse) => {
-            console.log(`[STATE RESPONSE Round ${roundNum}]`, response);
+        const handleStateResponse = (response: SimpleSocketResponse) => {
+            console.log(`[STATE RESPONSE Round ${response.roundNumber}]`, response);
             if (!response.success) return;
             
+            const { roundNumber, round, participants, currentUser } = response;
+            
+            // Early return if required data is missing
+            if (!roundNumber || !round || !participants) {
+                console.log('[MISSING DATA] Response missing required fields');
+                return;
+            }
+            
+            console.log(`[EXTRACTED DATA Round ${roundNumber}]`, {
+                isActive: round.isActive,
+                status: round.status,
+                participantsTotal: participants.total,
+                lobbyCount: participants.byStatus.lobby.length,
+                waitingCount: participants.byStatus.waiting.length,
+                inMatchCount: participants.byStatus.in_match.length
+            });
+            
             // Check if this round is active and update active round state
-            if (response.isActive) {
-                setActiveRoundNumber(roundNum);
+            if (round.isActive) {
+                setActiveRoundNumber(roundNumber);
                 setIsRoundActive(true);
-                setGlobalTimeRemaining(response.timeRemaining || response.globalTimeRemaining || 0);
-                setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
-                if (response.participant) setCurrentUser(response.participant);
-            } else if (!response.isActive && activeRoundNumber === roundNum) {
-
+                setGlobalTimeRemaining(round.timeRemaining);
+                setNextMatchmakingCycle(round.nextMatchmakingCycle);
+                if (currentUser) setCurrentUser(currentUser);
+            } else if (!round.isActive && activeRoundNumber === roundNumber) {
                 setIsRoundActive(false);
                 setActiveRoundNumber(null);
             }
             
-            if (response.allParticipants) {
-                // ONLY filter for waiting/in_match users if the round is actually active (IN_PROGRESS)
-                if (response.isActive && roundNum === selectedRoundForMatches) {
-                    const activeUsers = response.allParticipants.filter(
-                        p => p.status === 'waiting' || p.status === 'in_match'
-                    );
-                    
-                    console.log('[ACTIVE USERS]', activeUsers);
-                    
-                    // Get users who are in-match
-                    const inMatchUsers = activeUsers.filter(p => p.status === 'in_match');
-                    
-                    // Build match info
-                    const matchInfo: MatchParticipant[] = activeUsers.map((user) => {
-                        const matchData: MatchParticipant = {
-                            id: user.id,
-                            username: user.username,
-                            status: user.status as 'waiting' | 'in_match',
-                        };
-                        
-                        // If user is in-match, try to find their opponent
-                        if (user.status === 'in_match') {
-                            // First try using opponentId if available
-                            if (user.opponentId) {
-                                const opponent = response.allParticipants?.find(
-                                    p => p.id === user.opponentId
-                                );
-                                if (opponent) {
-                                    matchData.opponentUsername = opponent.username;
-                                }
-                            } else if (inMatchUsers.length === 2) {
-                                // Fallback: If there are exactly 2 users in-match and no opponentId,
-                                // assume they're matched against each other
-                                const otherUser = inMatchUsers.find(p => p.id !== user.id);
-                                if (otherUser) {
-                                    matchData.opponentUsername = otherUser.username;
-                                }
-                            }
-                        }
-                        
-                        return matchData;
-                    });
-                    
-                    console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
-                    setMatchParticipants(matchInfo);
-                } else if (!response.isActive && roundNum === selectedRoundForMatches) {
-                    // Round is NOT active - clear match participants for this round
-                    console.log('[ROUND NOT ACTIVE - CLEARING MATCH PARTICIPANTS]');
-                    setMatchParticipants([]);
-                }
+            // Update match participants (pre-filtered by backend)
+            if (round.isActive && roundNumber === selectedRoundForMatches) {
+                // Backend already filtered waiting + in_match users
+                const activeUsers = [
+                    ...participants.byStatus.waiting,
+                    ...participants.byStatus.in_match
+                ];
                 
-                // Also set all participants for leaderboard/other uses
-                setAllParticipants(response.allParticipants);
+                console.log('[ACTIVE USERS]', activeUsers);
                 
-                // Update lobby participants if this is the selected round for users
-                if (roundNum === selectedRoundForUsers) {
-                    // Show all participants with 'lobby' status, even if disconnected
-                    // This ensures the lobby displays all users who are part of participants
-                    const lobbyUsers = response.allParticipants.filter(p => p.status === 'lobby');
-                    console.log(`[UPDATING LOBBY USERS for round ${roundNum}]`, lobbyUsers);
-                    console.log('[ALL PARTICIPANTS WITH STATUS]', response.allParticipants.map(p => ({ username: p.username, status: p.status })));
-                    setParticipants(lobbyUsers);
-                }
+                // Build match info - backend already includes opponentUsername
+                const matchInfo: MatchParticipant[] = activeUsers.map(user => ({
+                    id: user.id,
+                    username: user.username,
+                    status: user.status as 'waiting' | 'in_match',
+                    opponentUsername: user.opponentUsername
+                }));
+                
+                console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
+                setMatchParticipants(matchInfo);
+            } else if (!round.isActive && roundNumber === selectedRoundForMatches) {
+                // Round is NOT active - clear match participants for this round
+                console.log('[ROUND NOT ACTIVE - CLEARING MATCH PARTICIPANTS]');
+                setMatchParticipants([]);
+            }
+            
+            // Set all participants for leaderboard/other uses
+            setAllParticipants(participants.all);
+            
+            // Update lobby participants if this is the selected round for users (pre-filtered by backend)
+            if (roundNumber === selectedRoundForUsers) {
+                console.log(`[UPDATING LOBBY USERS for round ${roundNumber}]`, participants.byStatus.lobby);
+                setParticipants(participants.byStatus.lobby);
             }
         };
 
-        // Listen for state responses from all rounds
-        const handleStateResponse0 = handleStateResponse(0);
-        const handleStateResponse1 = handleStateResponse(1);
-        const handleStateResponse2 = handleStateResponse(2);
-        const handleStateResponse3 = handleStateResponse(3);
-
-        socket.on('round0:state', handleStateResponse0);
-        socket.on('round1:state', handleStateResponse1);
-        socket.on('round2:state', handleStateResponse2);
-        socket.on('round3:state', handleStateResponse3);
+        // Listen for state responses from all rounds - use same handler since response includes roundNumber
+        socket.on('round0:state', handleStateResponse);
+        socket.on('round1:state', handleStateResponse);
+        socket.on('round2:state', handleStateResponse);
+        socket.on('round3:state', handleStateResponse);
 
         return () => {
-            socket.off('round0:state', handleStateResponse0);
-            socket.off('round1:state', handleStateResponse1);
-            socket.off('round2:state', handleStateResponse2);
-            socket.off('round3:state', handleStateResponse3);
+            socket.off('round0:state', handleStateResponse);
+            socket.off('round1:state', handleStateResponse);
+            socket.off('round2:state', handleStateResponse);
+            socket.off('round3:state', handleStateResponse);
         };
     }, [socket, activeRoundNumber, selectedRoundForUsers, selectedRoundForMatches]);
 
@@ -952,6 +946,8 @@ export default function Admin() {
                     <button
                       key={round}
                       onClick={() => {
+                        console.log(`[BUTTON CLICKED] Round ${round} button was pressed`);
+                        console.log(`[CURRENT STATE] selectedRoundForUsers: ${selectedRoundForUsers}, socket: ${socket ? 'connected' : 'not connected'}`);
                         console.log(`[FETCHING LOBBY USERS FOR ROUND ${round}]`);
                         setSelectedRoundForUsers(round);
                         fetchLobbyUsers(round);

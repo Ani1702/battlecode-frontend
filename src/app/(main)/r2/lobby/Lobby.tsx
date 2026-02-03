@@ -283,7 +283,7 @@ export default function LobbyR2() {
       }
     };
 
-    socket.on('round2:lobbyUpdate', handleLobbyUpdate);
+    socket.on('round2:lobby', handleLobbyUpdate);
     socket.on('round2:started', handleRoundStarted);
     socket.on('round2:rolesAssigned', handleRoleAssigned);
     socket.on('round2:ended', handleRoundEnd);
@@ -292,7 +292,7 @@ export default function LobbyR2() {
     socket.on('round2:adminAdded', handleAdminAdded);
 
     return () => {
-      socket.off('round2:lobbyUpdate', handleLobbyUpdate);
+      socket.off('round2:lobby', handleLobbyUpdate);
       socket.off('round2:started', handleRoundStarted);
       socket.off('round2:rolesAssigned', handleRoleAssigned);
       socket.off('round2:ended', handleRoundEnd);
