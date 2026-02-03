@@ -952,6 +952,7 @@ export default function Admin() {
                     <button
                       key={round}
                       onClick={() => {
+                        console.log(`[FETCHING LOBBY USERS FOR ROUND ${round}]`);
                         setSelectedRoundForUsers(round);
                         fetchLobbyUsers(round);
                       }}

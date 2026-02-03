@@ -35,8 +35,12 @@ interface GetStateResponse extends SimpleSocketResponse {
   allParticipants?: Participant[];
   state?: {
     roundIsActive: boolean;
-    shouldBeInGame: boolean;
+    roundEndTime: number | null;
     userRole: 'elite' | 'challenger' | null;
+    activeSession: boolean;
+    participants: Participant[];
+    elites: string[];
+    challengers: string[];
   };
 }
 
@@ -110,13 +114,20 @@ export default function LobbyR2() {
     if (response.state) {
       setIsRoundActive(response.state.roundIsActive);
       
-      if (response.state.shouldBeInGame && response.state.userRole) {
+      // Check if user should be in an active session
+      if (response.state.activeSession && response.state.userRole) {
         showInfoToast("Rejoining your session...");
         router.push(`/r2/${response.state.userRole}`);
         return;
       }
+
+      // Update participants from state
+      if (response.state.participants) {
+        setParticipants(response.state.participants.filter(p => p.status === "lobby"));
+      }
     }
 
+    // Fallback to legacy response format if state is not present
     if (response.allParticipants) {
       setParticipants(response.allParticipants.filter(p => p.status === "lobby"));
     }
