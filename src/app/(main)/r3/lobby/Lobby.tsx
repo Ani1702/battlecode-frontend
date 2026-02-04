@@ -106,7 +106,8 @@ export default function Lobbyr3() {
     });
   };
 
-  const handleState = useCallback((response: GetStateResponse) => {
+  const handleState = useCallback(
+  (response: GetStateResponse) => {
     setIsLoading(false);
     setHasAttemptedJoin(true);
 
@@ -121,20 +122,31 @@ export default function Lobbyr3() {
 
     setIsRoundActive(response.isActive ?? false);
 
+    // ✅ User already known to backend
     if (response.participant) {
       if (response.participant.status === "IN_MATCH") {
         router.push("/r3/code");
       }
-    } else {
-      socket?.emit("round3:join", { userId, username: user?.user_metadata?.full_name || user?.id }, (joinResponse: SimpleSocketResponse) => {
-        if (joinResponse.success) {
-          showSuccessToast("Successfully joined Round 3 lobby");
-        } else {
-          showErrorToast(joinResponse.error || "Failed to join lobby");
-        }
-      });
+      return;
     }
-  }, [router, socket, userId, user]);
+
+    // ✅ Only auto-join if round is NOT active
+    if (!response.isActive) {
+      socket?.emit(
+        "round3:join",
+        { userId, username: user?.user_metadata?.full_name || user?.id },
+        (joinResponse: SimpleSocketResponse) => {
+          if (joinResponse.success) {
+            showSuccessToast("Successfully joined Round 3 lobby");
+          } else {
+            showErrorToast(joinResponse.error || "Failed to join lobby");
+          }
+        }
+      );
+    }
+  },
+  [router, socket, userId, user]
+);
 
   // Authentication check useEffect
   useEffect(() => {
@@ -172,7 +184,7 @@ export default function Lobbyr3() {
         return;
       }
 
-      if (currentRound.currentRoundStatus !== 'LOBBY') {
+      if (currentRound.currentRoundStatus !== 'LOBBY' && userRole !== 'ADMIN') {
         showErrorToast(`Round 3 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`);
         console.log("Current round status:", currentRound.currentRoundStatus);
         router.back();
@@ -263,6 +275,7 @@ export default function Lobbyr3() {
 
     const handleAdminAdded = () => {
       console.log("You have been added to Round 3 by an admin");
+      socket.emit("round3:getState");
       
       if (!currentRoundData) {
         showErrorToast("Round data not available");
