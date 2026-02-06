@@ -5,6 +5,7 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import CodePage from "./CodePage";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 
 // --- Interfaces ---

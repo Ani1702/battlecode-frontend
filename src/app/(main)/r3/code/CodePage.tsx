@@ -8,6 +8,7 @@ import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
 import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play, ChevronLeft, ChevronRight, Lock, Swords } from "lucide-react";
 import HackModal from "@/components/shared/HackModal";
+import SecureWrapper from "@/components/shared/SecureWrapper";
 
 // --- Interfaces ---
 interface Problem {
@@ -394,6 +395,8 @@ export default function CodePage({
   };
 
   return (
+    //remove this securewrapper also to disable copy paste
+    <SecureWrapper>
     <>
       <HackModal
         isOpen={isHackModalOpen}
@@ -479,8 +482,31 @@ export default function CodePage({
                         onChange={(v) => setCode(v || "")} 
                         theme="custom-dark" 
                         options={editorOptions}
-                        onMount={(editor) => {
+                        onMount={(editor, monacoInstance) => {
                           editorRef.current = editor;
+
+                          //comment here to enable copy-paste
+                          // Disable paste via context menu
+                          editor.addAction({
+                            id: "disable-paste",
+                            label: "Paste",
+                            keybindings: [],
+                            precondition: "false",
+                            run: () => {}
+                          });
+                          // Block DOM paste events
+                          const domNode = editor.getDomNode();
+                          if (domNode) {
+                            domNode.addEventListener("paste", (e: ClipboardEvent) => {
+                              e.preventDefault();
+                              showErrorToast("Paste is disabled");
+                            }, true);
+                          }
+                          // Block keyboard shortcut Ctrl/Cmd+V
+                          editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+                            showErrorToast("Paste shortcut is disabled");
+                          });
+                          //till here
                         }}
                       />
                 </div>
@@ -501,5 +527,6 @@ export default function CodePage({
         </div>
       </div>
     </>
+    </SecureWrapper>
   );
 }

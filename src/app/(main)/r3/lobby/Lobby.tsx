@@ -8,6 +8,7 @@ import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
+import LoadingOverlay from '@/components/shared/LoadingOverlay';
 
 // --- TYPE DEFINITIONS ---
 
@@ -309,16 +310,10 @@ export default function Lobbyr3() {
   // Early return for loading states
   if (authLoading || !authenticationChecked || isCheckingRound) {
     return (
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 flex justify-center">
-            <Image src="/battlecode_logo.png" alt="Loading..." className="h-50 w-fit animate-pulse" width={200} height={50} />
-          </div>
-          <p className="text-gray-400">
-            {authLoading ? "Loading Authentication..." : "Checking Round Status..."}
-          </p>
-        </div>
-      </div>
+      <LoadingOverlay 
+        isLoading={true} 
+        message={authLoading ? "Loading Authentication..." : "Checking Round Status..."}
+      />
     );
   }
 
@@ -442,6 +437,13 @@ export default function Lobbyr3() {
           )}
         </div>
       )}
+      
+      {/* Powered by Judge0 Footer */}
+      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
+        <p className="text-white/60 text-sm font-oxanium">
+          Powered by <span className="text-orange-500 font-semibold">Judge0</span>
+        </p>
+      </div>
     </div>
   );
 }

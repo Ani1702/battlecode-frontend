@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import SecureWrapper from "@/components/shared/SecureWrapper";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 // Interfaces
 interface MatchData {
@@ -747,14 +748,7 @@ export default function R1CodePage() {
   };
 
   if (pageIsLoading || isAuthLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black/40 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p>Loading Round 1 Match...</p>
-        </div>
-      </div>
-    );
+    return <LoadingOverlay isLoading={true} message="Loading Round 1 Match..." />;
   }
 
   const popupContent = matchEndData ? getPopupContent(matchEndData.type) : null;

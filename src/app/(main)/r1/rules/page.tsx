@@ -62,5 +62,5 @@ export default function Rules() {
         "Matches continue until the global timer runs out."
     ];
 
-    return <RulesPage rules={rules} round="CC" />;
+    return <RulesPage rules={rules} round="1" />;
 }

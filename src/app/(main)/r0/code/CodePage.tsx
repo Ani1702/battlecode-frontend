@@ -16,6 +16,8 @@ import Button from "@/components/shared/button";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
+import SecureWrapper from "@/components/shared/SecureWrapper";
 
 interface Problem {
   id: string;
@@ -298,6 +300,8 @@ export default function CodePage({
     monacoInstance: typeof import('monaco-editor')
   ){
     editorRef.current = editor;
+
+    //comment here to enable copy-paste
     // Disable paste via context menu
     editor.addAction({
       id: "disable-paste",
@@ -308,17 +312,18 @@ export default function CodePage({
     });
     // Block DOM paste events
     const domNode = editor.getDomNode();
-if (domNode) {
-  domNode.addEventListener("paste", (e: ClipboardEvent) => { // Fixed with the specific event type
-    e.preventDefault();
-    showErrorToast("Paste is disabled");
-  }, true);
-}
+    if (domNode) {
+      domNode.addEventListener("paste", (e: ClipboardEvent) => {
+        e.preventDefault();
+        showErrorToast("Paste is disabled");
+      }, true);
+    }
     // Block keyboard shortcut Ctrl/Cmd+V
     editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
       showErrorToast("Paste shortcut is disabled");
     });
   }
+  //till here
   
 
   // ============================================================================
@@ -842,19 +847,7 @@ useEffect(() => {
   // ============================================================================
 
   if (isLoading) {
-    return (
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
-              <div className="text-center justify-center items-center">
-                <div className="mb-4 flex items-center justify-center">
-                  <Image src="/battlecode_logo.png" alt="Loading..." className="flex h-50 w-fit animate-pulse" width={200} height={50} />
-                </div>
-                <p className="text-gray-400">
-                  {isLoading ? "Loading..." : "Redirecting..."}
-                </p>
-              </div>
-            </div>
-            );
-    
+    return <LoadingOverlay isLoading={true} message="Loading Round..." />;
   }
 
   if (!currentProblem) {
@@ -880,6 +873,8 @@ useEffect(() => {
   // ============================================================================
 
   return (
+    //remove this securewrapper also to disable copy paste
+    <SecureWrapper>
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
       {/* Confirmation Modal for Next Question */}
       {isNextQuestionModalOpen && (
@@ -1242,5 +1237,6 @@ useEffect(() => {
         </div>
       </div>
     </div>
+    </SecureWrapper>
   );
 }

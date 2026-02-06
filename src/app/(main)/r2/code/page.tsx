@@ -9,6 +9,7 @@ import * as monaco from 'monaco-editor';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { Lightbulb, Play } from "lucide-react";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 // --- Interfaces ---
 interface SessionData {
@@ -566,7 +567,7 @@ if (domNode) {
 
 
   if (pageIsLoading || !sessionData) {
-    return <div className="flex items-center justify-center h-screen bg-gray-900 text-white">Loading Session...</div>;
+    return <LoadingOverlay isLoading={true} message="Loading Session..." />;
   }
 
   const { question, type, opponent } = sessionData;

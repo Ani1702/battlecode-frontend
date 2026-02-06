@@ -8,6 +8,7 @@ import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
+import LoadingOverlay from '@/components/shared/LoadingOverlay';
 
 // --- TYPE DEFINITIONS ---
 
@@ -316,16 +317,10 @@ export default function Lobbyr0() {
   // Early return for loading states
   if (authLoading || !authenticationChecked || isCheckingRound) {
     return (
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 flex justify-center">
-            <Image src="/battlecode_logo.png" alt="Loading..." className="h-50 w-fit animate-pulse" width={200} height={50} />
-          </div>
-          <p className="text-gray-400">
-            {authLoading ? "Loading Authentication..." : "Checking Round Status..."}
-          </p>
-        </div>
-      </div>
+      <LoadingOverlay 
+        isLoading={true} 
+        message={authLoading ? "Loading Authentication..." : "Checking Round Status..."}
+      />
     );
   }
 
@@ -394,7 +389,7 @@ export default function Lobbyr0() {
 
       {/* --- BOTTOM STATUS AND CONTROLS SECTION --- */}
       {!isRoundActive && !roundStarted && (
-        <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
+        <div className="flex-shrink-0 pb-8 pt-2 px-4 flex flex-col items-center gap-3">
           <div className="text-sm text-gray-200 text-center">
             {!isConnected ? (
               <div>
@@ -437,7 +432,7 @@ export default function Lobbyr0() {
             )}
           </div>
 
-          {isAdmin && !isLoading && participants.length > 0 && (
+          {/* {isAdmin && !isLoading && participants.length > 0 && (
             <button
               onClick={handleStartRound}
               className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm flex items-center gap-2"
@@ -446,9 +441,16 @@ export default function Lobbyr0() {
               <Rocket className="h-4 w-4" />
               Start Round 0
             </button>
-          )}
+          )} */}
         </div>
       )}
+      
+      {/* Powered by Judge0 Footer */}
+      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
+        <p className="text-white/60 text-sm font-oxanium">
+          Powered by <span className="text-orange-500 font-semibold">Judge0</span>
+        </p>
+      </div>
     </div>
   );
 }

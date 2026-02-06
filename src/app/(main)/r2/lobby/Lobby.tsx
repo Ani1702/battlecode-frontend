@@ -7,6 +7,7 @@ import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
+import LoadingOverlay from '@/components/shared/LoadingOverlay';
 
 // --- TYPE DEFINITIONS ---
 
@@ -305,9 +306,10 @@ export default function LobbyR2() {
   // Early return for loading states
   if (authLoading || !authenticationChecked || isCheckingRound) {
     return (
-      <div className="flex items-center justify-center h-screen text-white">
-        {authLoading ? "Loading Authentication..." : "Checking Round Status..."}
-      </div>
+      <LoadingOverlay 
+        isLoading={true} 
+        message={authLoading ? "Loading Authentication..." : "Checking Round Status..."}
+      />
     );
   }
 
@@ -431,6 +433,13 @@ export default function LobbyR2() {
           )}
         </div>
       )}
+      
+      {/* Powered by Judge0 Footer */}
+      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
+        <p className="text-white/60 text-sm font-oxanium">
+          Powered by <span className="text-orange-500 font-semibold">Judge0</span>
+        </p>
+      </div>
     </div>
   );
 }

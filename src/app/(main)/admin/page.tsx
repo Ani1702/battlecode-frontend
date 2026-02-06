@@ -1,10 +1,25 @@
 "use client"
+/**
+ * Admin Page - Updated to use Unified Round State Schema
+ * 
+ * This page now uses the BaseRoundState interface from @/types/roundState
+ * which provides a consistent structure across all rounds:
+ * 
+ * Key Changes:
+ * - Replaced SimpleSocketResponse with BaseRoundState
+ * - Updated Participant interface to use userId instead of id
+ * - Added support for round-specific data via roundSpecific property
+ * - Supports new unified schema with session data, round status, and participants
+ * - Compatible with Round 0-3 with their specific features (matchmaking, bounty, etc.)
+ */
 import {useState, useCallback} from 'react';
 import {useAuth} from "@/contexts/AuthContext";
 import { showErrorToast, showInfoToast, showSuccessToast } from "@/components/shared/CustomToast";
 import {useRouter} from "next/navigation"
 import { useEffect } from 'react';
 import { useSocket } from "@/contexts/SocketContext";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
+import { BaseRoundState, Participant } from "@/types/roundState";
 
 
 interface RoundStatus {
@@ -20,44 +35,8 @@ interface CurrentRoundData {
   rounds: RoundStatus[];
 }
 
-interface SimpleSocketResponse {
-    success: boolean;
-    error?: string;
-    timestamp?: number;
-    roundNumber?: number;
-    round?: {
-      isActive: boolean;
-      status: 'LOCKED' | 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED';
-      endTime: number | null;
-      timeRemaining: number;
-      nextMatchmakingCycle: number | null;
-    };
-    participants?: {
-      total: number;
-      byStatus: {
-        lobby: Participant[];
-        waiting: Participant[];
-        in_match: Participant[];
-        finished: Participant[];
-        disconnected: Participant[];
-        cooldown: Participant[];
-      };
-      all: Participant[];
-    };
-    currentUser?: Participant | null;
-}
-
-interface Participant {
-  id: string;
-  username: string;
-  rank: number;
-  status: 'lobby' | 'waiting' | 'in_match' | 'disconnected' | 'finished' | 'cooldown';
-  opponentUsername?: string; // Included by backend for matched users
-  [key: string]: unknown;
-}
-
 interface MatchParticipant {
-  id: string;
+  userId: string;
   username: string;
   status: 'waiting' | 'in_match'; // Redis participant status (lowercase with underscore)
   opponentUsername?: string;
@@ -76,6 +55,44 @@ export default function Admin() {
     const [matchParticipants, setMatchParticipants] = useState<MatchParticipant[]>([]);
     const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(0);
     
+    // Helper functions for localStorage persistence
+    const saveParticipantsToStorage = useCallback((participantsList: Participant[]) => {
+        try {
+            localStorage.setItem('participants', JSON.stringify(participantsList));
+        } catch (error) {
+            console.error('Failed to save participants to localStorage:', error);
+        }
+    }, []);
+
+    const loadParticipantsFromStorage = useCallback((): Participant[] => {
+        try {
+            const saved = localStorage.getItem('participants');
+            return saved ? JSON.parse(saved) : [];
+        } catch (error) {
+            console.error('Failed to load participants from localStorage:', error);
+            return [];
+        }
+    }, []);
+
+    // Match participants localStorage functions
+    const saveMatchParticipantsToStorage = useCallback((matchList: MatchParticipant[], roundNum: number) => {
+        try {
+            localStorage.setItem(`matchParticipants-round${roundNum}`, JSON.stringify(matchList));
+        } catch (error) {
+            console.error('Failed to save match participants to localStorage:', error);
+        }
+    }, []);
+
+    const loadMatchParticipantsFromStorage = useCallback((roundNum: number): MatchParticipant[] => {
+        try {
+            const saved = localStorage.getItem(`matchParticipants-round${roundNum}`);
+            return saved ? JSON.parse(saved) : [];
+        } catch (error) {
+            console.error('Failed to load match participants from localStorage:', error);
+            return [];
+        }
+    }, []);
+    
     // --- Active Round Section State (generalized for any round) ---
     const [activeRoundNumber, setActiveRoundNumber] = useState<number | null>(null);
     const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
@@ -88,7 +105,7 @@ export default function Admin() {
     const { socket } = useSocket();
     const router = useRouter();
 
-    // Load currentRoundData from localStorage on mount
+    // Load currentRoundData and participants from localStorage on mount
     useEffect(() => {
 
         const savedRounds = localStorage.getItem('battlecode_rounds');
@@ -100,8 +117,19 @@ export default function Admin() {
             }
         }
 
+        // Load participants from localStorage
+        const savedParticipants = loadParticipantsFromStorage();
+        if (savedParticipants.length > 0) {
+            setParticipants(savedParticipants);
+        }
         
-    }, []);
+        // Load match participants for the selected round
+        const savedMatchParticipants = loadMatchParticipantsFromStorage(selectedRoundForMatches);
+        if (savedMatchParticipants.length > 0) {
+            setMatchParticipants(savedMatchParticipants);
+        }
+        
+    }, [loadParticipantsFromStorage, loadMatchParticipantsFromStorage, selectedRoundForMatches]);
 
     const addUserToRound = async (userEmail:string, roundNumber:number) => {
         if (!userEmail || roundNumber === null) {
@@ -164,14 +192,15 @@ export default function Admin() {
     useEffect(() => {
         if (!socket) return;
 
-        const handleStateResponse = (response: SimpleSocketResponse) => {
+        const handleStateResponse = (response: BaseRoundState) => {
             console.log(`[STATE RESPONSE Round ${response.roundNumber}]`, response);
             if (!response.success) return;
             
             const { roundNumber, round, participants, currentUser } = response;
             
             // Early return if required data is missing
-            if (!roundNumber || !round || !participants) {
+            // Fix: Use explicit checks for null/undefined instead of falsy check (roundNumber can be 0)
+            if (roundNumber === null || roundNumber === undefined || !round || !participants) {
                 console.log('[MISSING DATA] Response missing required fields');
                 return;
             }
@@ -180,36 +209,42 @@ export default function Admin() {
                 isActive: round.isActive,
                 status: round.status,
                 participantsTotal: participants.total,
-                lobbyCount: participants.byStatus.lobby.length,
-                waitingCount: participants.byStatus.waiting.length,
-                inMatchCount: participants.byStatus.in_match.length
+                lobbyCount: participants.byStatus?.lobby?.length || 0,
+                waitingCount: participants.byStatus?.waiting?.length || 0,
+                inMatchCount: participants.byStatus?.in_match?.length || 0
             });
             
             // Check if this round is active and update active round state
             if (round.isActive) {
                 setActiveRoundNumber(roundNumber);
                 setIsRoundActive(true);
-                setGlobalTimeRemaining(round.timeRemaining);
-                setNextMatchmakingCycle(round.nextMatchmakingCycle);
+                setGlobalTimeRemaining(round.timeRemaining || 0);
+                // Use roundSpecific for Round 1's nextMatchmakingCycle
+                setNextMatchmakingCycle(response.roundSpecific?.nextMatchmakingCycle ?? null);
                 if (currentUser) setCurrentUser(currentUser);
             } else if (!round.isActive && activeRoundNumber === roundNumber) {
                 setIsRoundActive(false);
                 setActiveRoundNumber(null);
+                setGlobalTimeRemaining(0);
+                setNextMatchmakingCycle(null);
             }
             
             // Update match participants (pre-filtered by backend)
             if (round.isActive && roundNumber === selectedRoundForMatches) {
                 // Backend already filtered waiting + in_match users
                 const activeUsers = [
-                    ...participants.byStatus.waiting,
-                    ...participants.byStatus.in_match
+                    ...(participants.byStatus?.waiting || []),
+                    ...(participants.byStatus?.in_match || [])
                 ];
                 
-                console.log('[ACTIVE USERS]', activeUsers);
+                console.log(`[ACTIVE USERS for round ${roundNumber}]`, activeUsers);
+                console.log(`[SELECTED ROUND FOR MATCHES]`, selectedRoundForMatches);
+                console.log(`[WAITING USERS]`, participants.byStatus?.waiting);
+                console.log(`[IN_MATCH USERS]`, participants.byStatus?.in_match);
                 
                 // Build match info - backend already includes opponentUsername
                 const matchInfo: MatchParticipant[] = activeUsers.map(user => ({
-                    id: user.id,
+                    userId: user.userId,
                     username: user.username,
                     status: user.status as 'waiting' | 'in_match',
                     opponentUsername: user.opponentUsername
@@ -217,19 +252,29 @@ export default function Admin() {
                 
                 console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
                 setMatchParticipants(matchInfo);
-            } else if (!round.isActive && roundNumber === selectedRoundForMatches) {
-                // Round is NOT active - clear match participants for this round
-                console.log('[ROUND NOT ACTIVE - CLEARING MATCH PARTICIPANTS]');
-                setMatchParticipants([]);
+                // Save to localStorage
+                saveMatchParticipantsToStorage(matchInfo, roundNumber);
+            } else {
+                console.log(`[NOT UPDATING MATCHES] round.isActive: ${round.isActive}, roundNumber: ${roundNumber}, selectedRoundForMatches: ${selectedRoundForMatches}`);
+                if (!round.isActive && roundNumber === selectedRoundForMatches) {
+                    // Round is NOT active - clear match participants for this round
+                    console.log('[ROUND NOT ACTIVE - CLEARING MATCH PARTICIPANTS]');
+                    setMatchParticipants([]);
+                    saveMatchParticipantsToStorage([], roundNumber);
+                }
             }
             
             // Set all participants for leaderboard/other uses
-            setAllParticipants(participants.all);
+            if (participants.all && Array.isArray(participants.all)) {
+                setAllParticipants(participants.all);
+            }
             
             // Update lobby participants if this is the selected round for users (pre-filtered by backend)
             if (roundNumber === selectedRoundForUsers) {
-                console.log(`[UPDATING LOBBY USERS for round ${roundNumber}]`, participants.byStatus.lobby);
-                setParticipants(participants.byStatus.lobby);
+                console.log(`[UPDATING LOBBY USERS for round ${roundNumber}]`, participants.byStatus?.lobby);
+                setParticipants(participants.byStatus?.lobby || []);
+                // Save to localStorage
+                saveParticipantsToStorage(participants.byStatus?.lobby || []);
             }
         };
 
@@ -245,13 +290,25 @@ export default function Admin() {
             socket.off('round2:state', handleStateResponse);
             socket.off('round3:state', handleStateResponse);
         };
-    }, [socket, activeRoundNumber, selectedRoundForUsers, selectedRoundForMatches]);
+    }, [socket, activeRoundNumber, selectedRoundForUsers, selectedRoundForMatches, saveParticipantsToStorage, saveMatchParticipantsToStorage]);
 
     const handleStartRound = (roundNumber: number) => {
         if (!socket || participants.length === 0) return;
-        socket.emit(`round${roundNumber}:ready`, {}, (response: SimpleSocketResponse) => {
+        socket.emit(`round${roundNumber}:ready`, {}, (response: BaseRoundState) => {
             if (response.success) {
                 showSuccessToast(`Round ${roundNumber} started successfully`);
+                
+                // Clear lobby participants from localStorage
+                localStorage.removeItem('participants');
+                setParticipants([]);
+                
+                // Switch to the match view for this round
+                setSelectedRoundForMatches(roundNumber);
+                
+                // Fetch the updated state to get in-progress participants
+                setTimeout(() => {
+                    fetchMatchUsers(roundNumber);
+                }, 500); // Small delay to ensure backend has processed the state change
             } else {
                 showErrorToast(response.error || 'Failed to start the round');
             }
@@ -269,7 +326,7 @@ export default function Admin() {
           return;
         }
         
-        socket.emit("admin:endRound", { roundNumber }, (response: SimpleSocketResponse) => {
+        socket.emit("admin:endRound", { roundNumber }, (response: BaseRoundState) => {
           if (response?.success) {
             showSuccessToast(`Round ${roundNumber} ended successfully`);
           } else {
@@ -309,6 +366,16 @@ export default function Admin() {
         socket.emit('admin:reset');
         showInfoToast('Resetting Redis...');
         setShowResetRedisConfirm(false);
+        
+        // Clear all participants from localStorage when resetting Redis
+        localStorage.removeItem('participants');
+        [0, 1, 2, 3].forEach(round => {
+            localStorage.removeItem(`matchParticipants-round${round}`);
+        });
+        
+        // Clear current state
+        setParticipants([]);
+        setMatchParticipants([]);
     };
 
     const handleResetRedisClick = () => {
@@ -430,7 +497,9 @@ export default function Admin() {
             if (0 === selectedRoundForUsers) {
                 console.log('[LOBBY UPDATE Round 0]', data);
                 if (data.participants) {
-                    setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                    const lobbyUsers = data.participants.filter((p: Participant) => p.status === 'lobby');
+                    setParticipants(lobbyUsers);
+                    saveParticipantsToStorage(lobbyUsers);
                 }
             }
         };
@@ -439,7 +508,9 @@ export default function Admin() {
             if (1 === selectedRoundForUsers) {
                 console.log('[LOBBY UPDATE Round 1]', data);
                 if (data.participants) {
-                    setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                    const lobbyUsers = data.participants.filter((p: Participant) => p.status === 'lobby');
+                    setParticipants(lobbyUsers);
+                    saveParticipantsToStorage(lobbyUsers);
                 }
             }
         };
@@ -448,7 +519,9 @@ export default function Admin() {
             if (2 === selectedRoundForUsers) {
                 console.log('[LOBBY UPDATE Round 2]', data);
                 if (data.participants) {
-                    setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                    const lobbyUsers = data.participants.filter((p: Participant) => p.status === 'lobby');
+                    setParticipants(lobbyUsers);
+                    saveParticipantsToStorage(lobbyUsers);
                 }
             }
         };
@@ -457,7 +530,9 @@ export default function Admin() {
             if (3 === selectedRoundForUsers) {
                 console.log('[LOBBY UPDATE Round 3]', data);
                 if (data.participants) {
-                    setParticipants(data.participants.filter((p: Participant) => p.status === 'lobby'));
+                    const lobbyUsers = data.participants.filter((p: Participant) => p.status === 'lobby');
+                    setParticipants(lobbyUsers);
+                    saveParticipantsToStorage(lobbyUsers);
                 }
             }
         };
@@ -473,81 +548,9 @@ export default function Admin() {
             socket.off('lobby:round2', handleLobbyUpdate2);
             socket.off('lobby:round3', handleLobbyUpdate3);
         };
-    }, [socket, selectedRoundForUsers]);
+    }, [socket, selectedRoundForUsers, saveParticipantsToStorage]);
 
-    // Listen for live match updates - DISABLED to prevent interference
-    // The backend lobby events don't contain reliable match data
-    // We only rely on the initial fetch via round:state events
-    /*
-    useEffect(() => {
-        if (!socket) return;
-
-        const handleMatchUpdate = (roundNumber: number) => (data: { participants?: Participant[] }) => {
-            console.log(`[LOBBY UPDATE round${roundNumber}]`, data);
-            // Only update if this is the currently selected round
-            if (roundNumber === selectedRoundForMatches && data.participants && data.participants.length > 0) {
-                const activeUsers = data.participants.filter(
-                    (p: Participant) => p.status === 'waiting' || p.status === 'in-match'
-                );
-                
-                console.log(`[ACTIVE USERS FROM LOBBY round${roundNumber}]`, activeUsers);
-                
-                // Only update if we have active users to show
-                if (activeUsers.length > 0) {
-                    // Get users who are in-match
-                    const inMatchUsers = activeUsers.filter(p => p.status === 'in-match');
-                    
-                    const matchInfo: MatchParticipant[] = activeUsers.map((user: Participant) => {
-                        const matchData: MatchParticipant = {
-                            id: user.id,
-                            username: user.username,
-                            status: user.status as 'waiting' | 'in-match',
-                        };
-                        
-                        // If user is in-match, try to find their opponent
-                        if (user.status === 'in-match') {
-                            // First try using opponentId if available
-                            if (user.opponentId) {
-                                const opponent = data.participants?.find(
-                                    (p: Participant) => p.id === user.opponentId
-                                );
-                                if (opponent) {
-                                    matchData.opponentUsername = opponent.username;
-                                }
-                            } else if (inMatchUsers.length === 2) {
-                                // Fallback: If there are exactly 2 users in-match and no opponentId,
-                                // assume they're matched against each other
-                                const otherUser = inMatchUsers.find(p => p.id !== user.id);
-                                if (otherUser) {
-                                    matchData.opponentUsername = otherUser.username;
-                                }
-                            }
-                        }
-                        
-                        return matchData;
-                    });
-                    
-                    console.log('[SETTING MATCH PARTICIPANTS FROM LOBBY UPDATE]', matchInfo);
-                    setMatchParticipants(matchInfo);
-                } else {
-                    console.log('[NO ACTIVE USERS - NOT CLEARING STATE]');
-                }
-            }
-        };
-
-        socket.on('lobby:round1', handleMatchUpdate(1));
-        socket.on('lobby:round2', handleMatchUpdate(2));
-        socket.on('lobby:round3', handleMatchUpdate(3));
-
-        return () => {
-            socket.off('lobby:round1', handleMatchUpdate(1));
-            socket.off('lobby:round2', handleMatchUpdate(2));
-            socket.off('lobby:round3', handleMatchUpdate(3));
-        };
-    }, [socket, selectedRoundForMatches]);
-    */
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    
   const resetAllRounds = async () => {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds/reset`, {
@@ -673,6 +676,10 @@ export default function Admin() {
 
     return (
         <>
+        <LoadingOverlay 
+          isLoading={isLoading || !session}
+          message={isLoading ? "Verifying authentication..." : "Checking admin access..."}
+        />
         {isAdmin && (
         <div className="min-h-screen w-full bg-[url('/bg-dashboard.svg')] bg-cover bg-center flex items-center justify-center px-5">
           {/* End Round Confirmation Modal */}
@@ -972,7 +979,7 @@ export default function Admin() {
                       <div className="max-h-64 overflow-y-auto space-y-2">
                         {participants.map((participant, idx) => (
                           <div
-                            key={`participant-${participant.id}-${idx}`}
+                            key={`participant-${participant.userId}-${idx}`}
                             className="flex items-center justify-between bg-gray-600/50 px-3 py-2 rounded text-sm"
                           >
                             <div className="flex items-center gap-3">
@@ -1002,6 +1009,9 @@ export default function Admin() {
                     <button
                       key={round}
                       onClick={() => {
+                        console.log(`[MATCH BUTTON CLICKED] Round ${round}`);
+                        // Clear match participants immediately when switching rounds
+                        setMatchParticipants([]);
                         setSelectedRoundForMatches(round);
                         fetchMatchUsers(round);
                       }}
@@ -1025,7 +1035,7 @@ export default function Admin() {
                       <div className="max-h-96 overflow-y-auto space-y-2">
                         {matchParticipants.map((participant, idx) => (
                           <div
-                            key={`match-${participant.id}-${idx}`}
+                            key={`match-${participant.userId}-${idx}`}
                             className={`bg-gray-600/50 px-4 py-3 rounded border-l-4 ${
                               participant.status === 'in_match' ? 'border-blue-500' : 'border-yellow-500'
                             }`}
@@ -1061,14 +1071,14 @@ export default function Admin() {
               </div>
             </div>
 
-            {/* Leaderboard Section (from waiting room) */}
+            {/* Leaderboard Section (using match participants for consistency) */}
             <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
               <div className="flex items-center mb-4">
                 <img src="/leaderboard-img.svg" alt="Leaderboard Icon" width={16} height={16} />
-                <p className="text-2xl text-orange-500 ml-2">Round 1 Participants</p>
+                <p className="text-2xl text-orange-500 ml-2">Round {selectedRoundForMatches} Participants</p>
               </div>
               <div className="overflow-x-auto">
-                {Array.isArray(allParticipants) && allParticipants.length > 0 ? (
+                {Array.isArray(matchParticipants) && matchParticipants.length > 0 ? (
                   <table className="w-full text-left text-sm text-white">
                     <thead>
                       <tr className="border-b border-gray-700">
@@ -1079,28 +1089,21 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {allParticipants
-                        .slice()
-                        .sort((a, b) => {
-                          const aScore = typeof a.eventScore === 'number' ? a.eventScore : 0;
-                          const bScore = typeof b.eventScore === 'number' ? b.eventScore : 0;
-                          return bScore - aScore;
-                        })
-                        .map((p, idx) => (
-                          <tr key={`${p.id}-${idx}`} className="border-gray-800 hover:bg-white/5 transition">
-                            <td className="py-2 px-3">{idx + 1}</td>
-                            <td className="py-2 px-3 max-w-[100px] truncate">{p.username}</td>
-                            <td className="py-2 px-3 font-mono text-cyan-400">{typeof p.eventScore === 'number' ? p.eventScore : '...'}</td>
-                            <td className="py-2 px-3 text-sm">
-                              {typeof p.status === 'string' ? p.status.charAt(0).toUpperCase() + p.status.slice(1) : ''}
-                            </td>
-                          </tr>
-                        ))}
+                      {matchParticipants.map((p, idx) => (
+                        <tr key={`${p.userId}-${idx}`} className="border-gray-800 hover:bg-white/5 transition">
+                          <td className="py-2 px-3">{idx + 1}</td>
+                          <td className="py-2 px-3 max-w-[100px] truncate">{p.username}</td>
+                          <td className="py-2 px-3 font-mono text-cyan-400">0</td>
+                          <td className="py-2 px-3 text-sm">
+                            {p.status === 'in_match' ? 'In-match' : 'Waiting'}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-400">
-                    <p>No participants in the lobby yet.</p>
+                    <p>No active participants in Round {selectedRoundForMatches}.</p>
                   </div>
                 )}
               </div>

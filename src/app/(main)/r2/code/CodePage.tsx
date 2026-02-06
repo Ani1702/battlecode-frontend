@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Editor, { useMonaco } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { useAuth } from '@/contexts/AuthContext';
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import Button from '@/components/shared/ColoredBtn';
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/components/shared/CustomToast';
+import SecureWrapper from '@/components/shared/SecureWrapper';
 
 interface Problem {
   id: string;
@@ -88,6 +90,8 @@ export default function CodePage({
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
 
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+
   const editorOptions = {
     minimap: { enabled: false },
     fontSize: 14,
@@ -156,6 +160,36 @@ export default function CodePage({
       console.error('Error updating code for language change:', error);
     }
   }, [language, currentProblem]);
+
+  function handleEditorMount(
+    editor: monaco.editor.IStandaloneCodeEditor,
+    monacoInstance: typeof import('monaco-editor')
+  ){
+    editorRef.current = editor;
+
+    //comment here to enable copy-paste
+    // Disable paste via context menu
+    editor.addAction({
+      id: "disable-paste",
+      label: "Paste",
+      keybindings: [],
+      precondition: "false",
+      run: () => {}
+    });
+    // Block DOM paste events
+    const domNode = editor.getDomNode();
+    if (domNode) {
+      domNode.addEventListener("paste", (e: ClipboardEvent) => {
+        e.preventDefault();
+        showErrorToast("Paste is disabled");
+      }, true);
+    }
+    // Block keyboard shortcut Ctrl/Cmd+V
+    editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+      showErrorToast("Paste shortcut is disabled");
+    });
+  }
+  //till here
 
   const executeCode = async (isSubmission = false) => {
     if (!currentProblem) {
@@ -378,6 +412,8 @@ export default function CodePage({
   }
 
   return (
+    //remove this securewrapper also to disable copy paste
+    <SecureWrapper>
     <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
       <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
         <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
@@ -505,6 +541,7 @@ export default function CodePage({
                 onChange={(value) => setCode(value || "")}
                 theme="custom-dark"
                 options={editorOptions}
+                onMount={handleEditorMount}
                 loading={
                   <div className="flex items-center justify-center h-full bg-gray-900">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
@@ -568,5 +605,6 @@ export default function CodePage({
         </div>
       </div>
     </div>
+    </SecureWrapper>
   );
 }

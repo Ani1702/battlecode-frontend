@@ -7,6 +7,7 @@ import { useSocket } from "@/contexts/SocketContext";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showErrorToast, showSuccessToast } from "@/components/shared/CustomToast";
 import SignOut from "@/components/auth/SignOut";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 // Interfaces
 interface LeaderboardEntry {
@@ -301,23 +302,19 @@ export default function Dashboard() {
     <>
       <div className="bg-[url('/bg-dashboard.svg')] h-screen bg-cover bg-center flex flex-col relative overflow-hidden">
         {/* Loading/Authentication Overlay */}
-        {(isLoading || !user || !session) && (
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="text-center justify-center items-center">
-              <div className="mb-4 flex items-center justify-center">
-                <Image src="/battlecode_logo.png" alt="Loading..." className="flex h-50 w-fit animate-pulse" width={200} height={50} />
-              </div>
-              <p className="text-gray-400">
-                {isLoading ? "Verifying authentication..." : "Redirecting..."}
-              </p>
-            </div>
-          </div>
-        )}
-        <div className="flex-shrink-0 h-20">
+        <LoadingOverlay 
+          isLoading={isLoading || !user || !session}
+          message={isLoading ? "Verifying authentication..." : "Redirecting..."}
+        />
+        <div className="flex-shrink-0 h-15 bg-white/1">
           <div className="h-full">
-          <div className="flex-1 ml-3 orbitron flex justify-start items-start h-full">
-            <p className="flex-1 mt-2 orbitron text-white">{"<> Battlecode Arena"}</p>
-            <div className="flex-1 flex justify-end mr-2 mt-2">
+          <div className="flex-1 ml-3 orbitron flex justify-between items-start h-full px-2 pt-2">
+            <p className="orbitron text-white my-0">{"<> Battlecode Arena"}</p>
+            <div className="flex flex-col items-center mr-20">
+              <p className="text-[10px] text-white">Powered by</p>
+              <p className="text-lg text-orange-400 font-semibold -mt-0.5">Judge0</p>
+            </div>
+            <div className="flex justify-end">
               <SignOut />
             </div>
           </div>

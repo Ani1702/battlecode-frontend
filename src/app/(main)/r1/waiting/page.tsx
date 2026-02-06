@@ -8,6 +8,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 // Interfaces
 interface Participant {
@@ -299,11 +300,7 @@ export default function WaitingRoomR1() {
 
   // Early return
   if (authLoading || isLoading) {
-    console.log("auth loading");
-    console.log(authLoading);
-    console.log("is loading");
-    console.log(isLoading);
-    return <div className="flex items-center justify-center h-screen bg-black text-white">Loading Waiting Room...</div>;
+    return <LoadingOverlay isLoading={true} message="Loading Waiting Room..." />;
   }
 
   // JSX Return

@@ -10,6 +10,7 @@ import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import HackModal from "@/components/shared/HackModal";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
 import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play, ChevronLeft, ChevronRight, Lock, Swords, Clock, MemoryStick } from "lucide-react";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 
 // --- Interfaces ---
@@ -727,7 +728,7 @@ if (domNode) {
   };
 
   // --- Render Logic ---
-  if (pageIsLoading) return <div className="flex items-center justify-center h-screen bg-black/40 text-white"><p>Loading Round...</p></div>;
+  if (pageIsLoading) return <LoadingOverlay isLoading={true} message="Loading Round..." />;
   if (!currentProblem) return <div className="flex items-center justify-center h-screen bg-black/40 text-white"><p>Problem data not available. Please wait or return to the lobby.</p></div>;
 
   const saveStatusDisplay = getSaveStatusDisplay();

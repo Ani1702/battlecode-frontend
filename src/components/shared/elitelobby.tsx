@@ -7,6 +7,7 @@ import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/sh
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import IncomingEliteCard from '@/components/shared/IncomingEliteCard';
 import BountyQuestionCard, { BountyQuestion } from '@/components/shared/BountyQuestionCard';
+import LoadingOverlay from '@/components/shared/LoadingOverlay';
 
 // --- Interfaces ---
 interface Participant {
@@ -302,7 +303,7 @@ export default function EliteDashboard() {
   }, [socket, handleRemoveChallenger]);
   
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-white bg-gray-900">Checking session status...</div>;
+    return <LoadingOverlay isLoading={true} message="Checking session status..." />;
   }
 
   return (

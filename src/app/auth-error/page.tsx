@@ -2,6 +2,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 function AuthErrorContent() {
   const router = useRouter();
@@ -98,14 +99,7 @@ function AuthErrorContent() {
 
 export default function AuthErrorPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<LoadingOverlay isLoading={true} message="Loading..." />}>
       <AuthErrorContent />
     </Suspense>
   );

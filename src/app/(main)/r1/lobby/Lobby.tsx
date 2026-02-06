@@ -9,6 +9,7 @@ import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
+import LoadingOverlay from '@/components/shared/LoadingOverlay';
 
 // Interfaces
 interface Participant {
@@ -280,10 +281,11 @@ export default function Lobbyr1(){
 
     // Early return
     if (authLoading || !authenticationChecked || isCheckingRound) {
-        return ( 
-            <div className="flex items-center justify-center h-screen text-white">
-                {authLoading ? "Loading Authentication..." : "Checking Round Status..."}
-            </div> 
+        return (
+            <LoadingOverlay 
+                isLoading={true} 
+                message={authLoading ? "Loading Authentication..." : "Checking Round Status..."}
+            />
         );
     }
 
@@ -350,7 +352,7 @@ export default function Lobbyr1(){
             </div>
 
             {!isRoundActive && !roundStarted && (
-                <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
+                <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3 mb-3">
                     <div className="text-sm text-gray-200 text-center">
                         {!isConnected ? (
                             <div>
@@ -362,7 +364,7 @@ export default function Lobbyr1(){
                                 </div>
                             </div>
                         ) : participants.length > 0 ? (
-                            <div>
+                            <div >
                                 <p className="text-green-400">Connected to lobby. Waiting for more participants...</p>
                                 {!isLoading && (
                                     <div className="flex justify-center items-center gap-2 mt-2">
@@ -405,6 +407,13 @@ export default function Lobbyr1(){
                     )} */}
                 </div>
             )}
+            
+            {/* Powered by Judge0 Footer */}
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
+                <p className="text-white/60 text-sm font-oxanium">
+                    Powered by <span className="text-orange-500 font-semibold">Judge0</span>
+                </p>
+            </div>
         </div>
     );
 }
