@@ -35,13 +35,6 @@ interface CurrentRoundData {
   rounds: RoundStatus[];
 }
 
-interface MatchParticipant {
-  userId: string;
-  username: string;
-  status: 'waiting' | 'in_match'; // Redis participant status (lowercase with underscore)
-  opponentUsername?: string;
-}
-
 export default function Admin() {
     const [isAdmin, setIsAdmin] = useState(false);
     const [adminLoading, setAdminLoading] = useState(false);
@@ -52,7 +45,7 @@ export default function Admin() {
     const [showEndRoundConfirm, setShowEndRoundConfirm] = useState(false);
     const [roundToEnd, setRoundToEnd] = useState<number | null>(null);
     const [showResetRedisConfirm, setShowResetRedisConfirm] = useState(false);
-    const [matchParticipants, setMatchParticipants] = useState<MatchParticipant[]>([]);
+    const [matchParticipants, setMatchParticipants] = useState<Participant[]>([]);
     const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(0);
     
     // Helper functions for localStorage persistence
@@ -75,7 +68,7 @@ export default function Admin() {
     }, []);
 
     // Match participants localStorage functions
-    const saveMatchParticipantsToStorage = useCallback((matchList: MatchParticipant[], roundNum: number) => {
+    const saveMatchParticipantsToStorage = useCallback((matchList: Participant[], roundNum: number) => {
         try {
             localStorage.setItem(`matchParticipants-round${roundNum}`, JSON.stringify(matchList));
         } catch (error) {
@@ -83,7 +76,7 @@ export default function Admin() {
         }
     }, []);
 
-    const loadMatchParticipantsFromStorage = useCallback((roundNum: number): MatchParticipant[] => {
+    const loadMatchParticipantsFromStorage = useCallback((roundNum: number): Participant[] => {
         try {
             const saved = localStorage.getItem(`matchParticipants-round${roundNum}`);
             return saved ? JSON.parse(saved) : [];
@@ -193,26 +186,15 @@ export default function Admin() {
         if (!socket) return;
 
         const handleStateResponse = (response: BaseRoundState) => {
-            console.log(`[STATE RESPONSE Round ${response.roundNumber}]`, response);
             if (!response.success) return;
             
-            const { roundNumber, round, participants, currentUser } = response;
+            const { roundNumber, round, participants, currentUser, session } = response;
             
             // Early return if required data is missing
             // Fix: Use explicit checks for null/undefined instead of falsy check (roundNumber can be 0)
             if (roundNumber === null || roundNumber === undefined || !round || !participants) {
-                console.log('[MISSING DATA] Response missing required fields');
                 return;
             }
-            
-            console.log(`[EXTRACTED DATA Round ${roundNumber}]`, {
-                isActive: round.isActive,
-                status: round.status,
-                participantsTotal: participants.total,
-                lobbyCount: participants.byStatus?.lobby?.length || 0,
-                waitingCount: participants.byStatus?.waiting?.length || 0,
-                inMatchCount: participants.byStatus?.in_match?.length || 0
-            });
             
             // Check if this round is active and update active round state
             if (round.isActive) {
@@ -222,6 +204,11 @@ export default function Admin() {
                 // Use roundSpecific for Round 1's nextMatchmakingCycle
                 setNextMatchmakingCycle(response.roundSpecific?.nextMatchmakingCycle ?? null);
                 if (currentUser) setCurrentUser(currentUser);
+                
+                // Auto-switch to match view when round starts if we're viewing this round's lobby
+                if (roundNumber === selectedRoundForUsers) {
+                    setSelectedRoundForMatches(roundNumber);
+                }
             } else if (!round.isActive && activeRoundNumber === roundNumber) {
                 setIsRoundActive(false);
                 setActiveRoundNumber(null);
@@ -237,28 +224,36 @@ export default function Admin() {
                     ...(participants.byStatus?.in_match || [])
                 ];
                 
-                console.log(`[ACTIVE USERS for round ${roundNumber}]`, activeUsers);
-                console.log(`[SELECTED ROUND FOR MATCHES]`, selectedRoundForMatches);
-                console.log(`[WAITING USERS]`, participants.byStatus?.waiting);
-                console.log(`[IN_MATCH USERS]`, participants.byStatus?.in_match);
+                // Client-side opponent matching: If opponentUsername is undefined, match users by pairs
+                const activeUsersWithOpponents = activeUsers.map((user, index) => {
+                    // If backend already provided opponentUsername and it's not "undefined", use it
+                    if (user.opponentUsername && user.opponentUsername !== 'undefined') {
+                        return user;
+                    }
+                    
+                    // Client-side matching: pair users in order (0-1, 2-3, etc.)
+                    if (user.status === 'in_match') {
+                        const isEvenIndex = index % 2 === 0;
+                        const opponentIndex = isEvenIndex ? index + 1 : index - 1;
+                        const opponent = activeUsers[opponentIndex];
+                        
+                        if (opponent && opponent.status === 'in_match') {
+                            return {
+                                ...user,
+                                opponentUsername: opponent.username
+                            };
+                        }
+                    }
+                    
+                    return user;
+                });
                 
-                // Build match info - backend already includes opponentUsername
-                const matchInfo: MatchParticipant[] = activeUsers.map(user => ({
-                    userId: user.userId,
-                    username: user.username,
-                    status: user.status as 'waiting' | 'in_match',
-                    opponentUsername: user.opponentUsername
-                }));
-                
-                console.log('[SETTING MATCH PARTICIPANTS FROM STATE]', matchInfo);
-                setMatchParticipants(matchInfo);
+                setMatchParticipants(activeUsersWithOpponents);
                 // Save to localStorage
-                saveMatchParticipantsToStorage(matchInfo, roundNumber);
+                saveMatchParticipantsToStorage(activeUsersWithOpponents, roundNumber);
             } else {
-                console.log(`[NOT UPDATING MATCHES] round.isActive: ${round.isActive}, roundNumber: ${roundNumber}, selectedRoundForMatches: ${selectedRoundForMatches}`);
                 if (!round.isActive && roundNumber === selectedRoundForMatches) {
                     // Round is NOT active - clear match participants for this round
-                    console.log('[ROUND NOT ACTIVE - CLEARING MATCH PARTICIPANTS]');
                     setMatchParticipants([]);
                     saveMatchParticipantsToStorage([], roundNumber);
                 }
@@ -271,7 +266,6 @@ export default function Admin() {
             
             // Update lobby participants if this is the selected round for users (pre-filtered by backend)
             if (roundNumber === selectedRoundForUsers) {
-                console.log(`[UPDATING LOBBY USERS for round ${roundNumber}]`, participants.byStatus?.lobby);
                 setParticipants(participants.byStatus?.lobby || []);
                 // Save to localStorage
                 saveParticipantsToStorage(participants.byStatus?.lobby || []);
@@ -493,44 +487,44 @@ export default function Admin() {
     useEffect(() => {
         if (!socket) return;
 
-        const handleLobbyUpdate0 = (data: { participants?: Participant[] }) => {
+        const handleLobbyUpdate0 = (data: BaseRoundState) => {
             if (0 === selectedRoundForUsers) {
                 console.log('[LOBBY UPDATE Round 0]', data);
-                if (data.participants) {
-                    const lobbyUsers = data.participants.filter((p: Participant) => p.status === 'lobby');
+                if (data.participants?.byStatus?.lobby) {
+                    const lobbyUsers = data.participants.byStatus.lobby;
                     setParticipants(lobbyUsers);
                     saveParticipantsToStorage(lobbyUsers);
                 }
             }
         };
 
-        const handleLobbyUpdate1 = (data: { participants?: Participant[] }) => {
+        const handleLobbyUpdate1 = (data: BaseRoundState) => {
             if (1 === selectedRoundForUsers) {
                 console.log('[LOBBY UPDATE Round 1]', data);
-                if (data.participants) {
-                    const lobbyUsers = data.participants.filter((p: Participant) => p.status === 'lobby');
+                if (data.participants?.byStatus?.lobby) {
+                    const lobbyUsers = data.participants.byStatus.lobby;
                     setParticipants(lobbyUsers);
                     saveParticipantsToStorage(lobbyUsers);
                 }
             }
         };
 
-        const handleLobbyUpdate2 = (data: { participants?: Participant[] }) => {
+        const handleLobbyUpdate2 = (data: BaseRoundState) => {
             if (2 === selectedRoundForUsers) {
                 console.log('[LOBBY UPDATE Round 2]', data);
-                if (data.participants) {
-                    const lobbyUsers = data.participants.filter((p: Participant) => p.status === 'lobby');
+                if (data.participants?.byStatus?.lobby) {
+                    const lobbyUsers = data.participants.byStatus.lobby;
                     setParticipants(lobbyUsers);
                     saveParticipantsToStorage(lobbyUsers);
                 }
             }
         };
 
-        const handleLobbyUpdate3 = (data: { participants?: Participant[] }) => {
+        const handleLobbyUpdate3 = (data: BaseRoundState) => {
             if (3 === selectedRoundForUsers) {
                 console.log('[LOBBY UPDATE Round 3]', data);
-                if (data.participants) {
-                    const lobbyUsers = data.participants.filter((p: Participant) => p.status === 'lobby');
+                if (data.participants?.byStatus?.lobby) {
+                    const lobbyUsers = data.participants.byStatus.lobby;
                     setParticipants(lobbyUsers);
                     saveParticipantsToStorage(lobbyUsers);
                 }
@@ -681,7 +675,7 @@ export default function Admin() {
           message={isLoading ? "Verifying authentication..." : "Checking admin access..."}
         />
         {isAdmin && (
-        <div className="min-h-screen w-full bg-[url('/bg-dashboard.svg')] bg-cover bg-center flex items-center justify-center px-5">
+        <div className="min-h-screen w-full bg-[url('/bg-dashboard.svg')] bg-cover bg-center flex items-center justify-center px-5 py-8">
           {/* End Round Confirmation Modal */}
           {showEndRoundConfirm && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
@@ -735,6 +729,28 @@ export default function Admin() {
           )}
 
           <div className="w-full max-w-6xl rounded-lg border-2 border-orange-500/50 glass-box p-6">
+            {/* Admin Access Information Section */}
+            <div className="mb-8 bg-gradient-to-r from-orange-600/20 to-red-600/20 border-2 border-orange-500 rounded-lg p-6">
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
+                <h2 className="text-2xl font-bold text-orange-400">
+                  Admin Panel Access Restricted
+                </h2>
+                <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
+              </div>
+              <div className="text-center space-y-2">
+                <p className="text-white text-lg">
+                  <span className="text-gray-300">Authorized Admin:</span> <span className="font-semibold text-orange-300">Aryan Jain (Tech Lead)</span>
+                </p>
+                <p className="text-white">
+                  <span className="text-gray-300">Email:</span> <span className="font-mono text-orange-200">aryanramesh.jain2023@vitstudent.ac.in</span>
+                </p>
+                <p className="text-white">
+                  <span className="text-gray-300">Registration Number:</span> <span className="font-mono text-orange-200">23BCT0020</span>
+                </p>
+              </div>
+            </div>
+
             {/* --- Active Round Section (generalized for any round) --- */}
             <div className="mb-8">
               {isRoundActive && activeRoundNumber !== null && (
@@ -1009,7 +1025,6 @@ export default function Admin() {
                     <button
                       key={round}
                       onClick={() => {
-                        console.log(`[MATCH BUTTON CLICKED] Round ${round}`);
                         // Clear match participants immediately when switching rounds
                         setMatchParticipants([]);
                         setSelectedRoundForMatches(round);
@@ -1045,7 +1060,14 @@ export default function Admin() {
                                 <div className={`w-2 h-2 rounded-full ${
                                   participant.status === 'in_match' ? 'bg-blue-500' : 'bg-yellow-500'
                                 }`}></div>
-                                <span className="text-white font-medium">{participant.username}</span>
+                                <div className="flex flex-col">
+                                  <span className="text-white font-medium">{participant.username}</span>
+                                  {participant.status === 'in_match' && participant.opponentUsername && (
+                                    <span className="text-sm text-blue-300 mt-1">
+                                      🎮 vs <span className="font-semibold text-blue-200">{participant.opponentUsername}</span>
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <span className={`text-xs font-semibold uppercase ${
                                 participant.status === 'in_match' ? 'text-blue-400' : 'text-yellow-400'
@@ -1053,11 +1075,6 @@ export default function Admin() {
                                 {participant.status === 'in_match' ? 'In Match' : 'Waiting'}
                               </span>
                             </div>
-                            {participant.status === 'in_match' && participant.opponentUsername && (
-                              <div className="text-sm text-gray-300 mt-2 ml-5">
-                                vs <span className="font-medium">{participant.opponentUsername}</span>
-                              </div>
-                            )}
                           </div>
                         ))}
                       </div>

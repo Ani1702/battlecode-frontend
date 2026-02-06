@@ -38,14 +38,77 @@ interface RoundEndData {
   message?: string;
 }
 
+interface Participant {
+  userId: string;
+  username: string;
+  email?: string;
+  role?: string;
+  status: string;
+  rank?: number;
+  eventScore?: number;
+  socketId?: string;
+  joinedAt?: string;
+  disconnectedAt?: string;
+  reconnectedAt?: string;
+  finishedAt?: string;
+  cooldownEndTime?: number;
+  isReady?: boolean;
+}
+
+interface UserProgress {
+  problemsSolved: number;
+  currentProblem: number;
+  score: number;
+  lastActivity: string;
+}
+
 interface StateResponse {
   success?: boolean;
-  error?: { message?: string } | string;
-  currentProblem?: Problem;
-  problemIndex?: number;
-  timeRemaining?: number;
-  problems?: Problem[];
-  [key: string]: unknown;
+  error?: string;
+  timestamp?: number;
+  roundNumber?: number;
+  
+  round?: {
+    isActive: boolean;
+    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED';
+    startTime: number | null;
+    endTime: number | null;
+    timeRemaining: number;
+    duration: number;
+  };
+  
+  participants?: {
+    total: number;
+    byStatus: {
+      lobby: Array<Participant>;
+      waiting: Array<Participant>;
+      in_match: Array<Participant>;
+      cooldown: Array<Participant>;
+      finished: Array<Participant>;
+      disconnected: Array<Participant>;
+    };
+    all: Array<Participant>;
+  };
+  
+  currentUser?: Participant | null;
+  
+  session?: {
+    type: 'match' | 'bounty' | 'problem';
+    id: string;
+    startTime: number;
+    endTime: number;
+    timeRemaining: number;
+    problem?: Problem;
+    problems?: Array<Problem>;
+    currentProblemIndex?: number;
+    totalProblems?: number;
+  };
+  
+  roundSpecific?: {
+    progress?: UserProgress;
+  };
+  
+  message?: string;
 }
 
 interface NextQuestionResponse {
@@ -83,7 +146,12 @@ export default function R0Code() {
 
   // --- Socket Event Listeners ---
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!socket || !isConnected) {
+      console.log("[Socket Listeners] Socket not ready. Socket:", !!socket, "Connected:", isConnected);
+      return;
+    }
+    
+    console.log("[Socket Listeners] Setting up socket event listeners for round0");
     
     const handleTimerUpdate = (data: TimerData) => {
       if (isMountedRef.current) setTimeRemaining(data.timeRemaining || 0);
@@ -111,17 +179,28 @@ export default function R0Code() {
     };
 
     const handleAdminAdded = () => {
-      console.log("You have been added to Round 0 by an admin");
+      console.log("handleAdminAdded triggered - You have been added to Round 0 by an admin");
+      console.log("Socket available:", !!socket, "Socket connected:", isConnected);
+      
+      if (!socket || !isConnected) {
+        console.error("Socket not available or not connected");
+        showErrorToast("Connection error. Please refresh the page.");
+        return;
+      }
 
       // Check current round status
-      socket?.emit("user:current-round", {}, (response: { success: boolean; currentRound?: { currentRoundNumber: number; currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS'; }; error?: string }) => {
+      console.log("Emitting user:current-round request...");
+      socket.emit("user:current-round", {}, (response: { success: boolean; currentRound?: { currentRoundNumber: number; currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS'; }; error?: string }) => {
+        console.log("user:current-round response received:", response);
+        
         if (!response.success || !response.currentRound) {
+          console.error("Failed to get current round:", response);
           showErrorToast("Failed to check round status");
           return;
         }
 
         const { currentRoundNumber, currentRoundStatus } = response.currentRound;
-        console.log(currentRoundNumber, currentRoundStatus);
+        console.log("Current round number:", currentRoundNumber, "Status:", currentRoundStatus);
 
         if (currentRoundNumber !== 0) {
           showErrorToast("Round 0 is not the current round");
@@ -197,17 +276,15 @@ export default function R0Code() {
     if (!isMountedRef.current) return;
 
     try {
-      if (response?.currentProblem) {
-        setCurrentProblem(response.currentProblem);
-        setCurrentProblemIndex(response.problemIndex || 0);
-        setTimeRemaining(response.timeRemaining || 0);
-        setProblems(response.problems || [response.currentProblem]);
+      if (response?.session?.problem && response?.round?.isActive) {
+        setCurrentProblem(response.session.problem);
+        setCurrentProblemIndex(response.session.currentProblemIndex || 0);
+        setTimeRemaining(response.session.timeRemaining || 0);
+        setProblems(response.session.problems || [response.session.problem]);
+        setRoundDuration(response.round.duration || 600);
         setIsRoundActive(true);
       } else {
-        const errorMessage =
-          typeof response?.error === 'string'
-            ? response.error
-            : (response?.error?.message || 'No active round found.');
+        const errorMessage = response?.error || 'No active round found.';
 
         showErrorToast(errorMessage);
         localStorage.removeItem(`battlecode-round-0-code-store`);

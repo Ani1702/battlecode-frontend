@@ -9,20 +9,35 @@ import Image from "next/image";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import LoadingOverlay from "@/components/shared/LoadingOverlay";
+import { BaseRoundState } from "@/types/roundState";
 
 // Interfaces
 interface Participant {
-  id: string;
+  userId: string;
   username: string;
-  rank: number;
+  email?: string;
+  role?: string;
+  status: string;
+  rank?: number;
   eventScore?: number;
-  status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
+  socketId?: string;
+  joinedAt?: string;
+  disconnectedAt?: string;
+  reconnectedAt?: string;
+  finishedAt?: string;
   cooldownEndTime?: number;
-  [key: string]: unknown;
+  isReady?: boolean;
+}
+
+interface Problem {
+  id: string;
+  title: string;
+  difficulty: string;
+  description?: string;
 }
 
 interface MatchFoundData {
-  opponent: { id: string; rank?: number };
+  opponent: { userId: string; username: string; rank?: number };
   question: { id: string; title: string; };
   startTime: number;
   duration: number;
@@ -30,13 +45,48 @@ interface MatchFoundData {
 
 interface GetStateResponse {
     success: boolean;
-    isActive?: boolean;
-    globalTimeRemaining?: number;
-    allParticipants?: Participant[];
-    nextMatchmakingCycle?: number;
-    participant?: Participant;
-    matchData?: MatchFoundData;
     error?: string;
+    timestamp?: number;
+    roundNumber?: number;
+    round?: {
+        isActive: boolean;
+        status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED';
+        startTime: number | null;
+        endTime: number | null;
+        timeRemaining: number;
+        duration: number;
+    };
+    participants?: {
+        total: number;
+        byStatus: {
+            lobby: Array<Participant>;
+            waiting: Array<Participant>;
+            in_match: Array<Participant>;
+            cooldown: Array<Participant>;
+            finished: Array<Participant>;
+            disconnected: Array<Participant>;
+        };
+        all: Array<Participant>;
+    };
+    currentUser?: Participant | null;
+    session?: {
+        type: 'match' | 'bounty' | 'problem';
+        id: string;
+        startTime: number;
+        endTime: number;
+        timeRemaining: number;
+        opponent?: {
+            id: string;
+            username: string;
+            rank?: number | string;
+        };
+        problem?: Problem;
+    };
+    roundSpecific?: {
+        nextMatchmakingCycle?: number;
+        globalTimeRemaining?: number;
+    };
+    message?: string;
 }
 
 // Component
@@ -73,9 +123,9 @@ export default function WaitingRoomR1() {
             return `Next Match: ${formatTime(nextMatchmakingCycle)}`;
         }
         return 'Waiting for Match';
-      case 'in-match': return 'In Match';
+      case 'in_match': return 'In Match';
       case 'cooldown':
-        if (participant.id === userId) {
+        if (participant.userId === userId) {
              return `Cooldown (${formatTime(cooldownTimeRemaining)})`;
         }
         const remaining = participant.cooldownEndTime ? Math.max(0, Math.ceil((participant.cooldownEndTime - Date.now()) / 1000)) : 0;
@@ -104,18 +154,32 @@ export default function WaitingRoomR1() {
 
   const handleState = useCallback((response: GetStateResponse) => {
       console.log("Ehllo");
+      console.log("📡 [ROUND1 WAITING] State received:", JSON.stringify(response, null, 2));
+      
       if (response?.success) {
-        setIsRoundActive(response.isActive ?? false);
-        setGlobalTimeRemaining(response.globalTimeRemaining || 0);
-        setAllParticipants(response.allParticipants || []);
-        setNextMatchmakingCycle(response.nextMatchmakingCycle || null);
+        // Check if round status is IN_PROGRESS or LOBBY (allow LOBBY for admin-added users)
+        if (response.round?.status !== 'IN_PROGRESS' && response.round?.status !== 'LOBBY') {
+          showErrorToast('Round 1 is not in progress. Redirecting to dashboard...');
+          router.push('/dashboard');
+          return;
+        }
 
-        const me = response.participant;
+        // If round is in LOBBY, show a message but don't redirect
+        if (response.round?.status === 'LOBBY') {
+          showInfoToast('Round 1 is in lobby. Waiting for round to start...');
+        }
+
+        setIsRoundActive(response.round?.isActive ?? false);
+        setGlobalTimeRemaining(response.roundSpecific?.globalTimeRemaining || response.round?.timeRemaining || 0);
+        setAllParticipants(response.participants?.all || []);
+        setNextMatchmakingCycle(response.roundSpecific?.nextMatchmakingCycle || null);
+
+        const me = response.currentUser;
         if (me) {
-          if (me.status === 'in-match') {
-            if (response.matchData) {
+          if (me.status === 'in_match') {
+            if (response.session) {
                 showInfoToast('Rejoining your active match...');
-                sessionStorage.setItem('round1_match_data', JSON.stringify(response.matchData));
+                sessionStorage.setItem('round1_match_data', JSON.stringify(response.session));
                 router.push('/r1/code');
             } else {
                 showErrorToast('Match data missing. Returning to dashboard.');
@@ -147,9 +211,22 @@ export default function WaitingRoomR1() {
 
     const handleGlobalTimer = (data: { timeRemaining: number }) => setGlobalTimeRemaining(data.timeRemaining);
     
-    const handleParticipantsUpdate = (data: { participants: Participant[] }) => {
-        setAllParticipants(data.participants || []);
-        const me = data.participants?.find(p => p.id === userId);
+    const handleParticipantsUpdate = (data: BaseRoundState | { participants: Participant[] }) => {
+        // Handle both old array format and new unified schema
+        let participantsList: Participant[] = [];
+        
+        if ('byStatus' in (data.participants || {})) {
+            // New unified schema
+            const unifiedData = data as BaseRoundState;
+            participantsList = unifiedData.participants?.all || [];
+        } else {
+            // Old array format (fallback)
+            const oldData = data as { participants: Participant[] };
+            participantsList = oldData.participants || [];
+        }
+        
+        setAllParticipants(participantsList);
+        const me = participantsList.find(p => p.userId === userId);
         if (me) {
           setCurrentUser(me);
         }
@@ -383,11 +460,11 @@ export default function WaitingRoomR1() {
                   </thead>
                   <tbody>
                     {allParticipants.map((p) => (
-                      <tr key={p.id} className="border-gray-800 hover:bg-white/5 transition">
+                      <tr key={p.userId} className="border-gray-800 hover:bg-white/5 transition">
                         <td className="py-2 px-3">{p.rank}</td>
                         <td className="py-2 px-3 max-w-[100px] truncate">
                           {p.username}
-                          {p.id === userId && <span className="ml-2 text-orange-400 text-xs">(You)</span>}
+                          {p.userId === userId && <span className="ml-2 text-orange-400 text-xs">(You)</span>}
                         </td>
                         <td className="py-2 px-3 font-mono text-cyan-400">
                           {p.eventScore ?? '...'}

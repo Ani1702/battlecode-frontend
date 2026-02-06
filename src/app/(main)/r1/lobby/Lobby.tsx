@@ -13,17 +13,74 @@ import LoadingOverlay from '@/components/shared/LoadingOverlay';
 
 // Interfaces
 interface Participant {
-  id: string;
+  userId: string;
   username: string;
-  rank: number;
-  status: 'lobby' | 'waiting' | 'in-match' | 'cooldown';
-  [key: string]: unknown;
+  email?: string;
+  role?: string;
+  status: string;
+  rank?: number;
+  eventScore?: number;
+  socketId?: string;
+  joinedAt?: string;
+  disconnectedAt?: string;
+  reconnectedAt?: string;
+  finishedAt?: string;
+  cooldownEndTime?: number;
+  isReady?: boolean;
+}
+
+interface Problem {
+  id: string;
+  title: string;
+  difficulty: string;
+  description?: string;
 }
 
 interface LobbyData {
-  participants?: Participant[];
-  isActive?: boolean;
-  [key: string]: unknown;
+  success: boolean;
+  error?: string;
+  timestamp: number;
+  roundNumber: number;
+  round: {
+    isActive: boolean;
+    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED';
+    startTime: number | null;
+    endTime: number | null;
+    timeRemaining: number;
+    duration: number;
+  };
+  participants: {
+    total: number;
+    byStatus: {
+      lobby: Array<Participant>;
+      waiting: Array<Participant>;
+      in_match: Array<Participant>;
+      cooldown: Array<Participant>;
+      finished: Array<Participant>;
+      disconnected: Array<Participant>;
+    };
+    all: Array<Participant>;
+  };
+  currentUser: Participant | null;
+  session?: {
+    type: 'match' | 'bounty' | 'problem';
+    id: string;
+    startTime: number;
+    endTime: number;
+    timeRemaining: number;
+    opponent?: {
+      id: string;
+      username: string;
+      rank?: number | string;
+    };
+    problem?: Problem;
+    problems?: Array<Problem>;
+  };
+  roundSpecific?: {
+    nextMatchmakingCycle?: number;
+    globalTimeRemaining?: number;
+  };
+  message?: string;
 }
 
 interface MatchFoundData {
@@ -40,9 +97,46 @@ interface SimpleSocketResponse {
 }
 
 interface GetStateResponse extends SimpleSocketResponse {
-    participant?: Participant | null;
-    isActive?: boolean;
-    allParticipants?: Participant[];
+    timestamp?: number;
+    roundNumber?: number;
+    round?: {
+        isActive: boolean;
+        status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED';
+        startTime: number | null;
+        endTime: number | null;
+        timeRemaining: number;
+        duration: number;
+    };
+    participants?: {
+        total: number;
+        byStatus: {
+            lobby: Array<Participant>;
+            waiting: Array<Participant>;
+            in_match: Array<Participant>;
+            cooldown: Array<Participant>;
+            finished: Array<Participant>;
+            disconnected: Array<Participant>;
+        };
+        all: Array<Participant>;
+    };
+    currentUser?: Participant | null;
+    session?: {
+        type: 'match' | 'bounty' | 'problem';
+        id: string;
+        startTime: number;
+        endTime: number;
+        timeRemaining: number;
+        opponent?: {
+            id: string;
+            username: string;
+            rank?: number | string;
+        };
+    };
+    roundSpecific?: {
+        nextMatchmakingCycle?: number;
+        globalTimeRemaining?: number;
+    };
+    message?: string;
 }
 
 interface RoundInfo {
@@ -94,6 +188,7 @@ export default function Lobbyr1(){
 
     const handleState = useCallback((response: GetStateResponse) => {
         console.log("use effect 3 ✅");
+        console.log("📡 [ROUND1 LOBBY] State received:", JSON.stringify(response, null, 2));
 
         setIsLoading(false);
         setHasAttemptedJoin(true);
@@ -103,16 +198,22 @@ export default function Lobbyr1(){
             return;
         }
 
-        if (response.allParticipants) {
-            setParticipants(response.allParticipants.filter(p => p.status === "lobby"));
+        // Updated to use new unified schema
+        if (response.participants?.byStatus?.lobby) {
+            setParticipants(response.participants.byStatus.lobby);
         }
 
-        setIsRoundActive(response.isActive ?? false);
+        setIsRoundActive(response.round?.isActive ?? false);
 
-        if (response.participant) {
-            if (response.participant.status === "in-match") {
+        // Update time remaining if available
+        if (response.round?.timeRemaining !== undefined) {
+            setTimeRemaining(response.round.timeRemaining);
+        }
+
+        if (response.currentUser) {
+            if (response.currentUser.status === "in_match") {
                 router.push("/r1/code");
-            } else if (response.participant.status !== "lobby") {
+            } else if (response.currentUser.status !== "lobby") {
                 router.push("/r1/waiting");
             }
         } else {
@@ -197,8 +298,15 @@ export default function Lobbyr1(){
 
         const handleLobbyUpdate = (data: LobbyData) => {
             setIsLoading(false);
-            if (data.participants) setParticipants(data.participants);
-            if (data.isActive !== undefined) setIsRoundActive(data.isActive);
+            if (data.participants?.byStatus?.lobby) {
+                setParticipants(data.participants.byStatus.lobby);
+            }
+            if (data.round?.isActive !== undefined) {
+                setIsRoundActive(data.round.isActive);
+            }
+            if (data.round?.timeRemaining !== undefined) {
+                setTimeRemaining(data.round.timeRemaining);
+            }
         };
 
         const handleRoundStarted = () => {
@@ -337,7 +445,7 @@ export default function Lobbyr1(){
                         ) : participants.length > 0 ? (
                             participants.map((participant) => (
                                 <PlayerCard 
-                                    key={participant.id}
+                                    key={participant.userId}
                                     username={participant.username}
                                     avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=ea580c&color=fff`}
                                 />

@@ -21,18 +21,6 @@ interface LeaderboardEntry {
   trend: string;
 }
 
-interface RoundStatus {
-  roundNumber: number;
-  status: string;
-  isActive: boolean;
-  isLocked: boolean;
-}
-
-interface CurrentRoundData {
-  currentRoundNumber: number;
-  currentRoundStatus: string;
-  rounds: RoundStatus[];
-}
 interface RoundInfo {
   roundNumber: number;
   status: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
@@ -40,17 +28,10 @@ interface RoundInfo {
   isLocked: boolean;
 }
 
-interface SimpleSocketResponse {
-  success: boolean;
-  error?: string;
-}
-
-interface CurrentRoundResponse extends SimpleSocketResponse {
-  currentRound?: {
-    currentRoundNumber: number;
-    currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
-    rounds: RoundInfo[];
-  };
+interface CurrentRoundData {
+  currentRoundNumber: number;
+  currentRoundStatus: string;
+  rounds: RoundInfo[];
 }
 
 export default function Dashboard() {
@@ -82,7 +63,7 @@ export default function Dashboard() {
     setCurrentRoundData(data);
 
     const newLockedStatus = [true, true, true, true];
-    data.rounds.forEach((round) => {
+    data.rounds.forEach((round: RoundInfo) => {
       if (round.roundNumber >= 0 && round.roundNumber <= 3) {
         newLockedStatus[round.roundNumber] = round.isLocked;
       }
@@ -99,48 +80,56 @@ export default function Dashboard() {
   const handleAdminAdded = useCallback((roundNumber: number) => {
     console.log(`You have been added to Round ${roundNumber} by an admin`);
     
-    // Get current data synchronously - no state update needed
-    const currentData = currentRoundData;
-    
-    if (!currentData) {
-      showErrorToast("Round data not available");
-      return;
-    }
-
-    const { currentRoundNumber, currentRoundStatus } = currentData;
-
-    if (currentRoundNumber !== roundNumber) {
-      showErrorToast(`Round ${roundNumber} is not the current round`);
-      return;
-    }
-
-    if (currentRoundStatus === 'COMPLETED') {
-      showErrorToast(`Round ${roundNumber} has already completed`);
-      return;
-    }
-    
-    if (currentRoundStatus === 'LOCKED') {
-      showErrorToast(`Round ${roundNumber} is currently locked`);
-      return;
-    }
-
-    // Handle different rounds based on status
-    if (currentRoundStatus === 'LOBBY') {
-      // Always redirect to lobby for any round in LOBBY status
-      showSuccessToast(`You have been added to Round ${roundNumber}! Redirecting to lobby...`);
-      setTimeout(() => router.push(`/r${roundNumber}/lobby`), 1500);
-    } else if (currentRoundStatus === 'IN_PROGRESS') {
-      if (roundNumber === 1) {
-        showSuccessToast("You have been added to Round 1! Redirecting to waiting room...");
-        setTimeout(() => router.push('/r1/waiting'), 1500);
-      } else if (roundNumber === 2) {
-        showSuccessToast("You have been added to Round 2! Round in progress.");
-      } else {
-        showSuccessToast(`You have been added to Round ${roundNumber}! Redirecting to coding environment...`);
-        setTimeout(() => router.push(`/r${roundNumber}/code`), 1500);
+    // Set up a ONE-TIME listener for the fresh data
+    const handleFreshData = (data: CurrentRoundData) => {
+      console.log("Received fresh round data:", data);
+      
+      // Now we have FRESH data from the server
+      const targetRound = data.rounds.find((r: RoundInfo) => r.roundNumber === roundNumber);
+      
+      if (!targetRound) {
+        showErrorToast(`Round ${roundNumber} data not found`);
+        return;
       }
-    }
-  }, [currentRoundData, router]);
+
+      const roundStatus = targetRound.status;
+      console.log(`Round ${roundNumber} status:`, roundStatus);
+
+      if (roundStatus === 'COMPLETED') {
+        showErrorToast(`Round ${roundNumber} has already completed`);
+        return;
+      }
+      
+      if (roundStatus === 'LOCKED') {
+        showErrorToast(`Round ${roundNumber} is currently locked`);
+        return;
+      }
+
+      // Navigate based on status
+      if (roundStatus === 'LOBBY') {
+        showSuccessToast(`You have been added to Round ${roundNumber}! Redirecting to lobby...`);
+        setTimeout(() => router.push(`/r${roundNumber}/lobby`), 1500);
+      } else if (roundStatus === 'IN_PROGRESS') {
+        if (roundNumber === 1) {
+          showSuccessToast("You have been added to Round 1! Redirecting to waiting room...");
+          setTimeout(() => router.push('/r1/waiting'), 1500);
+        } else if (roundNumber === 2) {
+          showSuccessToast("You have been added to Round 2! Redirecting...");
+          setTimeout(() => router.push('/r2/lobby'), 1500);
+        } else {
+          showSuccessToast(`You have been added to Round ${roundNumber}! Redirecting to coding environment...`);
+          setTimeout(() => router.push(`/r${roundNumber}/code`), 1500);
+        }
+      }
+    };
+    
+    // Listen for the response (ONE TIME ONLY)
+    socket?.once("server:currentRound", handleFreshData);
+    
+    // Request the fresh data
+    socket?.emit("user:current-round");
+    
+  }, [router, socket]);
 
   // Helper Functions
   const getBorderColor = (status: string) => {
@@ -344,7 +333,7 @@ export default function Dashboard() {
             <div className = "flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron text-white"> <p className="text-orange-500">Competition</p> &nbsp;Rounds</div>
             <div className="flex-4 ">
               {[0, 1, 2, 3].map((i) => {
-                const roundStatus = currentRoundData?.rounds.find(r => r.roundNumber === i);
+                const roundStatus = currentRoundData?.rounds.find((r: RoundInfo) => r.roundNumber === i);
                 const locked = islocked[i];
                 const currentStatus = roundStatus?.status || 'LOCKED';
 

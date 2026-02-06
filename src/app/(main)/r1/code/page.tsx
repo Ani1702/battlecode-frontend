@@ -14,14 +14,24 @@ import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 // Interfaces
 interface MatchData {
-  opponent: { id: string; rank?: number; };
-  question: {
+  opponent: { id: string; username?: string; rank?: number; };
+  // Support both old format (question) and new unified schema format (problem)
+  question?: {
+    id: string; title: string; description: string; difficulty: string;
+    duration?: number; constraints?: string[]; boilerplate?: { [key: string]: string };
+    sampleTestCases?: TestCase[]; hints?: string[];
+  };
+  problem?: {
     id: string; title: string; description: string; difficulty: string;
     duration?: number; constraints?: string[]; boilerplate?: { [key: string]: string };
     sampleTestCases?: TestCase[]; hints?: string[];
   };
   startTime: number;
-  duration: number;
+  duration?: number;
+  endTime?: number;
+  timeRemaining?: number;
+  type?: string;
+  id?: string;
   difficulty?: string;
 }
 
@@ -55,11 +65,36 @@ interface CodeStore {
 
 interface GetStateResponse {
   success: boolean;
-  participant?: {
-    status: string;
-  };
-  matchData?: MatchData;
   error?: string;
+  currentUser?: {
+    userId: string;
+    username: string;
+    status: string;
+    [key: string]: unknown;
+  };
+  session?: {
+    type: 'match' | 'bounty' | 'problem';
+    id: string;
+    startTime: number;
+    endTime: number;
+    timeRemaining: number;
+    opponent?: {
+      id: string;
+      username: string;
+      rank?: number | string;
+    };
+    problem?: {
+      id: string;
+      title: string;
+      description: string;
+      difficulty: string;
+      duration?: number;
+      constraints?: string[];
+      boilerplate?: { [key: string]: string };
+      sampleTestCases?: any[];
+      hints?: string[];
+    };
+  };
 }
 
 // CodePage Component
@@ -146,7 +181,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
     }, 600);
   }, [currentContext, problem, contextManager]);
 
-  const handleContextTransition = useCallback((newProblem: MatchData['question'], newLanguage: string) => {
+  const handleContextTransition = useCallback((newProblem: NonNullable<MatchData['question'] | MatchData['problem']>, newLanguage: string) => {
     const newContext = contextManager.createContext('1', newProblem.id, newLanguage);
     if (currentContext && contextManager.contextEquals(currentContext, newContext)) return;
 
@@ -291,21 +326,30 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
   // useEffect Hooks
   useEffect(() => {
-    if (!matchData?.question || isContextInitialized) return;
+    // Handle both old format (question) and new unified schema format (problem)
+    const problemData = matchData?.question || matchData?.problem;
+    
+    if (!problemData || isContextInitialized) return;
+    
+    console.log('[INITIALIZING CONTEXT] Problem data:', problemData);
+    
     const loadedStore = contextManager.loadCodeStore('1');
     setCodeStore(loadedStore);
-    const initialContext = contextManager.createContext('1', matchData.question.id, language);
+    const initialContext = contextManager.createContext('1', problemData.id, language);
     setCurrentContext(initialContext);
     const savedCode = contextManager.getCodeForContext(loadedStore, initialContext);
-    const boilerplate = contextManager.getBoilerplate(matchData.question, language);
+    const boilerplate = contextManager.getBoilerplate(problemData, language);
     setCode(savedCode || boilerplate);
-    setProblem(matchData.question);
+    setProblem(problemData);
     setIsContextInitialized(true);
   }, [matchData, language, isContextInitialized, contextManager]);
 
   useEffect(() => {
-    if (isContextInitialized && matchData?.question) {
-      handleContextTransition(matchData.question, language);
+    // Handle both old format (question) and new unified schema format (problem)
+    const problemData = matchData?.question || matchData?.problem;
+    
+    if (isContextInitialized && problemData) {
+      handleContextTransition(problemData, language);
     }
   }, [language, isContextInitialized, matchData, handleContextTransition]);
 
@@ -346,6 +390,8 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDragging, handleMouseMove]);
+
+  console.log("Rendering CodePage with context:", { currentContext, saveStatus, timeRemaining, problem, matchData });
 
   if (!problem || !matchData) return <div className="text-white text-center p-8">Initializing editor...</div>;
 
@@ -393,7 +439,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                 <h2 className="text-2xl font-bold">{problem.title}</h2>
                 <div className="flex gap-4 text-sm text-gray-400 mt-1">
 
-                  <span>vs {matchData.opponent.id}</span>
+                  <span>vs {matchData.opponent.username || matchData.opponent.id}</span>
                 </div>
               </div>
               {problem.hints && problem.hints.length > 0 && (
@@ -447,7 +493,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
                   <option value="python">Python</option><option value="java">Java</option>
                   <option value="cpp">C++</option><option value="c">C</option>
                 </select>
-                <div className={`text-center p-2 font-mono text-xl bg-gray-800 rounded border border-amber-600 ${timerDisplay.className}`}>
+                <div className={`text-center px-4 py-2 font-mono text-xl bg-black rounded border border-amber-600 ${timerDisplay.className}`}>
                   {timerDisplay.time}
                 </div>
                 <div className="flex-1 flex justify-end items-center gap-2">
@@ -587,9 +633,56 @@ export default function R1CodePage() {
     // which happens on a page refresh or direct URL access.
     showInfoToast("Re-syncing with server...");
     socket.emit('round1:getState', {}, (response: GetStateResponse) => {
-      if (response.success && response.participant?.status === 'in-match' && response.matchData) {
+      // Log the response for debugging
+      console.log('[GET STATE RESPONSE]', {
+        success: response.success,
+        currentUser: response.currentUser,
+        session: response.session,
+        hasSession: !!response.session,
+        userStatus: response.currentUser?.status,
+        hasProblem: !!response.session?.problem,
+        problemId: response.session?.problem?.id,
+        problemTitle: response.session?.problem?.title
+      });
+
+      // Handle both 'in_match' and 'in-match' formats for backward compatibility
+      const isInMatch = response.currentUser?.status === 'in_match' || response.currentUser?.status === 'in-match';
+      
+      if (response.success && isInMatch && response.session) {
         showSuccessToast("Successfully re-synced match!");
-        const data = response.matchData;
+        
+        // Additional validation
+        if (!response.session.problem) {
+          console.error('[MISSING PROBLEM DATA] Session exists but problem is missing:', response.session);
+          showErrorToast("Match data incomplete - missing problem.");
+          router.push('/r1/waiting');
+          setPageIsLoading(false);
+          return;
+        }
+        
+        // Convert session data to old MatchData format
+        const data: MatchData = {
+          opponent: {
+            id: response.session.opponent?.id || '',
+            username: response.session.opponent?.username,
+            rank: typeof response.session.opponent?.rank === 'number' 
+              ? response.session.opponent.rank 
+              : undefined
+          },
+          question: {
+            id: response.session.problem?.id || '',
+            title: response.session.problem?.title || '',
+            description: response.session.problem?.description || '',
+            difficulty: response.session.problem?.difficulty || '',
+            duration: response.session.problem?.duration,
+            constraints: response.session.problem?.constraints || [],
+            boilerplate: response.session.problem?.boilerplate || {},
+            sampleTestCases: response.session.problem?.sampleTestCases || [],
+            hints: response.session.problem?.hints || []
+          },
+          startTime: response.session.startTime,
+          duration: response.session.endTime - response.session.startTime
+        };
         sessionStorage.setItem('round1_match_data', JSON.stringify(data));
         setMatchData(data);
       } else {
@@ -604,7 +697,18 @@ export default function R1CodePage() {
   // Client-side timer for UI updates and as a fallback for match end.
   useEffect(() => {
     if (!matchData) return;
-    const endTime = matchData.startTime + matchData.duration;
+    
+    // Handle both old format (startTime + duration) and new unified schema (endTime)
+    const endTime = matchData.endTime || (matchData.startTime + (matchData.duration || 0));
+    
+    console.log('[TIMER INIT]', {
+      startTime: matchData.startTime,
+      duration: matchData.duration,
+      endTime: matchData.endTime,
+      calculatedEndTime: endTime,
+      now: Date.now()
+    });
+    
     const timerInterval = setInterval(() => {
       const remainingMs = endTime - Date.now();
       if (remainingMs <= 0) {
