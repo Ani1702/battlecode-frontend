@@ -6,23 +6,12 @@ import PlayerCard from '@/components/shared/PlayerCard';
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRound2State, Participant } from '@/hooks';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import LoadingOverlay from '@/components/shared/LoadingOverlay';
 
-// --- TYPE DEFINITIONS ---
 
-interface Participant {
-  id: string;
-  username: string;
-  status: 'lobby' | 'elite:idle' | 'challenger:idle' | 'in-match';
-  role?: 'elite' | 'challenger';
-}
-
-interface LobbyData {
-  participants?: Participant[];
-  isActive?: boolean;
-  [key: string]: unknown;
-}
+// --- Type Definitions ---
 
 interface SimpleSocketResponse {
   success: boolean;
@@ -30,60 +19,16 @@ interface SimpleSocketResponse {
   message?: string;
 }
 
-interface GetStateResponse extends SimpleSocketResponse {
-  participant?: Participant | null;
-  isActive?: boolean;
-  allParticipants?: Participant[];
-  state?: {
-    roundIsActive: boolean;
-    roundEndTime: number | null;
-    userRole: 'elite' | 'challenger' | null;
-    activeSession: boolean;
-    participants: Participant[];
-    elites: string[];
-    challengers: string[];
-  };
-}
-
-interface RoundInfo {
-  roundNumber: number;
-  status: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
-  isActive: boolean;
-  isLocked: boolean;
-}
-
-interface CurrentRoundResponse extends SimpleSocketResponse {
-  currentRound?: {
-    currentRoundNumber: number;
-    currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
-    rounds: RoundInfo[];
-  };
-}
-
-interface RoleAssignedData {
-  role: 'elite' | 'challenger';
-}
-
-interface ErrorData {
-  message?: string;
-  [key: string]: unknown;
-}
-
-// --- COMPONENT ---
+// --- Component ---
 
 export default function LobbyR2() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
   const { userId, isLoading: authLoading, userRole } = useAuth();
+  const { state, isLoading: stateLoading, error: stateError } = useRound2State();
   
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [isRoundActive, setIsRoundActive] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [roundStarted, setRoundStarted] = useState(false);
-  const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
-  const [isCheckingRound, setIsCheckingRound] = useState(true);
-  const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundResponse['currentRound'] | null>(null);
   
   const isAdmin = userRole === 'ADMIN';
 
@@ -100,211 +45,67 @@ export default function LobbyR2() {
     });
   };
 
-  const handleState = useCallback((response: GetStateResponse) => {
-    console.log("Round 2 state response:", response);
-
-    setIsLoading(false);
-    setHasAttemptedJoin(true);
-
-    if (!response.success) {
-      showErrorToast(response.error || "Could not sync with the server.");
-      return;
-    }
-
-    // Handle the response.state format for Round 2
-    if (response.state) {
-      setIsRoundActive(response.state.roundIsActive);
-      
-      // Check if user should be in an active session
-      if (response.state.activeSession && response.state.userRole) {
-        showInfoToast("Rejoining your session...");
-        router.push(`/r2/${response.state.userRole}`);
-        return;
-      }
-
-      // Update participants from state
-      if (response.state.participants) {
-        setParticipants(response.state.participants.filter(p => p.status === "lobby"));
-      }
-    }
-
-    // Fallback to legacy response format if state is not present
-    if (response.allParticipants) {
-      setParticipants(response.allParticipants.filter(p => p.status === "lobby"));
-    }
-
-    setIsRoundActive(response.isActive ?? response.state?.roundIsActive ?? false);
-
-    if (response.participant) {
-      if (response.participant.status === "in-match" && response.participant.role) {
-        router.push(`/r2/${response.participant.role}`);
-      }
-    } else {
-      socket?.emit("round2:join", {}, (joinResponse: SimpleSocketResponse) => {
-        if (joinResponse.success) {
-          showSuccessToast("Successfully joined Round 2 lobby");
-        } else {
-          showErrorToast(joinResponse.error || "Failed to join lobby");
-        }
-      });
-    }
-  }, [router, socket]);
-
-  // Authentication check useEffect
+  // Authentication check
   useEffect(() => {
     if (!authLoading) setAuthenticationChecked(true);
     if (!authLoading && !userId) router.push('/dashboard');
   }, [authLoading, userId, router]);
 
-  // Check current round useEffect
+  // State-driven navigation and participant updates
   useEffect(() => {
-    if (!socket || !isConnected || !authenticationChecked) return;
+    if (!state || !authenticationChecked) return;
 
-    socket.emit("user:current-round", {}, (response: CurrentRoundResponse) => {
-      console.log("Current round response:", response);
-      setIsCheckingRound(false);
-      
-      if (!response.success) {
-        showErrorToast(response.error || "Failed to check round status");
-        router.back();
-        return;
-      }
+    console.debug('[R2 Lobby] State update:', state);
 
-      const currentRound = response.currentRound;
-
-      if (!currentRound) {
-        showErrorToast("No active round found");
-        router.back();
-        return;
-      }
-
-      setCurrentRoundData(currentRound);
-
-      if (currentRound.currentRoundNumber !== 2) {
-        showErrorToast("Round 2 is not the current round");
-        router.back();
-        return;
-      }
-
-      if (currentRound.currentRoundStatus !== 'LOBBY') {
-        showErrorToast(`Round 2 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`);
-        console.log("Current round status:", currentRound.currentRoundStatus);
-        router.back();
-        return;
-      }
-
-      console.log("Round status valid, proceeding to get state");
-    });
-  }, [socket, isConnected, authenticationChecked, router]);
-
-  // Emit getState useEffect
-  useEffect(() => {
-    if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin || isCheckingRound)
-      return;
-
-    socket.emit("round2:getState");
-  }, [socket, isConnected, authenticationChecked, hasAttemptedJoin, isCheckingRound]);
-
-  // Listen to state response useEffect
-  useEffect(() => {
-    if (!socket) return;
-    socket.on("round2:state", handleState);
-
-    return () => {
-      socket.off("round2:state", handleState);
-    };
-  }, [socket, handleState]);
-
-  // Main Socket event listeners useEffect
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleLobbyUpdate = (lobbyData: LobbyData) => {
-      setIsLoading(false);
-      if (lobbyData.participants) setParticipants(lobbyData.participants.filter(p => p.status === 'lobby'));
-      if (lobbyData.isActive !== undefined) setIsRoundActive(lobbyData.isActive);
-    };
-
-    const handleRoundStarted = () => {
-      setRoundStarted(true);
-      setIsRoundActive(true);
-      localStorage.removeItem('battlecode-round-2-code-store');
-      showSuccessToast('Round 2 has started! Assigning roles...');
-    };
-
-    const handleRoleAssigned = (data: RoleAssignedData) => {
-      if (data.role) {
-        showInfoToast(`You have been assigned the role of: ${data.role.toUpperCase()}!`);
-        setTimeout(() => {
-          router.push(`/r2/${data.role}`);
-        }, 2000);
-      }
-    };
+    // Update participants list - try participantsByStatus first, fallback to filtering participants array
+    let lobbyParticipants: Participant[] = [];
     
-    const handleRoundEnd = () => {
-      showSuccessToast('Round 2 has ended.');
-      router.push('/dashboard');
-    };
+    if (state.state?.participantsByStatus?.lobby) {
+      console.debug('[R2 Lobby] Using participantsByStatus.lobby:', state.state.participantsByStatus.lobby);
+      lobbyParticipants = state.state.participantsByStatus.lobby;
+    } else if (state.state?.participants) {
+      console.debug('[R2 Lobby] All participants from state:', state.state.participants);
+      lobbyParticipants = state.state.participants.filter(p => {
+        console.debug(`[R2 Lobby] Checking participant: id=${p.userId || p.id}, username=${p.username}, status=${p.status}`);
+        return p.status === 'lobby';
+      });
+      console.debug('[R2 Lobby] Filtered lobby participants:', lobbyParticipants);
+    }
+    
+    setParticipants(lobbyParticipants);
 
-    const handleError = (error: ErrorData) => {
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
-      showErrorToast(errorMessage);
-    };
+    // Auto-navigate if round started AND user has a role
+    if (state.state?.round.status === 'IN_PROGRESS' && state.state?.currentUser.role) {
+      console.debug('[R2 Lobby] Round started, navigating to role page:', state.state.currentUser.role);
+      showInfoToast(`You have been assigned the role: ${state.state.currentUser.role.toUpperCase()}`);
+      setTimeout(() => {
+        if (state.state?.currentUser.role) {
+          router.push(`/r2/${state.state.currentUser.role}`);
+        }
+      }, 1500);
+    }
+  }, [state, authenticationChecked, router]);
 
-    const handleAdminRemoved = () => {
-      console.log("You have been removed from Round 2 by an admin");
-      showErrorToast("You have been removed from Round 2 by an admin");
-      localStorage.removeItem('battlecode-round-2-code-store');
-      router.push('/');
-    };
+  // Listen for lobby updates to refresh participant list
+  useEffect(() => {
+    if (!socket || !isConnected) return;
 
-    const handleAdminAdded = () => {
-      console.log("You have been added to Round 2 by an admin");
-      
-      if (!currentRoundData) {
-        showErrorToast("Round data not available");
-        return;
-      }
-
-      const { currentRoundNumber, currentRoundStatus } = currentRoundData;
-
-      if (currentRoundNumber !== 2) {
-        showErrorToast("Round 2 is not the current round");
-        return;
-      }
-
-      if (currentRoundStatus === 'LOBBY') {
-        showSuccessToast("You have been added to Round 2! Already in lobby.");
-      } else if (currentRoundStatus === 'IN_PROGRESS') {
-        showSuccessToast("You have been added to Round 2! Waiting for role assignment...");
-      } else if (currentRoundStatus === 'COMPLETED') {
-        showErrorToast("Round 2 has already completed");
-      } else if (currentRoundStatus === 'LOCKED') {
-        showErrorToast("Round 2 is currently locked");
+    const handleLobbyUpdate = (data: any) => {
+      console.debug('[Lobby] Received lobbyUpdate:', data);
+      if (data?.participants) {
+        setParticipants(data.participants);
       }
     };
 
-    socket.on('round2:lobby', handleLobbyUpdate);
-    socket.on('round2:started', handleRoundStarted);
-    socket.on('round2:rolesAssigned', handleRoleAssigned);
-    socket.on('round2:ended', handleRoundEnd);
-    socket.on('round2:error', handleError);
-    socket.on('round2:adminRemoved', handleAdminRemoved);
-    socket.on('round2:adminAdded', handleAdminAdded);
+    socket.on('round2:lobbyUpdate', handleLobbyUpdate);
 
     return () => {
-      socket.off('round2:lobby', handleLobbyUpdate);
-      socket.off('round2:started', handleRoundStarted);
-      socket.off('round2:rolesAssigned', handleRoleAssigned);
-      socket.off('round2:ended', handleRoundEnd);
-      socket.off('round2:error', handleError);
-      socket.off('round2:adminRemoved', handleAdminRemoved);
-      socket.off('round2:adminAdded', handleAdminAdded);
+      socket.off('round2:lobbyUpdate', handleLobbyUpdate);
     };
-  }, [socket, router, currentRoundData]);
+  }, [socket, isConnected]);
 
   // Early return for loading states
-  if (authLoading || !authenticationChecked || isCheckingRound) {
+  if (authLoading || !authenticationChecked || stateLoading) {
     return (
       <LoadingOverlay 
         isLoading={true} 
@@ -319,31 +120,6 @@ export default function LobbyR2() {
       <div className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(8, 145, 178, 1)' }}>
         <p className='flex-1 flex items-end pt-8'> <span className="text-white">ROUND</span> <span className="text-orange-500">&nbsp; 2</span></p>
         <span className="text-orange-500 text-2xl pb-4">LOBBY</span>
-        
-        {(roundStarted || isRoundActive) && (
-          <div className="mt-3 flex flex-col items-center gap-2">
-            {roundStarted ? (
-              <>
-                <div className="text-base text-center text-green-400">Round 2 Started!</div>
-                <div className="text-gray-200 text-center text-sm">
-                  <p>Assigning roles to participants...</p>
-                  <div className="flex justify-center items-center gap-2 mt-2">
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-base text-center text-green-400">Round 2 Active</div>
-                <div className="text-gray-200 text-center text-sm">
-                  <p>Round is currently in progress</p>
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
@@ -353,16 +129,10 @@ export default function LobbyR2() {
       <div className="flex-1 p-6 min-h-0">
         <CustomScrollbar className="h-full overflow-y-auto">
           <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
-            {isLoading ? (
-              Array.from({ length: 9 }).map((_, index) => (
-                <div key={index} className="relative w-full h-[90px] mb-3">
-                  <div className="absolute inset-0 w-full h-full bg-gray-800/50 animate-pulse rounded-lg"></div>
-                </div>
-              ))
-            ) : participants.length > 0 ? (
+            {participants.length > 0 ? (
               participants.map((participant) => (
                 <PlayerCard 
-                  key={participant.id}
+                  key={participant.id || participant.userId}
                   username={participant.username}
                   avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=0e7490&color=fff`}
                 />
@@ -377,7 +147,7 @@ export default function LobbyR2() {
       </div>
 
       {/* --- BOTTOM STATUS AND CONTROLS SECTION --- */}
-      {!isRoundActive && !roundStarted && (
+      {state?.state?.round.status === 'LOBBY' && (
         <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
           <div className="text-sm text-gray-200 text-center">
             {!isConnected ? (
@@ -392,21 +162,10 @@ export default function LobbyR2() {
             ) : participants.length > 0 ? (
               <div>
                 <p className="text-green-400">Connected to lobby. Waiting for more participants...</p>
-                {!isLoading && (
-                  <div className="flex justify-center items-center gap-2 mt-2">
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
-                  </div>
-                )}
-              </div>
-            ) : isLoading ? (
-              <div>
-                <p className="text-blue-400">Joining lobby...</p>
                 <div className="flex justify-center items-center gap-2 mt-2">
-                  <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"></div>
-                  <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
+                  <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                  <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
                 </div>
               </div>
             ) : (
@@ -421,11 +180,11 @@ export default function LobbyR2() {
             )}
           </div>
 
-          {isAdmin && !isLoading && participants.length > 0 && (
+          {isAdmin && participants.length > 0 && (
             <button
               onClick={handleStartRound}
               className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm flex items-center gap-2"
-              disabled={isLoading || participants.length < 2}
+              disabled={participants.length < 2}
             >
               <Rocket className="h-4 w-4" />
               Start Round 2

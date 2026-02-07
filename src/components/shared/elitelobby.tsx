@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, memo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/contexts/SocketContext';
+import { useRound2State } from '@/hooks';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import IncomingEliteCard from '@/components/shared/IncomingEliteCard';
@@ -123,63 +124,65 @@ ChallengerRequestRow.displayName = 'ChallengerRequestRow';
 export default function EliteDashboard() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
+  const { state, isLoading: stateLoading } = useRound2State();
 
   const [incomingChallengers, setIncomingChallengers] = useState<Participant[]>([]);
   const [bountyQuestions, setBountyQuestions] = useState<BountyQuestion[]>([]);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRedirecting, setIsRedirecting] = useState(false); // Safeguard state
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const handleRemoveChallenger = useCallback((challengerId: string) => {
       setIncomingChallengers(prev => prev.filter(p => p.id !== challengerId));
   }, []);
 
+  // Guard: Redirect if user has active session or is not an elite
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!state || stateLoading) return;
 
-    socket.emit('round2:getState', (stateResponse: SocketStateResponse) => {
-        if (!stateResponse.success) {
-            showErrorToast("Could not verify state. Redirecting...");
-            router.push('/dashboard');
-            return;
-        }
-
-        if (stateResponse.state.activeSession) {
-            showInfoToast("Resuming your active session...");
-            try {
-                sessionStorage.setItem('r2_session_type', stateResponse.state.activeSession.type);
-                sessionStorage.setItem('r2_context_id', stateResponse.state.activeSession.contextId);
-                sessionStorage.setItem('r2_user_role', 'elite');
-                router.push(`/r2/code`);
-            } catch (error) {
-              console.log(error);
-                showErrorToast("Could not resume session. Please enable storage.");
-            }
-            return;
-        }
-
-        if (stateResponse.state.userRole === 'elite') {
-            socket.emit('round2:getDashboardState', (dashResponse: EliteDashboardResponse) => {
-                if (dashResponse.success) {
-                    setRoundEndTime(dashResponse.dashboard.roundEndTime);
-                    const transformedBounties = dashResponse.dashboard.bountyQuestions.map((q) => ({
-                        ...q, name: q.title,
-                    }));
-                    setBountyQuestions(transformedBounties);
-                    setIncomingChallengers(dashResponse.dashboard.incomingRequests);
-                } else {
-                    showErrorToast(dashResponse.message || "Failed to load dashboard.");
-                    router.push('/dashboard');
-                }
-                setIsLoading(false);
-            });
-        } else {
-            showErrorToast("Access denied. Redirecting...");
-            router.push(stateResponse.state.userRole ? `/r2/${stateResponse.state.userRole}` : '/dashboard');
-        }
+    console.debug('[Elite] State check:', {
+      hasActiveSession: state.state?.currentUser.activeSession,
+      userRole: state.state?.currentUser.role,
     });
-  }, [socket, isConnected, router]);
+
+    // If user has active session, redirect to code page
+    if (state.state?.currentUser.activeSession === true) {
+      showInfoToast("Resuming your active session...");
+      setTimeout(() => {
+        router.push('/r2/code');
+      }, 1000);
+      return;
+    }
+
+    // If user is not an elite, redirect to their role page
+    if (state.state?.currentUser.role !== 'elite') {
+      showErrorToast("Access denied. Redirecting...");
+      setTimeout(() => {
+        router.push(state.state?.currentUser.role ? `/r2/${state.state.currentUser.role}` : '/dashboard');
+      }, 1000);
+      return;
+    }
+  }, [state, stateLoading, router]);
+
+  // Fetch dashboard data when state is ready
+  useEffect(() => {
+    if (!socket || !isConnected || !state || state.state?.currentUser.role !== 'elite') return;
+
+    socket.emit('round2:getDashboardState', (dashResponse: EliteDashboardResponse) => {
+      if (dashResponse.success) {
+        setRoundEndTime(dashResponse.dashboard.roundEndTime);
+        const transformedBounties = dashResponse.dashboard.bountyQuestions.map((q) => ({
+          ...q, name: q.title,
+        }));
+        setBountyQuestions(transformedBounties);
+        setIncomingChallengers(dashResponse.dashboard.incomingRequests);
+      } else {
+        showErrorToast(dashResponse.message || "Failed to load dashboard.");
+      }
+      setDashboardLoading(false);
+    });
+  }, [socket, isConnected, state]);
 
   // --- MODIFIED: Timer now triggers redirection ---
   useEffect(() => {
@@ -302,8 +305,8 @@ export default function EliteDashboard() {
     });
   }, [socket, handleRemoveChallenger]);
   
-  if (isLoading) {
-    return <LoadingOverlay isLoading={true} message="Checking session status..." />;
+  if (stateLoading || dashboardLoading) {
+    return <LoadingOverlay isLoading={true} message="Loading Elite Dashboard..." />;
   }
 
   return (
