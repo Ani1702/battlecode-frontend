@@ -634,15 +634,62 @@ export default function Admin() {
     return validTransitions[currentStatus]?.includes(targetStatus) || false;
   };
 
-    // Live decrement timers for globalTimeRemaining and nextMatchmakingCycle
+    // Listen to timer updates from server to stay in sync with user timers
     useEffect(() => {
-      if (!isRoundActive) return;
-      const interval = setInterval(() => {
-        setGlobalTimeRemaining(prev => (typeof prev === 'number' && prev > 0 ? prev - 1 : 0));
-        setNextMatchmakingCycle(prev => (typeof prev === 'number' && prev > 0 ? prev - 1 : prev));
-      }, 1000);
-      return () => clearInterval(interval);
-    }, [isRoundActive]);
+      if (!socket) return;
+
+      const handleTimer0 = (data: { timeRemaining?: number }) => {
+        if (activeRoundNumber === 0) {
+          setGlobalTimeRemaining(data.timeRemaining || 0);
+        }
+      };
+
+      const handleTimer1 = (data: { timeRemaining?: number }) => {
+        if (activeRoundNumber === 1) {
+          setGlobalTimeRemaining(data.timeRemaining || 0);
+        }
+      };
+
+      const handleTimer2 = (data: { timeRemaining?: number }) => {
+        if (activeRoundNumber === 2) {
+          setGlobalTimeRemaining(data.timeRemaining || 0);
+        }
+      };
+
+      const handleTimer3 = (data: { timeRemaining?: number }) => {
+        if (activeRoundNumber === 3) {
+          setGlobalTimeRemaining(data.timeRemaining || 0);
+        }
+      };
+
+      // Handle global timer events for rounds that use them (Round 1+)
+      const handleGlobalTimer = (data: { timeRemaining?: number }) => {
+        setGlobalTimeRemaining(data.timeRemaining || 0);
+      };
+
+      // Handle matchmaking cycle updates for Round 1
+      const handleMatchmakingCycle = (data: { nextCycle: number }) => {
+        if (activeRoundNumber === 1) {
+          setNextMatchmakingCycle(data.nextCycle);
+        }
+      };
+
+      socket.on('round0:timer', handleTimer0);
+      socket.on('round1:timer', handleTimer1);
+      socket.on('round1:globalTimer', handleGlobalTimer);
+      socket.on('round1:matchmakingCycle', handleMatchmakingCycle);
+      socket.on('round2:timer', handleTimer2);
+      socket.on('round3:timer', handleTimer3);
+
+      return () => {
+        socket.off('round0:timer', handleTimer0);
+        socket.off('round1:timer', handleTimer1);
+        socket.off('round1:globalTimer', handleGlobalTimer);
+        socket.off('round1:matchmakingCycle', handleMatchmakingCycle);
+        socket.off('round2:timer', handleTimer2);
+        socket.off('round3:timer', handleTimer3);
+      };
+    }, [socket, activeRoundNumber]);
     // Cooldown timer logic
     useEffect(() => {
       const cooldownInterval = setInterval(() => {

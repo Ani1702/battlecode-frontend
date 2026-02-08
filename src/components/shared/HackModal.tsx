@@ -72,9 +72,9 @@ export default function HackModal({ isOpen, onClose, submissions, onSubmitHack }
         <div className="flex items-center justify-between p-4 border-b border-red-500/30">
           <h2 className="text-2xl font-bold flex items-center gap-3"><Swords className="text-red-400" /> Hacking Arena</h2>
           {submissions.length > 0 && (
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 mr-10">
               <button onClick={handlePrev} disabled={submissions.length <= 1} className="p-2 rounded-md hover:bg-gray-700 disabled:opacity-40"><ChevronLeft /></button>
-              <span className="font-mono text-lg">Submission {currentIndex + 1} / {submissions.length}</span>
+              <span className="font-mono text-lg ">Submission {currentIndex + 1} / {submissions.length}</span>
               <button onClick={handleNext} disabled={submissions.length <= 1} className="p-2 rounded-md hover:bg-gray-700 disabled:opacity-40"><ChevronRight /></button>
             </div>
           )}

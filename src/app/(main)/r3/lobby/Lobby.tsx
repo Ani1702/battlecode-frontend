@@ -13,21 +13,108 @@ import LoadingOverlay from '@/components/shared/LoadingOverlay';
 // --- TYPE DEFINITIONS ---
 
 interface Participant {
-  id: string;
   userId: string;
   username: string;
-  status: 'WAITING' | 'IN_MATCH' | 'DISCONNECTED' | 'FINISHED';
-  joinedAt: string;
-  isReady: boolean;
+  email?: string;
+  role?: string;
+  status: string;
+  rank?: number;
+  eventScore?: number;
+  socketId?: string;
+  joinedAt?: string;
   disconnectedAt?: string;
   reconnectedAt?: string;
   finishedAt?: string;
+  cooldownEndTime?: number;
+  isReady?: boolean;
+  opponentUsername?: string;
+}
+
+interface Problem {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: string;
+  constraints: string[];
+  boilerplate: { [key: string]: string };
+  sampleTestCases: TestCase[];
+  hints: string[];
+}
+
+interface TestCase {
+  stdin?: string;
+  expected_output?: string;
+  input?: { stdin?: string; json?: unknown; };
+  output?: { stdout?: string; json?: unknown; };
+  explanation?: string;
+}
+
+interface Round3State {
+  success: boolean;
+  timestamp: number;
+  roundNumber: number;
+  round: {
+    isActive: boolean;
+    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED';
+    startTime: number | null;
+    endTime: number | null;
+    timeRemaining: number;
+    duration: number;
+  };
+  participants: {
+    total: number;
+    byStatus: {
+      lobby: Participant[];
+      waiting: Participant[];
+      in_match: Participant[];
+      cooldown: Participant[];
+      finished: Participant[];
+      disconnected: Participant[];
+    };
+    all: Participant[];
+  };
+  currentUser: Participant | null;
+  roundSpecific: {
+    lockedQuestionIds: string[];
+    questions: Problem[];
+    isHackingPhase: boolean;
+  };
+  message?: string;
+  error?: string;
 }
 
 interface LobbyData {
-  participants?: Participant[];
-  isActive?: boolean;
-  [key: string]: unknown;
+  success: boolean;
+  error?: string;
+  timestamp: number;
+  roundNumber: number;
+  round: {
+    isActive: boolean;
+    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED';
+    startTime: number | null;
+    endTime: number | null;
+    timeRemaining: number;
+    duration: number;
+  };
+  participants: {
+    total: number;
+    byStatus: {
+      lobby: Array<Participant>;
+      waiting: Array<Participant>;
+      in_match: Array<Participant>;
+      cooldown: Array<Participant>;
+      finished: Array<Participant>;
+      disconnected: Array<Participant>;
+    };
+    all: Array<Participant>;
+  };
+  currentUser: Participant | null;
+  roundSpecific?: {
+    lockedQuestionIds: string[];
+    questions: Problem[];
+    isHackingPhase: boolean;
+  };
+  message?: string;
 }
 
 interface RoundStartData {
@@ -40,12 +127,6 @@ interface RoundStartData {
 interface SimpleSocketResponse {
   success: boolean;
   error?: string;
-}
-
-interface GetStateResponse extends SimpleSocketResponse {
-  participant?: Participant | null;
-  isActive?: boolean;
-  allParticipants?: Participant[];
 }
 
 interface RoundInfo {
@@ -91,6 +172,15 @@ export default function Lobbyr3() {
 
   const isAdmin = userRole === 'ADMIN';
 
+  // Debug: Log participants whenever they change
+  useEffect(() => {
+    console.log("🔍 [R3 Lobby] Participants state updated:", participants);
+    console.log("📊 [R3 Lobby] Participants count:", participants.length);
+    if (participants.length > 0) {
+      console.log("👥 [R3 Lobby] First participant:", participants[0]);
+    }
+  }, [participants]);
+
   // Functions
   const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 19);
 
@@ -106,31 +196,55 @@ export default function Lobbyr3() {
     });
   };
 
-  const handleState = useCallback((response: GetStateResponse) => {
+  const handleState = useCallback((response: Round3State) => {
+    console.log("🔵 [R3 Lobby] handleState called with response:", response);
     setIsLoading(false);
     setHasAttemptedJoin(true);
 
     if (!response.success) {
+      console.error("❌ [R3 Lobby] State response failed:", response.error);
       showErrorToast(response.error || "Could not sync with the server.");
       return;
     }
 
-    if (response.allParticipants) {
-      setParticipants(response.allParticipants.filter(p => p.status === "WAITING"));
+    // Update participants from the new state structure
+    if (response.participants?.byStatus) {
+      console.log("👥 [R3 Lobby] Participants by status:", response.participants.byStatus);
+      // Show participants in lobby and waiting status
+      const lobbyParticipants = [
+        ...(response.participants.byStatus.lobby || []),
+        ...(response.participants.byStatus.waiting || [])
+      ];
+      console.log("✅ [R3 Lobby] Combined lobby participants:", lobbyParticipants);
+      console.log("📊 [R3 Lobby] Total participants count:", lobbyParticipants.length);
+      setParticipants(lobbyParticipants);
+    } else {
+      console.warn("⚠️ [R3 Lobby] No participants.byStatus in response");
     }
 
-    setIsRoundActive(response.isActive ?? false);
+    // Update round active status
+    setIsRoundActive(response.round.isActive);
+    setTimeRemaining(response.round.timeRemaining);
+    console.log("⏰ [R3 Lobby] Round active:", response.round.isActive, "Time remaining:", response.round.timeRemaining);
 
-    if (response.participant) {
-      if (response.participant.status === "IN_MATCH") {
+    // Check current user status
+    if (response.currentUser) {
+      console.log("👤 [R3 Lobby] Current user:", response.currentUser);
+      if (response.currentUser.status === "IN_MATCH") {
+        console.log("🎮 [R3 Lobby] User in match, redirecting to code page");
         router.push("/r3/code");
       }
     } else {
+      console.log("🔄 [R3 Lobby] User not in round, attempting to join");
+      // User is not in the round, attempt to join
       socket?.emit("round3:join", { userId, username: user?.user_metadata?.full_name || user?.id }, (joinResponse: SimpleSocketResponse) => {
+        console.log("📥 [R3 Lobby] Join response:", joinResponse);
         if (joinResponse.success) {
           showSuccessToast("Successfully joined Round 3 lobby");
+          console.log("✅ [R3 Lobby] User joined successfully");
         } else {
           showErrorToast(joinResponse.error || "Failed to join lobby");
+          console.error("❌ [R3 Lobby] Failed to join:", joinResponse.error);
         }
       });
     }
@@ -188,15 +302,18 @@ export default function Lobbyr3() {
     if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin || isCheckingRound)
       return;
 
+    console.log("🚀 [R3 Lobby] Emitting round3:getState");
     socket.emit("round3:getState");
   }, [socket, isConnected, authenticationChecked, hasAttemptedJoin, isCheckingRound]);
 
   // Listen to state response useEffect
   useEffect(() => {
     if (!socket) return;
+    console.log("👂 [R3 Lobby] Setting up listener for round3:state");
     socket.on("round3:state", handleState);
 
     return () => {
+      console.log("🔇 [R3 Lobby] Removing listener for round3:state");
       socket.off("round3:state", handleState);
     };
   }, [socket, handleState]);
@@ -205,10 +322,21 @@ export default function Lobbyr3() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleLobbyUpdate = (lobbyData: LobbyData) => {
+    const handleLobbyUpdate = (data: LobbyData) => {
+      console.log("🔄 [R3 Lobby] Lobby update received:", data);
       setIsLoading(false);
-      if (lobbyData.participants) setParticipants(lobbyData.participants);
-      if (lobbyData.isActive !== undefined) setIsRoundActive(lobbyData.isActive);
+      if (data.participants?.byStatus?.lobby) {
+        console.log("👥 [R3 Lobby] Updating participants from lobby update:", data.participants.byStatus.lobby);
+        setParticipants(data.participants.byStatus.lobby);
+      }
+      if (data.round?.isActive !== undefined) {
+        console.log("🏁 [R3 Lobby] Round active status update:", data.round.isActive);
+        setIsRoundActive(data.round.isActive);
+      }
+      if (data.round?.timeRemaining !== undefined) {
+        console.log("⏰ [R3 Lobby] Time remaining update:", data.round.timeRemaining);
+        setTimeRemaining(data.round.timeRemaining);
+      }
     };
 
     const handleRoundStart = (data: RoundStartData) => {
@@ -366,7 +494,7 @@ export default function Lobbyr3() {
             ) : participants.length > 0 ? (
               participants.map((participant) => (
                 <PlayerCard
-                  key={participant.id || participant.userId}
+                  key={participant.userId}
                   username={participant.username}
                   avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=ea580c&color=fff`}
                 />
@@ -382,7 +510,7 @@ export default function Lobbyr3() {
 
       {/* --- BOTTOM STATUS AND CONTROLS SECTION --- */}
       {!isRoundActive && !roundStarted && (
-        <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
+        <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3 mb-3">
           <div className="text-sm text-gray-200 text-center">
             {!isConnected ? (
               <div>
@@ -425,7 +553,7 @@ export default function Lobbyr3() {
             )}
           </div>
 
-          {isAdmin && !isLoading && participants.length > 0 && (
+          {/* {isAdmin && !isLoading && participants.length > 0 && (
             <button
               onClick={handleStartRound}
               className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm flex items-center gap-2"
@@ -434,7 +562,7 @@ export default function Lobbyr3() {
               <Rocket className="h-4 w-4" />
               Start Round 3
             </button>
-          )}
+          )} */}
         </div>
       )}
       
