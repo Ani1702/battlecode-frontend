@@ -100,24 +100,32 @@ export default function Admin() {
 
     // Load currentRoundData and participants from localStorage on mount
     useEffect(() => {
-
+        console.log('[ADMIN STATE] Loading initial state from localStorage');
+        
         const savedRounds = localStorage.getItem('battlecode_rounds');
         if (savedRounds) {
             try {
-                setCurrentRoundData(JSON.parse(savedRounds));
-            } catch {
+                const parsedRounds = JSON.parse(savedRounds);
+                console.log('[ADMIN STATE] Loaded saved rounds:', parsedRounds);
+                setCurrentRoundData(parsedRounds);
+            } catch (error) {
+                console.error('[ADMIN STATE] Failed to parse saved rounds:', error);
                 localStorage.removeItem('battlecode_rounds');
             }
+        } else {
+            console.log('[ADMIN STATE] No saved rounds found in localStorage');
         }
 
         // Load participants from localStorage
         const savedParticipants = loadParticipantsFromStorage();
+        console.log('[ADMIN STATE] Loaded saved participants:', savedParticipants.length);
         if (savedParticipants.length > 0) {
             setParticipants(savedParticipants);
         }
         
         // Load match participants for the selected round
         const savedMatchParticipants = loadMatchParticipantsFromStorage(selectedRoundForMatches);
+        console.log('[ADMIN STATE] Loaded saved match participants for round', selectedRoundForMatches, ':', savedMatchParticipants.length);
         if (savedMatchParticipants.length > 0) {
             setMatchParticipants(savedMatchParticipants);
         }
@@ -125,7 +133,10 @@ export default function Admin() {
     }, [loadParticipantsFromStorage, loadMatchParticipantsFromStorage, selectedRoundForMatches]);
 
     const addUserToRound = async (userEmail:string, roundNumber:number) => {
+        console.log('[ADMIN ACTION] Adding user to round:', { userEmail, roundNumber });
+        
         if (!userEmail || roundNumber === null) {
+            console.warn('[ADMIN ACTION] Invalid parameters for addUserToRound');
             showErrorToast('Please enter email and select a round');
             return;
         }
@@ -133,18 +144,21 @@ export default function Admin() {
         socket?.emit('admin:adduser', 
         { user: { email: userEmail }, round: roundNumber },
         (response: { success: boolean; message: string; error: string; }) => {
-        if (response.success) {
-            showSuccessToast(`User ${userEmail} added to Round ${roundNumber}`);
-            
-        } else {
-            showErrorToast(response.error || 'Failed to add user');
-        }
+            console.log('[ADMIN ACTION] Add user response:', response);
+            if (response.success) {
+                showSuccessToast(`User ${userEmail} added to Round ${roundNumber}`);
+            } else {
+                showErrorToast(response.error || 'Failed to add user');
+            }
         }
     );
     };
 
     const removeUserFromRound = async (userEmail:string, roundNumber:number) => {
+        console.log('[ADMIN ACTION] Removing user from round:', { userEmail, roundNumber });
+        
         if (!userEmail || roundNumber === null) {
+            console.warn('[ADMIN ACTION] Invalid parameters for removeUserFromRound');
             showErrorToast('Please enter email and select a round');
             return;
         }
@@ -152,11 +166,12 @@ export default function Admin() {
         socket?.emit('admin:removeuser',
             { user: { email: userEmail }, round: roundNumber },
             (response: { success: boolean; message: string; error: string; }) => {
-            if (response.success) {
-                showSuccessToast(`User ${userEmail} removed from Round ${roundNumber}`);
-            } else {
-                showErrorToast(response.error || 'Failed to remove user');
-            }
+                console.log('[ADMIN ACTION] Remove user response:', response);
+                if (response.success) {
+                    showSuccessToast(`User ${userEmail} removed from Round ${roundNumber}`);
+                } else {
+                    showErrorToast(response.error || 'Failed to remove user');
+                }
             }
         );
     };
@@ -186,30 +201,52 @@ export default function Admin() {
         if (!socket) return;
 
         const handleStateResponse = (response: BaseRoundState) => {
-            if (!response.success) return;
+            console.log('[SOCKET STATE] Received state response:', {
+                success: response.success,
+                roundNumber: response.roundNumber,
+                isActive: response.round?.isActive,
+                participantCount: response.participants?.all?.length
+            });
+            
+            if (!response.success) {
+                console.warn('[SOCKET STATE] Response not successful');
+                return;
+            }
             
             const { roundNumber, round, participants, currentUser, session } = response;
             
             // Early return if required data is missing
             // Fix: Use explicit checks for null/undefined instead of falsy check (roundNumber can be 0)
             if (roundNumber === null || roundNumber === undefined || !round || !participants) {
+                console.warn('[SOCKET STATE] Missing required data in response');
                 return;
             }
             
             // Check if this round is active and update active round state
             if (round.isActive) {
+                console.log('[SOCKET STATE] Round is ACTIVE:', {
+                    roundNumber,
+                    timeRemaining: round.timeRemaining,
+                    nextMatchmakingCycle: response.roundSpecific?.nextMatchmakingCycle
+                });
+                
                 setActiveRoundNumber(roundNumber);
                 setIsRoundActive(true);
                 setGlobalTimeRemaining(round.timeRemaining || 0);
                 // Use roundSpecific for Round 1's nextMatchmakingCycle
                 setNextMatchmakingCycle(response.roundSpecific?.nextMatchmakingCycle ?? null);
-                if (currentUser) setCurrentUser(currentUser);
+                if (currentUser) {
+                    console.log('[SOCKET STATE] Current user:', currentUser);
+                    setCurrentUser(currentUser);
+                }
                 
                 // Auto-switch to match view when round starts if we're viewing this round's lobby
                 if (roundNumber === selectedRoundForUsers) {
+                    console.log('[SOCKET STATE] Auto-switching to match view for round', roundNumber);
                     setSelectedRoundForMatches(roundNumber);
                 }
             } else if (!round.isActive && activeRoundNumber === roundNumber) {
+                console.log('[SOCKET STATE] Round is INACTIVE:', roundNumber);
                 setIsRoundActive(false);
                 setActiveRoundNumber(null);
                 setGlobalTimeRemaining(0);
@@ -218,11 +255,19 @@ export default function Admin() {
             
             // Update match participants (pre-filtered by backend)
             if (round.isActive && roundNumber === selectedRoundForMatches) {
+                console.log('[SOCKET STATE] Updating match participants for round', roundNumber);
+                
                 // Backend already filtered waiting + in_match users
                 const activeUsers = [
                     ...(participants.byStatus?.waiting || []),
                     ...(participants.byStatus?.in_match || [])
                 ];
+                
+                console.log('[SOCKET STATE] Active users count:', {
+                    waiting: participants.byStatus?.waiting?.length || 0,
+                    in_match: participants.byStatus?.in_match?.length || 0,
+                    total: activeUsers.length
+                });
                 
                 // Client-side opponent matching: If opponentUsername is undefined, match users by pairs
                 const activeUsersWithOpponents = activeUsers.map((user, index) => {
@@ -248,11 +293,13 @@ export default function Admin() {
                     return user;
                 });
                 
+                console.log('[SOCKET STATE] Setting match participants:', activeUsersWithOpponents.length);
                 setMatchParticipants(activeUsersWithOpponents);
                 // Save to localStorage
                 saveMatchParticipantsToStorage(activeUsersWithOpponents, roundNumber);
             } else {
                 if (!round.isActive && roundNumber === selectedRoundForMatches) {
+                    console.log('[SOCKET STATE] Round inactive, clearing match participants for round', roundNumber);
                     // Round is NOT active - clear match participants for this round
                     setMatchParticipants([]);
                     saveMatchParticipantsToStorage([], roundNumber);
@@ -261,14 +308,17 @@ export default function Admin() {
             
             // Set all participants for leaderboard/other uses
             if (participants.all && Array.isArray(participants.all)) {
+                console.log('[SOCKET STATE] Setting all participants:', participants.all.length);
                 setAllParticipants(participants.all);
             }
             
             // Update lobby participants if this is the selected round for users (pre-filtered by backend)
             if (roundNumber === selectedRoundForUsers) {
-                setParticipants(participants.byStatus?.lobby || []);
+                const lobbyUsers = participants.byStatus?.lobby || [];
+                console.log('[SOCKET STATE] Updating lobby participants for round', roundNumber, ':', lobbyUsers.length);
+                setParticipants(lobbyUsers);
                 // Save to localStorage
-                saveParticipantsToStorage(participants.byStatus?.lobby || []);
+                saveParticipantsToStorage(lobbyUsers);
             }
         };
 
@@ -287,20 +337,31 @@ export default function Admin() {
     }, [socket, activeRoundNumber, selectedRoundForUsers, selectedRoundForMatches, saveParticipantsToStorage, saveMatchParticipantsToStorage]);
 
     const handleStartRound = (roundNumber: number) => {
-        if (!socket || participants.length === 0) return;
+        console.log('[ADMIN ACTION] Starting round:', roundNumber, 'with participants:', participants.length);
+        
+        if (!socket || participants.length === 0) {
+            console.warn('[ADMIN ACTION] Cannot start round - no socket or no participants');
+            return;
+        }
+        
         socket.emit(`round${roundNumber}:ready`, {}, (response: BaseRoundState) => {
+            console.log('[ADMIN ACTION] Start round response:', response);
+            
             if (response.success) {
                 showSuccessToast(`Round ${roundNumber} started successfully`);
                 
                 // Clear lobby participants from localStorage
                 localStorage.removeItem('participants');
                 setParticipants([]);
+                console.log('[ADMIN ACTION] Cleared lobby participants');
                 
                 // Switch to the match view for this round
                 setSelectedRoundForMatches(roundNumber);
+                console.log('[ADMIN ACTION] Switched to match view for round', roundNumber);
                 
                 // Fetch the updated state to get in-progress participants
                 setTimeout(() => {
+                    console.log('[ADMIN ACTION] Fetching updated match state');
                     fetchMatchUsers(roundNumber);
                 }, 500); // Small delay to ensure backend has processed the state change
             } else {
@@ -310,17 +371,23 @@ export default function Admin() {
     };
 
       const endRound = (roundNumber: number) => {
+        console.log('[ADMIN ACTION] Ending round:', roundNumber);
+        
         if (!socket) {
+          console.error('[ADMIN ACTION] Socket not connected');
           showErrorToast('Socket not connected');
           return;
         }
 
         if (!socket.connected) {
+          console.error('[ADMIN ACTION] Socket disconnected');
           showErrorToast('Socket disconnected. Please refresh the page.');
           return;
         }
         
         socket.emit("admin:endRound", { roundNumber }, (response: BaseRoundState) => {
+          console.log('[ADMIN ACTION] End round response:', response);
+          
           if (response?.success) {
             showSuccessToast(`Round ${roundNumber} ended successfully`);
           } else {
@@ -352,7 +419,10 @@ export default function Admin() {
       };
 
     const resetAllRedis = () => {
+        console.log('[ADMIN ACTION] Resetting all Redis data');
+        
         if (!socket) {
+            console.error('[ADMIN ACTION] Socket not connected');
             showErrorToast('Socket not connected');
             return;
         }
@@ -366,10 +436,12 @@ export default function Admin() {
         [0, 1, 2, 3].forEach(round => {
             localStorage.removeItem(`matchParticipants-round${round}`);
         });
+        console.log('[ADMIN ACTION] Cleared all localStorage data');
         
         // Clear current state
         setParticipants([]);
         setMatchParticipants([]);
+        console.log('[ADMIN ACTION] Cleared all state');
     };
 
     const handleResetRedisClick = () => {
@@ -385,56 +457,81 @@ export default function Admin() {
     };
 
     const fetchRoundData = useCallback(async () => {
+        console.log('[API] Fetching round data from API');
+        
         try {
-            if (!session?.access_token) return;
+            if (!session?.access_token) {
+                console.warn('[API] No access token available');
+                return;
+            }
+            
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/rounds`, {
                 headers: {
                     'Authorization': `Bearer ${session?.access_token}`
                 }
             });
+            
             if (!response.ok) {
                 throw new Error(`API error: ${response.status}`);
             }
+            
             const data = await response.json();
+            console.log('[API] Round data fetched successfully:', data);
+            
             if (data.success && data.data) {
                 setCurrentRoundData(data.data);
                 localStorage.setItem('battlecode_rounds', JSON.stringify(data.data));
+                console.log('[API] Round data saved to state and localStorage');
             }
         } catch (error) {
-            console.error('Error fetching round data:', error);
+            console.error('[API] Error fetching round data:', error);
             // Fallback to localStorage if API fails
             const savedRounds = localStorage.getItem('battlecode_rounds');
             if (savedRounds) {
                 try {
-                setCurrentRoundData(JSON.parse(savedRounds));
-            } catch (error) {
-                console.error('Failed to parse saved rounds:', error);
-                localStorage.removeItem('battlecode_rounds');
-            }
+                    const parsedRounds = JSON.parse(savedRounds);
+                    console.log('[API] Using fallback round data from localStorage:', parsedRounds);
+                    setCurrentRoundData(parsedRounds);
+                } catch (error) {
+                    console.error('[API] Failed to parse saved rounds:', error);
+                    localStorage.removeItem('battlecode_rounds');
+                }
             }
         }
     }, [session?.access_token]);
 
 
     useEffect(() => {
-        if (isLoading) return;
+        console.log('[ADMIN INIT] Admin page initializing', { isLoading, userRole, hasToken: !!session?.access_token });
+        
+        if (isLoading) {
+            console.log('[ADMIN INIT] Still loading, waiting...');
+            return;
+        }
        
         const savedRounds = localStorage.getItem('battlecode_rounds');
         if (savedRounds) {
            try {
-                setCurrentRoundData(JSON.parse(savedRounds));
+                const parsedRounds = JSON.parse(savedRounds);
+                console.log('[ADMIN INIT] Loading saved rounds from localStorage:', parsedRounds);
+                setCurrentRoundData(parsedRounds);
             } catch (error) {
-                console.error('Failed to parse saved rounds:', error);
+                console.error('[ADMIN INIT] Failed to parse saved rounds:', error);
                 localStorage.removeItem('battlecode_rounds');
             }
         }
+        
         if (userRole !== "ADMIN"){
+            console.warn('[ADMIN INIT] User is not admin, redirecting back');
             router.back();
             return;
-            
         }
+        
+        console.log('[ADMIN INIT] User is admin, initializing admin page');
         setIsAdmin(true);
+        
         if (session?.access_token) {
+            console.log('[ADMIN INIT] Access token available, fetching round data');
             fetchRoundData();
         }
         
@@ -443,19 +540,27 @@ export default function Admin() {
     // Save round data to localStorage whenever it changes
     useEffect(() => {
         if (currentRoundData) {
+            console.log('[STATE] Current round data changed, saving to localStorage:', currentRoundData);
             localStorage.setItem('battlecode_rounds', JSON.stringify(currentRoundData));
         }
     }, [currentRoundData]);
 
     // Listen for real-time round status updates via socket (same pattern as dashboard)
     useEffect(() => {
-        if (!socket) return;
+        if (!socket) {
+            console.log('[SOCKET] No socket available for real-time updates');
+            return;
+        }
+
+        console.log('[SOCKET] Setting up real-time round status listeners');
 
         const handleCurrentRound = (data: CurrentRoundData) => {
+            console.log('[SOCKET] Received current round update:', data);
             setCurrentRoundData(data);
         };
 
         const handleRedisResetSuccess = () => {
+            console.log('[SOCKET] Redis reset successful');
             showSuccessToast('Redis cleared successfully');
         };
 
@@ -463,9 +568,11 @@ export default function Admin() {
         socket.on('admin:reset:success', handleRedisResetSuccess);
         
         // Request initial round data
+        console.log('[SOCKET] Requesting initial round data');
         socket.emit('client:getCurrentRound');
 
         return () => {
+            console.log('[SOCKET] Cleaning up round status listeners');
             socket.off('server:currentRound', handleCurrentRound);
             socket.off('admin:reset:success', handleRedisResetSuccess);
         };
@@ -473,13 +580,21 @@ export default function Admin() {
 
     // Fetch lobby users whenever socket changes or selected round changes
     useEffect(() => {
-        if (!socket) return;
+        if (!socket) {
+            console.log('[FETCH] No socket for fetching lobby users');
+            return;
+        }
+        console.log('[FETCH] Fetching lobby users for round', selectedRoundForUsers);
         fetchLobbyUsers(selectedRoundForUsers);
     }, [socket, selectedRoundForUsers, fetchLobbyUsers]);
 
     // Fetch match users whenever socket changes or selected round for matches changes
     useEffect(() => {
-        if (!socket) return;
+        if (!socket) {
+            console.log('[FETCH] No socket for fetching match users');
+            return;
+        }
+        console.log('[FETCH] Fetching match users for round', selectedRoundForMatches);
         fetchMatchUsers(selectedRoundForMatches);
     }, [socket, selectedRoundForMatches, fetchMatchUsers]);
 
@@ -567,12 +682,21 @@ export default function Admin() {
     
 
     const updateRoundStatus = async (roundNumber: number, newStatus: string) => {
-    if (!isAdmin || adminLoading) return;
-    if (!newStatus || roundNumber === null || roundNumber === undefined) return;
+    console.log('[ADMIN ACTION] Updating round status:', { roundNumber, newStatus });
+    
+    if (!isAdmin || adminLoading) {
+      console.warn('[ADMIN ACTION] Cannot update status - not admin or already loading');
+      return;
+    }
+    if (!newStatus || roundNumber === null || roundNumber === undefined) {
+      console.warn('[ADMIN ACTION] Invalid parameters for updateRoundStatus');
+      return;
+    }
     
     setAdminLoading(true);
     
     if ((newStatus === 'COMPLETED' || newStatus === 'LOCKED') && roundNumber === 0) {
+      console.log('[ADMIN ACTION] Clearing code store for round 0');
       localStorage.removeItem(`battlecode-round-0-code-store`);
     }
     try {
@@ -586,6 +710,8 @@ export default function Admin() {
       });
       if (response){
         const data = await response.json();
+        console.log('[ADMIN ACTION] Update status response:', data);
+        
         if (data.success) {
         showSuccessToast(`Round ${roundNumber} ${newStatus.toLowerCase()}`);
         await fetchRoundData();
@@ -598,7 +724,7 @@ export default function Admin() {
 
       
     } catch (error) {
-      console.error('Error updating round status:', error);
+      console.error('[ADMIN ACTION] Error updating round status:', error);
       showErrorToast('Failed to update round status');
     } finally {
       setAdminLoading(false);

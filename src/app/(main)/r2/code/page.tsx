@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useRound2State } from "@/hooks";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
@@ -104,7 +103,6 @@ export default function R2CodePage() {
   const router = useRouter();
   const { session } = useAuth();
   const { socket, isConnected } = useSocket();
-  const { state: round2State, isLoading: stateLoading } = useRound2State();
   
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -444,21 +442,7 @@ if (domNode) {
   // --- FIX: Added triggerSessionEnd to dependency array ---
   }, [sessionData, showEndPopup, triggerSessionEnd]);
 
-  // Guard: Redirect if no active session
-  useEffect(() => {
-    if (!round2State || stateLoading) return;
-
-    if (round2State.state?.currentUser.activeSession === false) {
-      showErrorToast("Your session has ended. Redirecting to dashboard...");
-      sessionStorage.removeItem('r2_session_type');
-      sessionStorage.removeItem('r2_context_id');
-      setTimeout(() => {
-        const userRole = round2State.state?.currentUser.role;
-        router.push(userRole ? `/r2/${userRole}` : '/dashboard');
-      }, 1500);
-    }
-  }, [round2State, stateLoading, router]);
-
+  // Initial state fetch
   useEffect(() => {
     if (!socket || !isConnected) return;
 

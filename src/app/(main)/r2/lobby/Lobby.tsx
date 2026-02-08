@@ -6,12 +6,28 @@ import PlayerCard from '@/components/shared/PlayerCard';
 import CustomScrollbar from '@/components/shared/CustomScrollbar';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRound2State, Participant } from '@/hooks';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
 import LoadingOverlay from '@/components/shared/LoadingOverlay';
 
 
 // --- Type Definitions ---
+
+interface Participant {
+  userId: string;
+  username: string;
+  email?: string;
+  role?: string;
+  status: string;
+  rank?: number;
+  eventScore?: number;
+  socketId?: string;
+  joinedAt?: string;
+  disconnectedAt?: string;
+  reconnectedAt?: string;
+  finishedAt?: string;
+  cooldownEndTime?: number;
+  isReady?: boolean;
+}
 
 interface SimpleSocketResponse {
   success: boolean;
@@ -23,12 +39,13 @@ interface SimpleSocketResponse {
 
 export default function LobbyR2() {
   const router = useRouter();
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, isLoading: socketLoading } = useSocket();
   const { userId, isLoading: authLoading, userRole } = useAuth();
-  const { state, isLoading: stateLoading, error: stateError, refetch } = useRound2State();
   
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [roundStatus, setRoundStatus] = useState<'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED'>('LOBBY');
   const hasNavigated = useRef(false);
   
   const isAdmin = userRole === 'ADMIN';
@@ -52,83 +69,121 @@ export default function LobbyR2() {
     if (!authLoading && !userId) router.push('/dashboard');
   }, [authLoading, userId, router]);
 
-  // 🔑 Join Round 2 lobby (THIS IS REQUIRED)
+  // 🔑 Join Round 2 lobby and fetch state
   useEffect(() => {
-    if (!socket || !isConnected || !authenticationChecked) return;
+    if (!socket || !isConnected || !authenticationChecked || socketLoading) {
+      console.debug('[R2 Lobby] Waiting for socket/auth:', { 
+        hasSocket: !!socket, 
+        isConnected, 
+        authenticationChecked, 
+        socketLoading 
+      });
+      return;
+    }
 
     console.debug('[R2 Lobby] Emitting round2:join');
+    
+    // Set a timeout to prevent infinite loading
+    const joinTimeout = setTimeout(() => {
+      console.error('[R2 Lobby] Join/GetState timeout');
+      setIsLoading(false);
+      showErrorToast('Failed to connect to lobby. Please refresh.');
+    }, 10000); // 10 second timeout
+
     socket.emit('round2:join', {}, (res?: SimpleSocketResponse) => {
       if (!res?.success) {
         console.error('[R2 Lobby] Failed to join lobby:', res);
-        // attempt to fetch canonical state on failure
-        if (socket && isConnected) socket.emit('round2:getState');
+        clearTimeout(joinTimeout);
+        setIsLoading(false);
+        showErrorToast(res?.error || 'Failed to join lobby');
         return;
       }
 
-      // After successful join, request canonical state so UI updates immediately
-      if (typeof refetch === 'function') {
-        console.debug('[R2 Lobby] Refetching round2 state after join');
-        try {
-          refetch();
-        } catch (err) {
-          console.error('[R2 Lobby] refetch error:', err);
+      // After successful join, request state
+      console.debug('[R2 Lobby] Emitting round2:getState after join');
+      socket.emit('round2:getState', (stateResponse: any) => {
+        clearTimeout(joinTimeout);
+        console.debug('[R2 Lobby] State response:', stateResponse);
+        
+        if (stateResponse?.success) {
+          const lobbyParticipants = stateResponse.participants?.byStatus?.lobby || [];
+          setParticipants(lobbyParticipants);
+          setRoundStatus(stateResponse.round?.status || 'LOBBY');
+          
+          // Auto-navigate if round started AND user has a role
+          const userRole = stateResponse.roundSpecific?.role;
+          if (!hasNavigated.current && stateResponse.round?.status === 'IN_PROGRESS' && userRole) {
+            hasNavigated.current = true;
+            console.debug('[R2 Lobby] Round started, navigating to role page:', userRole);
+            showInfoToast(`Role assigned: ${userRole.toUpperCase()}`);
+            router.push(`/r2/${userRole}`);
+          }
+        } else {
+          console.error('[R2 Lobby] GetState failed:', stateResponse);
+          showErrorToast('Failed to get lobby state');
         }
-      } else if (socket && isConnected) {
-        console.debug('[R2 Lobby] Emitting round2:getState after join');
-        socket.emit('round2:getState');
-      }
+        
+        setIsLoading(false);
+      });
     });
-  }, [socket, isConnected, authenticationChecked, refetch]);
 
-  // Listen for backend lobby broadcasts and refetch canonical state
+    return () => {
+      clearTimeout(joinTimeout);
+    };
+  }, [socket, isConnected, authenticationChecked, socketLoading, router]);
+
+  // Listen for lobby updates
   useEffect(() => {
     if (!socket || !isConnected) return;
 
+    const handleStateUpdate = (stateResponse: any) => {
+      console.debug('[R2 Lobby] State update:', stateResponse);
+      
+      if (stateResponse?.success) {
+        const lobbyParticipants = stateResponse.participants?.byStatus?.lobby || [];
+        setParticipants(lobbyParticipants);
+        setRoundStatus(stateResponse.round?.status || 'LOBBY');
+        
+        // Auto-navigate if round started AND user has a role
+        const userRole = stateResponse.roundSpecific?.role;
+        if (!hasNavigated.current && stateResponse.round?.status === 'IN_PROGRESS' && userRole) {
+          hasNavigated.current = true;
+          console.debug('[R2 Lobby] Round started, navigating to role page:', userRole);
+          showInfoToast(`Role assigned: ${userRole.toUpperCase()}`);
+          router.push(`/r2/${userRole}`);
+        }
+        
+        // Ensure loading is false when we receive updates
+        setIsLoading(false);
+      }
+    };
+
     const handleLobbyUpdate = () => {
-      console.debug('[R2 Lobby] Lobby update → refetching state');
-      socket.emit('round2:getState');
+      console.debug('[R2 Lobby] Lobby update → fetching state');
+      socket.emit('round2:getState', handleStateUpdate);
     };
 
     socket.on('round2:lobby', handleLobbyUpdate);
+    socket.on('round2:state', handleStateUpdate);
 
     return () => {
       socket.off('round2:lobby', handleLobbyUpdate);
+      socket.off('round2:state', handleStateUpdate);
     };
-  }, [socket, isConnected]);
-
-  // 🔑 Request canonical Round 2 state on lobby mount
-  useEffect(() => {
-    if (!socket || !isConnected) return;
-
-    console.debug('[R2 Lobby] Emitting round2:getState');
-    socket.emit('round2:getState');
-  }, [socket, isConnected]);
-
-  // State-driven navigation and participant updates
-  useEffect(() => {
-    if (!state || !state.state || !authenticationChecked) return;
-
-    console.debug('[R2 Lobby] State update:', state);
-
-    // Update participants list from canonical state
-    const lobbyParticipants = state.state.participants.filter(p => p.status === 'lobby');
-    setParticipants(lobbyParticipants);
-
-    // Auto-navigate if round started AND user has a role (idempotent)
-    if (!hasNavigated.current && state.state.round.status === 'IN_PROGRESS' && state.state.currentUser.role) {
-      hasNavigated.current = true;
-      console.debug('[R2 Lobby] Round started, navigating to role page:', state.state.currentUser.role);
-      showInfoToast(`Role assigned: ${state.state.currentUser.role.toUpperCase()}`);
-      router.push(`/r2/${state.state.currentUser.role}`);
-    }
-  }, [state, authenticationChecked, router]);
+  }, [socket, isConnected, router]);
 
   // Early return for loading states
-  if (authLoading || !authenticationChecked || stateLoading) {
+  if (authLoading || !authenticationChecked || isLoading || socketLoading) {
+    const loadingMessage = authLoading 
+      ? "Loading Authentication..." 
+      : socketLoading 
+        ? "Connecting to server..."
+        : "Checking Round Status...";
+    
     return (
       <LoadingOverlay 
         isLoading={true} 
-        message={authLoading ? "Loading Authentication..." : "Checking Round Status..."}
+        message={loadingMessage}
       />
     );
   }
@@ -149,9 +204,9 @@ export default function LobbyR2() {
         <CustomScrollbar className="h-full overflow-y-auto">
           <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
             {participants.length > 0 ? (
-              participants.map((participant) => (
+              participants.map((participant, index) => (
                 <PlayerCard 
-                  key={participant.id || participant.userId}
+                  key={participant.userId || `participant-${index}`}
                   username={participant.username}
                   avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=0e7490&color=fff`}
                 />
@@ -166,8 +221,8 @@ export default function LobbyR2() {
       </div>
 
       {/* --- BOTTOM STATUS AND CONTROLS SECTION --- */}
-      {state?.state?.round.status === 'LOBBY' && (
-        <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3">
+      {roundStatus === 'LOBBY' && (
+        <div className="flex-shrink-0 p-4 flex flex-col items-center gap-3 mb-3">
           <div className="text-sm text-gray-200 text-center">
             {!isConnected ? (
               <div>
@@ -199,7 +254,7 @@ export default function LobbyR2() {
             )}
           </div>
 
-          {isAdmin && participants.length > 0 && (
+          {/* {isAdmin && participants.length > 0 && (
             <button
               onClick={handleStartRound}
               className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm flex items-center gap-2"
@@ -208,7 +263,7 @@ export default function LobbyR2() {
               <Rocket className="h-4 w-4" />
               Start Round 2
             </button>
-          )}
+          )} */}
         </div>
       )}
       
