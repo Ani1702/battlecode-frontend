@@ -56,6 +56,40 @@ interface ViewSubmissionsData {
   submissions: HackableSubmission[];
 }
 
+interface Round3State {
+  success: boolean;
+  timestamp: number;
+  roundNumber: number;
+  round: {
+    isActive: boolean;
+    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED';
+    startTime: number | null;
+    endTime: number | null;
+    timeRemaining: number;
+    duration: number;
+  };
+  participants: {
+    total: number;
+    byStatus: {
+      lobby: Array<unknown>;
+      waiting: Array<unknown>;
+      in_match: Array<unknown>;
+      cooldown: Array<unknown>;
+      finished: Array<unknown>;
+      disconnected: Array<unknown>;
+    };
+    all: Array<unknown>;
+  };
+  currentUser: unknown | null;
+  roundSpecific: {
+    lockedQuestionIds: string[];
+    questions: Problem[];
+    isHackingPhase: boolean;
+  };
+  message?: string;
+  error?: string;
+}
+
 interface StateResponse {
   success?: boolean;
   error?: { message?: string } | string;
@@ -344,27 +378,48 @@ export default function Round3Page() {
       router.refresh();
     };
 
-    const handleState = (data: GetStateResponse) => {
+    const handleState = (data: Round3State | GetStateResponse) => {
       if (!isMountedRef.current || !data.success) return;
 
-      if (data.questions) {
-        setProblems(data.questions);
-        if (data.questions.length > 0 && !currentProblem) {
-          setCurrentProblem(data.questions[0]);
-          setCurrentProblemIndex(0);
+      // Handle new Round3State structure
+      if ('roundSpecific' in data) {
+        const state = data as Round3State;
+        
+        if (state.roundSpecific.questions) {
+          setProblems(state.roundSpecific.questions);
+          if (state.roundSpecific.questions.length > 0 && !currentProblem) {
+            setCurrentProblem(state.roundSpecific.questions[0]);
+            setCurrentProblemIndex(0);
+          }
         }
-      }
 
-      if (typeof data.globalTimeRemaining === "number") {
-        setTimeRemaining(data.globalTimeRemaining);
-      }
+        setTimeRemaining(state.round.timeRemaining);
+        setIsHackingPhase(state.roundSpecific.isHackingPhase);
+        setLockedQuestionIds(state.roundSpecific.lockedQuestionIds);
+      } 
+      // Handle legacy GetStateResponse structure (for backward compatibility)
+      else {
+        const state = data as GetStateResponse;
+        
+        if (state.questions) {
+          setProblems(state.questions);
+          if (state.questions.length > 0 && !currentProblem) {
+            setCurrentProblem(state.questions[0]);
+            setCurrentProblemIndex(0);
+          }
+        }
 
-      if (typeof data.isHackingPhase === "boolean") {
-        setIsHackingPhase(data.isHackingPhase);
-      }
+        if (typeof state.globalTimeRemaining === "number") {
+          setTimeRemaining(state.globalTimeRemaining);
+        }
 
-      if (data.lockedQuestionIds) {
-        setLockedQuestionIds(data.lockedQuestionIds);
+        if (typeof state.isHackingPhase === "boolean") {
+          setIsHackingPhase(state.isHackingPhase);
+        }
+
+        if (state.lockedQuestionIds) {
+          setLockedQuestionIds(state.lockedQuestionIds);
+        }
       }
       
       // Ensure page loading is complete when state is received
@@ -409,20 +464,34 @@ export default function Round3Page() {
       }
     }, 5000);
 
-    socket.emit('round3:getState', {}, (response: StateResponse) => {
+    socket.emit('round3:getState', {}, (response: Round3State | StateResponse) => {
       clearTimeout(timeoutId);
       
       if (!isMountedRef.current) return;
       
-      if (response?.success && response?.questions && response.questions.length > 0) {
-        setProblems(response.questions);
-        setCurrentProblem(response.questions[0]);
+      // Handle new Round3State structure
+      if ('roundSpecific' in response && response.success) {
+        const state = response as Round3State;
+        setProblems(state.roundSpecific.questions);
+        setCurrentProblem(state.roundSpecific.questions[0]);
         setCurrentProblemIndex(0);
-        setTimeRemaining(response.timeRemaining || 0);
-        setIsHackingPhase(response.isHackingPhase || false);
-        setLockedQuestionIds(response.lockedQuestionIds || []);
+        setTimeRemaining(state.round.timeRemaining);
+        setIsHackingPhase(state.roundSpecific.isHackingPhase);
+        setLockedQuestionIds(state.roundSpecific.lockedQuestionIds);
+      }
+      // Handle legacy StateResponse structure (for backward compatibility)
+      else if (response?.success && 'questions' in response && response.questions && response.questions.length > 0) {
+        const state = response as StateResponse;
+        setProblems(state.questions!);
+        setCurrentProblem(state.questions![0]);
+        setCurrentProblemIndex(0);
+        setTimeRemaining(state.timeRemaining || 0);
+        setIsHackingPhase(state.isHackingPhase || false);
+        setLockedQuestionIds(state.lockedQuestionIds || []);
       } else {
-        const errorMessage = typeof response?.error === 'string' ? response.error : response?.error?.message || 'No active round found.';
+        const errorMessage = response?.error 
+          ? (typeof response.error === 'string' ? response.error : response.error.message || 'No active round found.')
+          : 'No active round found.';
         showErrorToast(errorMessage);
         router.push('/r3/lobby');
       }
@@ -674,13 +743,39 @@ if (domNode) {
   const handleLockQuestion = useCallback((questionId: string) => {
     if (!socket) return showErrorToast("Not connected to server.");
     showInfoToast("Attempting to lock question...");
-    socket.emit('round3:lockQuestion', { questionId }, (response: { success: boolean, error?: string, message?: string }) => {
+    socket.emit('round3:lockQuestion', { questionId }, (response: { success: boolean, error?: string, message?: string, submissions?: HackableSubmission[] }) => {
       if (response.success) {
         showSuccessToast(response.message || "Question locked successfully!");
         setLockedQuestionIds(prev => [...prev, questionId]);
-      } else { showErrorToast(response.error || "Failed to lock question."); }
+        
+        // Store the initial locked submissions
+        if (response.submissions) {
+          setHackableSubmissions(prev => ({ 
+            ...prev, 
+            [questionId]: response.submissions || [] 
+          }));
+        }
+      } else { 
+        showErrorToast(response.error || "Failed to lock question."); 
+      }
     });
   }, [socket]);
+
+  const handleOpenHackModal = useCallback(() => {
+    if (!socket || !currentProblem) return;
+    
+    // Fetch locked submissions when opening the hack modal
+    socket.emit('round3:getLockedSubmissions', { questionId: currentProblem.id }, (response: { success: boolean, error?: string, submissions?: HackableSubmission[] }) => {
+      if (response.success && response.submissions) {
+        setHackableSubmissions(prev => ({ 
+          ...prev, 
+          [currentProblem.id]: response.submissions || [] 
+        }));
+      }
+    });
+    
+    setIsHackModalOpen(true);
+  }, [socket, currentProblem]);
 
   const handleHackAttempt = useCallback((testCase: string, targetSubmission: HackableSubmission) => {
     if (!socket || !currentProblem) return showErrorToast("Cannot submit hack, connection or problem invalid.");
@@ -726,6 +821,17 @@ if (domNode) {
         return savedCode ? { text: 'Saved', className: 'text-green-400', icon: <CheckCircle className="h-3 w-3" /> } : { text: '', icon: null };
     }
   };
+
+  // Log hackable submissions when modal is about to be displayed
+  useEffect(() => {
+    if (isHackModalOpen && currentProblem) {
+      console.log('=== HACK MODAL OPENED ===');
+      console.log('Current Problem ID:', currentProblem.id);
+      console.log('All Hackable Submissions:', hackableSubmissions);
+      console.log('Submissions for Current Problem:', hackableSubmissions[currentProblem.id] || []);
+      console.log('Number of Submissions:', (hackableSubmissions[currentProblem.id] || []).length);
+    }
+  }, [isHackModalOpen, currentProblem, hackableSubmissions]);
 
   // --- Render Logic ---
   if (pageIsLoading) return <LoadingOverlay isLoading={true} message="Loading Round..." />;
@@ -786,7 +892,7 @@ if (domNode) {
                 <div className="flex-1 flex justify-end items-center gap-2">
                   {saveStatusDisplay.text && (<span className={`text-xs ${saveStatusDisplay.className} flex items-center gap-1`}>{saveStatusDisplay.icon}{saveStatusDisplay.text}</span>)}
                   {isLocked ? (
-                    <button onClick={() => setIsHackModalOpen(true)} disabled={!isHackingPhase} title={isHackingPhase ? "Hack other solutions for this problem" : "Hacking is not yet active"} className="flex items-center gap-2 bg-red-600 text-white p-2 rounded border border-red-500 hover:bg-red-500 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600">
+                    <button onClick={handleOpenHackModal} disabled={!isHackingPhase} title={isHackingPhase ? "Hack other solutions for this problem" : "Hacking is not yet active"} className="flex items-center gap-2 bg-red-600 text-white p-2 rounded border border-red-500 hover:bg-red-500 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600">
                       <Swords size={16} />Hack
                     </button>
                   ) : (
@@ -841,7 +947,7 @@ if (domNode) {
                     </div>
                   </div>
                 ) : (
-                  <CustomScrollbar className="h-full">
+                  <CustomScrollbar className="h-full overflow-y-auto">
                     <div className="p-1">
                       {(isRunning || isSubmitting) && !submissionResults && (<div className="flex items-center justify-center h-full text-gray-400">Judging...</div>)}
                       {!isRunning && !isSubmitting && !submissionResults && (<div className="flex items-center justify-center h-full text-gray-400">Run code or submit a solution to see results.</div>)}

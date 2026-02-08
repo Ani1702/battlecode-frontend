@@ -79,6 +79,16 @@ interface BaseRoundState {
   message?: string;
 }
 
+// Round 3 specific state type
+interface Round3State extends BaseRoundState {
+  roundNumber: 3;
+  roundSpecific: {
+    lockedQuestionIds: Array<string>;
+    questions: Array<Problem>;
+    isHackingPhase: boolean;
+  };
+}
+
 interface Participant {
   userId: string;
   username: string;
@@ -125,4 +135,4 @@ interface BountyQuestion extends Problem {
   isAttemptedByUser: boolean;
 }
 
-export type { BaseRoundState, Participant, Problem, UserProgress, ChallengeRequest, BountyQuestion };
+export type { BaseRoundState, Round3State, Participant, Problem, UserProgress, ChallengeRequest, BountyQuestion };
