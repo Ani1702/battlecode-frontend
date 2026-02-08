@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Rocket } from "lucide-react";
 import PlayerCard from '@/components/shared/PlayerCard';
@@ -25,10 +25,11 @@ export default function LobbyR2() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
   const { userId, isLoading: authLoading, userRole } = useAuth();
-  const { state, isLoading: stateLoading, error: stateError } = useRound2State();
+  const { state, isLoading: stateLoading, error: stateError, refetch } = useRound2State();
   
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
+  const hasNavigated = useRef(false);
   
   const isAdmin = userRole === 'ADMIN';
 
@@ -51,58 +52,76 @@ export default function LobbyR2() {
     if (!authLoading && !userId) router.push('/dashboard');
   }, [authLoading, userId, router]);
 
-  // State-driven navigation and participant updates
+  // 🔑 Join Round 2 lobby (THIS IS REQUIRED)
   useEffect(() => {
-    if (!state || !authenticationChecked) return;
+    if (!socket || !isConnected || !authenticationChecked) return;
 
-    console.debug('[R2 Lobby] State update:', state);
+    console.debug('[R2 Lobby] Emitting round2:join');
+    socket.emit('round2:join', {}, (res?: SimpleSocketResponse) => {
+      if (!res?.success) {
+        console.error('[R2 Lobby] Failed to join lobby:', res);
+        // attempt to fetch canonical state on failure
+        if (socket && isConnected) socket.emit('round2:getState');
+        return;
+      }
 
-    // Update participants list - try participantsByStatus first, fallback to filtering participants array
-    let lobbyParticipants: Participant[] = [];
-    
-    if (state.state?.participantsByStatus?.lobby) {
-      console.debug('[R2 Lobby] Using participantsByStatus.lobby:', state.state.participantsByStatus.lobby);
-      lobbyParticipants = state.state.participantsByStatus.lobby;
-    } else if (state.state?.participants) {
-      console.debug('[R2 Lobby] All participants from state:', state.state.participants);
-      lobbyParticipants = state.state.participants.filter(p => {
-        console.debug(`[R2 Lobby] Checking participant: id=${p.userId || p.id}, username=${p.username}, status=${p.status}`);
-        return p.status === 'lobby';
-      });
-      console.debug('[R2 Lobby] Filtered lobby participants:', lobbyParticipants);
-    }
-    
-    setParticipants(lobbyParticipants);
-
-    // Auto-navigate if round started AND user has a role
-    if (state.state?.round.status === 'IN_PROGRESS' && state.state?.currentUser.role) {
-      console.debug('[R2 Lobby] Round started, navigating to role page:', state.state.currentUser.role);
-      showInfoToast(`You have been assigned the role: ${state.state.currentUser.role.toUpperCase()}`);
-      setTimeout(() => {
-        if (state.state?.currentUser.role) {
-          router.push(`/r2/${state.state.currentUser.role}`);
+      // After successful join, request canonical state so UI updates immediately
+      if (typeof refetch === 'function') {
+        console.debug('[R2 Lobby] Refetching round2 state after join');
+        try {
+          refetch();
+        } catch (err) {
+          console.error('[R2 Lobby] refetch error:', err);
         }
-      }, 1500);
-    }
-  }, [state, authenticationChecked, router]);
+      } else if (socket && isConnected) {
+        console.debug('[R2 Lobby] Emitting round2:getState after join');
+        socket.emit('round2:getState');
+      }
+    });
+  }, [socket, isConnected, authenticationChecked, refetch]);
 
-  // Listen for lobby updates to refresh participant list
+  // Listen for backend lobby broadcasts and refetch canonical state
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    const handleLobbyUpdate = (data: any) => {
-      console.debug('[Lobby] Received lobbyUpdate:', data);
-      if (data?.participants) {
-        setParticipants(data.participants);
-      }
+    const handleLobbyUpdate = () => {
+      console.debug('[R2 Lobby] Lobby update → refetching state');
+      socket.emit('round2:getState');
     };
 
-    socket.on('round2:lobbyUpdate', handleLobbyUpdate);
+    socket.on('round2:lobby', handleLobbyUpdate);
 
     return () => {
-      socket.off('round2:lobbyUpdate', handleLobbyUpdate);
+      socket.off('round2:lobby', handleLobbyUpdate);
     };
   }, [socket, isConnected]);
+
+  // 🔑 Request canonical Round 2 state on lobby mount
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    console.debug('[R2 Lobby] Emitting round2:getState');
+    socket.emit('round2:getState');
+  }, [socket, isConnected]);
+
+  // State-driven navigation and participant updates
+  useEffect(() => {
+    if (!state || !state.state || !authenticationChecked) return;
+
+    console.debug('[R2 Lobby] State update:', state);
+
+    // Update participants list from canonical state
+    const lobbyParticipants = state.state.participants.filter(p => p.status === 'lobby');
+    setParticipants(lobbyParticipants);
+
+    // Auto-navigate if round started AND user has a role (idempotent)
+    if (!hasNavigated.current && state.state.round.status === 'IN_PROGRESS' && state.state.currentUser.role) {
+      hasNavigated.current = true;
+      console.debug('[R2 Lobby] Round started, navigating to role page:', state.state.currentUser.role);
+      showInfoToast(`Role assigned: ${state.state.currentUser.role.toUpperCase()}`);
+      router.push(`/r2/${state.state.currentUser.role}`);
+    }
+  }, [state, authenticationChecked, router]);
 
   // Early return for loading states
   if (authLoading || !authenticationChecked || stateLoading) {
