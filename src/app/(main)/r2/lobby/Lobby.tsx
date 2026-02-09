@@ -41,13 +41,13 @@ export default function LobbyR2() {
   const router = useRouter();
   const { socket, isConnected, isLoading: socketLoading } = useSocket();
   const { userId, isLoading: authLoading, userRole } = useAuth();
-  
+
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [roundStatus, setRoundStatus] = useState<'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED'>('LOBBY');
   const hasNavigated = useRef(false);
-  
+
   const isAdmin = userRole === 'ADMIN';
 
   // Functions
@@ -72,17 +72,17 @@ export default function LobbyR2() {
   // 🔑 Join Round 2 lobby and fetch state
   useEffect(() => {
     if (!socket || !isConnected || !authenticationChecked || socketLoading) {
-      console.debug('[R2 Lobby] Waiting for socket/auth:', { 
-        hasSocket: !!socket, 
-        isConnected, 
-        authenticationChecked, 
-        socketLoading 
+      console.debug('[R2 Lobby] Waiting for socket/auth:', {
+        hasSocket: !!socket,
+        isConnected,
+        authenticationChecked,
+        socketLoading
       });
       return;
     }
 
     console.debug('[R2 Lobby] Emitting round2:join');
-    
+
     // Set a timeout to prevent infinite loading
     const joinTimeout = setTimeout(() => {
       console.error('[R2 Lobby] Join/GetState timeout');
@@ -104,12 +104,12 @@ export default function LobbyR2() {
       socket.emit('round2:getState', (stateResponse: any) => {
         clearTimeout(joinTimeout);
         console.debug('[R2 Lobby] State response:', stateResponse);
-        
+
         if (stateResponse?.success) {
           const lobbyParticipants = stateResponse.participants?.byStatus?.lobby || [];
           setParticipants(lobbyParticipants);
           setRoundStatus(stateResponse.round?.status || 'LOBBY');
-          
+
           // Auto-navigate if round started AND user has a role
           const userRole = stateResponse.roundSpecific?.role;
           if (!hasNavigated.current && stateResponse.round?.status === 'IN_PROGRESS' && userRole) {
@@ -122,10 +122,12 @@ export default function LobbyR2() {
           console.error('[R2 Lobby] GetState failed:', stateResponse);
           showErrorToast('Failed to get lobby state');
         }
-        
+
         setIsLoading(false);
       });
     });
+
+    socket.emit("round2:getState");
 
     return () => {
       clearTimeout(joinTimeout);
@@ -138,12 +140,12 @@ export default function LobbyR2() {
 
     const handleStateUpdate = (stateResponse: any) => {
       console.debug('[R2 Lobby] State update:', stateResponse);
-      
+
       if (stateResponse?.success) {
         const lobbyParticipants = stateResponse.participants?.byStatus?.lobby || [];
         setParticipants(lobbyParticipants);
         setRoundStatus(stateResponse.round?.status || 'LOBBY');
-        
+
         // Auto-navigate if round started AND user has a role
         const userRole = stateResponse.roundSpecific?.role;
         if (!hasNavigated.current && stateResponse.round?.status === 'IN_PROGRESS' && userRole) {
@@ -152,7 +154,7 @@ export default function LobbyR2() {
           showInfoToast(`Role assigned: ${userRole.toUpperCase()}`);
           router.push(`/r2/${userRole}`);
         }
-        
+
         // Ensure loading is false when we receive updates
         setIsLoading(false);
       }
@@ -174,15 +176,15 @@ export default function LobbyR2() {
 
   // Early return for loading states
   if (authLoading || !authenticationChecked || isLoading || socketLoading) {
-    const loadingMessage = authLoading 
-      ? "Loading Authentication..." 
-      : socketLoading 
+    const loadingMessage = authLoading
+      ? "Loading Authentication..."
+      : socketLoading
         ? "Connecting to server..."
         : "Checking Round Status...";
-    
+
     return (
-      <LoadingOverlay 
-        isLoading={true} 
+      <LoadingOverlay
+        isLoading={true}
         message={loadingMessage}
       />
     );
@@ -205,7 +207,7 @@ export default function LobbyR2() {
           <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
             {participants.length > 0 ? (
               participants.map((participant, index) => (
-                <PlayerCard 
+                <PlayerCard
                   key={participant.userId || `participant-${index}`}
                   username={participant.username}
                   avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=0e7490&color=fff`}
@@ -266,7 +268,7 @@ export default function LobbyR2() {
           )} */}
         </div>
       )}
-      
+
       {/* Powered by Judge0 Footer */}
       <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
         <p className="text-white/60 text-sm font-oxanium">

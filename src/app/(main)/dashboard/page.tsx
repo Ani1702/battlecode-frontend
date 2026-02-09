@@ -51,7 +51,7 @@ export default function Dashboard() {
 
   const prevUserRef = useRef(user);
 
-  
+
   const handleLeaderboard = useCallback((data: { leaderboard: LeaderboardEntry[] }) => {
     setLeaderboard(data.leaderboard);
     if (isClient) {
@@ -68,7 +68,7 @@ export default function Dashboard() {
         newLockedStatus[round.roundNumber] = round.isLocked;
       }
     });
-    
+
     setIsLocked(newLockedStatus);
 
     if (isClient) {
@@ -79,14 +79,14 @@ export default function Dashboard() {
 
   const handleAdminAdded = useCallback((roundNumber: number) => {
     console.log(`You have been added to Round ${roundNumber} by an admin`);
-    
+
     // Set up a ONE-TIME listener for the fresh data
     const handleFreshData = (data: CurrentRoundData) => {
       console.log("Received fresh round data:", data);
-      
+
       // Now we have FRESH data from the server
       const targetRound = data.rounds.find((r: RoundInfo) => r.roundNumber === roundNumber);
-      
+
       if (!targetRound) {
         showErrorToast(`Round ${roundNumber} data not found`);
         return;
@@ -99,7 +99,7 @@ export default function Dashboard() {
         showErrorToast(`Round ${roundNumber} has already completed`);
         return;
       }
-      
+
       if (roundStatus === 'LOCKED') {
         showErrorToast(`Round ${roundNumber} is currently locked`);
         return;
@@ -122,13 +122,13 @@ export default function Dashboard() {
         }
       }
     };
-    
+
     // Listen for the response (ONE TIME ONLY)
     socket?.once("server:currentRound", handleFreshData);
-    
+
     // Request the fresh data
     socket?.emit("user:current-round");
-    
+
   }, [router, socket]);
 
   // Helper Functions
@@ -171,7 +171,7 @@ export default function Dashboard() {
   // useEffect Hooks
   useEffect(() => {
     const prevUser = prevUserRef.current;
-    
+
     // Only redirect if we're done loading AND have no session at all
     // Don't redirect if we have a session but user is still being verified
     if (!isLoading && !session) {
@@ -187,12 +187,12 @@ export default function Dashboard() {
 
       return () => clearTimeout(redirectTimer);
     }
-    
+
     // If we have a session but no user and we're not loading, it means verification is in progress
     if (!isLoading && session && !user) {
-      
+
     }
-    
+
     prevUserRef.current = user;
   }, [user, session, isLoading, router]);
 
@@ -221,10 +221,10 @@ export default function Dashboard() {
   useEffect(() => {
     const prevUser = prevUserRef.current;
     if (!prevUser && user && !isLoading && !hasShownLoginToast) {
-    
+
       showSuccessToast("Successfully logged in");
       setHasShownLoginToast(true);
-      
+
       // Check if user is admin
       setIsAdmin(userRole === 'ADMIN');
     }
@@ -291,29 +291,36 @@ export default function Dashboard() {
     <>
       <div className="bg-[url('/bg-dashboard.svg')] h-screen bg-cover bg-center flex flex-col relative overflow-hidden">
         {/* Loading/Authentication Overlay */}
-        <LoadingOverlay 
+        <LoadingOverlay
           isLoading={isLoading || !user || !session}
           message={isLoading ? "Verifying authentication..." : "Redirecting..."}
         />
         <div className="flex-shrink-0 h-15 bg-white/1">
           <div className="h-full">
-          <div className="flex-1 ml-3 orbitron flex justify-between items-start h-full px-2 pt-2">
-            <p className="orbitron text-white my-0">{"<> Battlecode Arena"}</p>
-            <div className="flex flex-col items-center mr-20">
-              <p className="text-[10px] text-white">Powered by</p>
-              <p className="text-lg text-orange-400 font-semibold -mt-0.5">Judge0</p>
+            <div className="flex-1 ml-3 orbitron flex justify-between items-start h-full px-2 pt-2">
+              <p className="orbitron text-white my-0">{"<> Battlecode Arena"}</p>
+              <div className="flex flex-col items-center mr-20">
+                <p className="text-[10px] text-white">Powered by</p>
+                <svg viewBox="0 0 710.482 194.87" xmlns="http://www.w3.org/2000/svg" fill="currentColor" style={{ width: '80px', height: 'auto', color: '#F97316' }}>
+                  <path d="M72.992,169.303c-14.205,0-25.429-3.903-33.688-11.712-8.252-7.802-12.382-18.361-12.382-31.673h23.999c0,6.913,1.944,12.382,5.854,16.413,3.903,4.031,9.311,6.047,16.216,6.047,6.785,0,12.155-1.982,16.126-5.949,3.963-3.967,5.953-9.409,5.953-16.319V27.255h23.992v98.857c0,13.312-4.13,23.837-12.382,31.578-8.252,7.741-19.484,11.614-33.688,11.614Z" />
+                  <path d="M193.541,169.303c-13.698,0-24.415-3.744-32.153-11.232-7.745-7.484-11.618-17.688-11.618-30.618V27.255h24.189v100.01c0,6.656,1.664,11.837,4.992,15.547,3.328,3.714,8.184,5.567,14.59,5.567,6.263,0,11.096-1.853,14.492-5.567,3.389-3.71,5.083-8.891,5.083-15.547V27.255h24.189v100.199c0,12.93-3.842,23.133-11.519,30.618-7.677,7.488-18.425,11.232-32.244,11.232Z" />
+                  <path d="M265.517,167.382V27.255h41.653c9.47,0,17.691,1.823,24.673,5.472,6.974,3.646,12.382,8.732,16.216,15.26,3.842,6.527,5.756,14.205,5.756,23.035v52.405c0,8.827-1.914,16.538-5.756,23.13-3.835,6.592-9.243,11.709-16.216,15.354-6.981,3.649-15.203,5.472-24.673,5.472h-41.653ZM289.516,145.883h17.654c6.913,0,12.412-2.016,16.511-6.047,4.092-4.031,6.142-9.5,6.142-16.409v-52.405c0-6.781-2.05-12.189-6.142-16.22-4.099-4.031-9.598-6.047-16.511-6.047h-17.654v97.128Z" />
+                  <path d="M422.538,169.303c-9.084,0-16.958-1.698-23.614-5.087-6.648-3.392-11.799-8.191-15.445-14.397-3.653-6.206-5.476-13.535-5.476-21.98v-61.042c0-8.445,1.823-15.77,5.476-21.98,3.646-6.202,8.797-11.001,15.445-14.394,6.656-3.392,14.53-5.087,23.614-5.087,8.955,0,16.761,1.694,23.417,5.087s11.837,8.191,15.551,14.394c3.706,6.21,5.567,13.535,5.567,21.98h-24.189c0-6.527-1.762-11.546-5.279-15.067-3.517-3.521-8.539-5.279-15.067-5.279s-11.58,1.728-15.165,5.181c-3.585,3.457-5.37,8.449-5.37,14.972v61.235c0,6.527,1.785,11.584,5.37,15.165,3.585,3.585,8.638,5.374,15.165,5.374s11.55-1.789,15.067-5.374c3.517-3.581,5.279-8.638,5.279-15.165v-15.547h-23.803v-20.732h47.991v36.279c0,8.445-1.861,15.774-5.567,21.98-3.714,6.206-8.895,11.005-15.551,14.397-6.656,3.389-14.462,5.087-23.417,5.087Z" />
+                  <path d="M490.293,167.382V27.255h84.077v21.114h-60.464v36.472h53.747v20.35h-53.747v41.078h60.464v21.114h-84.077Z" />
+                  <path d="M639.833,169.303c-9.091,0-16.965-1.728-23.614-5.185-6.656-3.457-11.807-8.316-15.453-14.586-3.646-6.27-5.469-13.63-5.469-22.078v-60.271c0-8.449,1.823-15.804,5.469-22.074,3.646-6.27,8.797-11.134,15.453-14.59,6.648-3.457,14.522-5.181,23.614-5.181s16.95,1.725,23.606,5.181c6.656,3.457,11.807,8.32,15.453,14.59,3.646,6.27,5.469,13.626,5.469,22.074v60.271c0,8.449-1.823,15.808-5.469,22.078-3.646,6.27-8.797,11.13-15.453,14.586-6.656,3.457-14.522,5.185-23.606,5.185ZM639.833,148.571c6.648,0,11.958-1.921,15.929-5.76,3.963-3.839,5.953-8.955,5.953-15.358v-60.271c0-6.399-1.951-11.519-5.854-15.358-3.91-3.839-9.25-5.76-16.027-5.76s-12.132,1.921-16.035,5.76c-3.903,3.839-5.854,8.959-5.854,15.358v60.271c0,6.403,1.982,11.519,5.953,15.358,3.963,3.839,9.281,5.76,15.937,5.76ZM639.833,108.836c-3.842,0-6.913-1.055-9.22-3.165-2.299-2.114-3.449-5.09-3.449-8.929s1.15-6.747,3.449-8.732c2.307-1.982,5.378-2.976,9.22-2.976s6.906.995,9.213,2.976c2.299,1.985,3.449,4.894,3.449,8.732s-1.15,6.815-3.449,8.929c-2.307,2.11-5.378,3.165-9.213,3.165Z"></path>
+                </svg>
+              </div>
+              <div className="flex justify-end">
+                <SignOut />
+              </div>
             </div>
-            <div className="flex justify-end">
-              <SignOut />
-            </div>
-          </div>
           </div>
         </div>
         <div className="flex-1 flex flex-col lg:flex-row p-4 lg:p-0 gap-4 lg:gap-0 min-h-0">
           <div className="flex-[1.5] flex flex-col ">
             <div className="flex-[0.5] flex flex-col lg:ml-5 justify-center">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl text-white flex-wrap flex-[0.2] flex justify-start items-center">
-                <p className = "font-bold">Welcome </p>
+                <p className="font-bold">Welcome </p>
                 <span className="text-orange-500 text-3xl sm:text-4xl lg:text-5xl ml-2">
                   {(isLoading || (user && !userName)) ? (
                     <span className="animate-pulse">...</span>
@@ -321,16 +328,16 @@ export default function Dashboard() {
                     userName || 'Warrior'
                   )}
                 </span>
-                
+
               </h1>
               {/* <p className ="flex-[1] flex ">
                 
                 
 
               </p> */}
-              
+
             </div>
-            <div className = "flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron text-white"> <p className="text-orange-500">Competition</p> &nbsp;Rounds</div>
+            <div className="flex-[0.8] lg:ml-5 mt-3 text-2xl sm:text-3xl lg:text-4xl flex justify-start items-center orbitron text-white"> <p className="text-orange-500">Competition</p> &nbsp;Rounds</div>
             <div className="flex-4 ">
               {[0, 1, 2, 3].map((i) => {
                 const roundStatus = currentRoundData?.rounds.find((r: RoundInfo) => r.roundNumber === i);
@@ -348,7 +355,7 @@ export default function Dashboard() {
                       onClick={() => handleRoundClick(i, locked, currentStatus)}
                     >
                       <div className={`rounded-[50%] h-15 w-15 ml-1 ${currentStatus === 'LOCKED' || currentStatus === 'COMPLETED'
-                        ? currentStatus === 'COMPLETED' 
+                        ? currentStatus === 'COMPLETED'
                           ? "border-green-500/50"
                           : "border-gray-400/50"
                         : currentStatus === 'IN_PROGRESS'
@@ -378,19 +385,19 @@ export default function Dashboard() {
                                     : "Available"}
                           </p>
                         </div>
-                        
+
                         <div className={`flex-1 ${currentStatus === 'LOCKED'
                           ? "text-gray-400/50"
                           : "text-white"
                           }`}>
-                          
+
                         </div>
                       </div>
                       <div className={`flex-[0.5] flex justify-center items-center`}>
                         {currentStatus === 'LOCKED' ? (
                           <Image src="/lock.svg" alt="Locked" width={16} height={16} />
                         ) : currentStatus === 'COMPLETED' ? (
-                          <Image src="/tick.png" alt="Completed" width={16} height={16} className = "opacity-80" />
+                          <Image src="/tick.png" alt="Completed" width={16} height={16} className="opacity-80" />
                         ) : currentStatus === 'IN_PROGRESS' ? (
                           <div className="w-4 h-4 bg-orange-500 rounded-lg animate-pulse"></div>
                         ) : (
@@ -421,54 +428,54 @@ export default function Dashboard() {
               </div>
               <div className="flex-1 overflow-hidden">
                 <CustomScrollbar className="h-full overflow-y-auto px-4 pb-4">
-                <table className="min-w-full text-left text-sm  text-white">
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      {leaderboard_titles.map((title, idx) => (
-                        <th key={idx} className="py-2 px-3 font-bold text-white">{title}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaderboard.length > 0 ? (
-                      // Display real leaderboard data from socket or localStorage
-                      leaderboard.map((entry, idx) => (
-                        <tr key={entry.id || idx} className="border-gray-800 hover:bg-white/5 transition">
-                          <td className="py-2 px-3 text-white">{entry.rank}</td>
-                          <td className="py-2 px-3 text-white">
-                            <div className="flex flex-col">
-                              <span className="font-medium">{entry.username !== 'Not Set' ? entry.username : entry.name}</span>
-                              {entry.username !== 'Not Set' && entry.name && (
-                                <span className="text-xs text-gray-400">{entry.name}</span>
-                              )}
+                  <table className="min-w-full text-left text-sm  text-white">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        {leaderboard_titles.map((title, idx) => (
+                          <th key={idx} className="py-2 px-3 font-bold text-white">{title}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboard.length > 0 ? (
+                        // Display real leaderboard data from socket or localStorage
+                        leaderboard.map((entry, idx) => (
+                          <tr key={entry.id || idx} className="border-gray-800 hover:bg-white/5 transition">
+                            <td className="py-2 px-3 text-white">{entry.rank}</td>
+                            <td className="py-2 px-3 text-white">
+                              <div className="flex flex-col">
+                                <span className="font-medium">{entry.username !== 'Not Set' ? entry.username : entry.name}</span>
+                                {entry.username !== 'Not Set' && entry.name && (
+                                  <span className="text-xs text-gray-400">{entry.name}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-white">{entry.score}</td>
+
+                          </tr>
+                        ))
+                      ) : isInitialLoad ? (
+                        // Show loading state only on very first load
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-gray-400">
+                            <div className="flex items-center justify-center space-x-2">
+                              <div className="w-4 h-4 bg-orange-500 rounded-full animate-pulse"></div>
+                              <span>Loading leaderboard...</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3 text-white">{entry.score}</td>
-                          
                         </tr>
-                      ))
-                    ) : isInitialLoad ? (
-                      // Show loading state only on very first load
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center text-gray-400">
-                          <div className="flex items-center justify-center space-x-2">
-                            <div className="w-4 h-4 bg-orange-500 rounded-full animate-pulse"></div>
-                            <span>Loading leaderboard...</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      // Display fallback data only if no cached data exists
-                      fallbackLeaderboard.map((row, idx) => (
-                        <tr key={idx} className="border-gray-800 hover:bg-white/5 transition opacity-50">
-                          {row.map((cell, cidx) => (
-                            <td key={cidx} className="py-2 px-3 text-white">{cell}</td>
-                          ))}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        // Display fallback data only if no cached data exists
+                        fallbackLeaderboard.map((row, idx) => (
+                          <tr key={idx} className="border-gray-800 hover:bg-white/5 transition opacity-50">
+                            {row.map((cell, cidx) => (
+                              <td key={cidx} className="py-2 px-3 text-white">{cell}</td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </CustomScrollbar>
               </div>
             </div>
@@ -477,7 +484,7 @@ export default function Dashboard() {
       </div>
 
       {/* Admin Controls - Positioned after 100vh */}
-      
+
 
 
     </>

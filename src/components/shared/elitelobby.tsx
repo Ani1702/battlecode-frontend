@@ -330,7 +330,7 @@ export default function EliteDashboard() {
   }
 
   return (
-    <div className="flex bg-[url('/elite_bg.svg')] bg-center bg-no-repeat h-screen w-full flex-col overflow-hidden orbitron">
+    <div className="flex bg-[url('/bg_round2.jpg')] bg-center bg-no-repeat h-screen w-full flex-col overflow-hidden orbitron">
       <div className="flex-1 flex items-center justify-center text-6xl orbitron white-glow relative">
         <Image src="/b-2.svg" alt="Battlecode Logo" className="h-20" width={80} height={80} />
         ELITE DASHBOARD

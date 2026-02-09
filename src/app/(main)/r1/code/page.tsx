@@ -124,6 +124,9 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
+  // Keep codeRef in sync with code state
+  useEffect(() => { codeRef.current = code; }, [code]);
+
   // Helper Functions & Managers
   const contextManager = useMemo(() => ({
     getStorageKey: (round: string) => `battlecode-round-${round}-code-store`,
@@ -183,6 +186,9 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
   const handleContextTransition = useCallback((newProblem: NonNullable<MatchData['question'] | MatchData['problem']>, newLanguage: string) => {
     const newContext = contextManager.createContext('1', newProblem.id, newLanguage);
+
+
+
     if (currentContext && contextManager.contextEquals(currentContext, newContext)) return;
 
     let updatedStore = { ...codeStore };
@@ -198,6 +204,8 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
     const savedCode = contextManager.getCodeForContext(updatedStore, newContext);
     const newBoilerplate = contextManager.getBoilerplate(newProblem, newLanguage);
+
+
 
     setCodeStore(updatedStore);
     setCode(savedCode || newBoilerplate);
@@ -265,9 +273,9 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   }, [problem, matchData, isSubmitting, isRunning, session?.access_token, language, code]);
 
   const handleMouseDown = (e: React.MouseEvent) => { setIsDragging(true); e.preventDefault(); };
-  
+
   const handleMouseUp = () => setIsDragging(false);
-  
+
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     const container = document.querySelector('.code-results-container') as HTMLElement;
@@ -317,10 +325,10 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   // Constants
   const monaco = useMonaco();
   const editorOptions = {
-    minimap: { enabled: false }, 
-    fontSize: 14, 
+    minimap: { enabled: false },
+    fontSize: 14,
     scrollBeyondLastLine: false,
-    automaticLayout: true, 
+    automaticLayout: true,
     wordWrap: 'on' as const,
   };
 
@@ -328,11 +336,9 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   useEffect(() => {
     // Handle both old format (question) and new unified schema format (problem)
     const problemData = matchData?.question || matchData?.problem;
-    
+
     if (!problemData || isContextInitialized) return;
-    
-    console.log('[INITIALIZING CONTEXT] Problem data:', problemData);
-    
+
     const loadedStore = contextManager.loadCodeStore('1');
     setCodeStore(loadedStore);
     const initialContext = contextManager.createContext('1', problemData.id, language);
@@ -345,26 +351,30 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
   }, [matchData, language, isContextInitialized, contextManager]);
 
   useEffect(() => {
-    // Handle both old format (question) and new unified schema format (problem)
-    const problemData = matchData?.question || matchData?.problem;
-    
-    if (isContextInitialized && problemData) {
-      handleContextTransition(problemData, language);
+    if (isContextInitialized && problem) {
+      handleContextTransition(problem, language);
     }
-  }, [language, isContextInitialized, matchData, handleContextTransition]);
+  }, [language, problem, isContextInitialized, handleContextTransition]);
+
+  // Trigger auto-save when code changes
+  useEffect(() => {
+    if (isContextInitialized && code && currentContext) {
+      scheduleAutoSave();
+    }
+  }, [code, isContextInitialized, currentContext, scheduleAutoSave]);
 
   useEffect(() => {
     if (monaco) {
       monaco.editor.defineTheme('custom-dark', {
-        base: 'vs-dark', 
+        base: 'vs-dark',
         inherit: true,
         rules: [],
         colors: {
-          'editor.background': '#0a0a0a', 
+          'editor.background': '#0a0a0a',
           'editor.foreground': '#ffffff',
-          'editor.lineHighlightBackground': '#1a1a1a', 
+          'editor.lineHighlightBackground': '#1a1a1a',
           'editor.selectionBackground': '#264f78',
-          'editorCursor.foreground': '#f97316', 
+          'editorCursor.foreground': '#f97316',
           'editorLineNumber.foreground': '#858585',
           'editorLineNumber.activeForeground': '#f97316',
         },
@@ -599,9 +609,9 @@ export default function R1CodePage() {
   const [pageIsLoading, setPageIsLoading] = useState(true);
 
   const [showMatchEndPopup, setShowMatchEndPopup] = useState(false);
-  const [matchEndData, setMatchEndData] = useState<{ type: 'win' | 'lose' | 'timeout'|'admin_end', message?: string } | null>(null);
+  const [matchEndData, setMatchEndData] = useState<{ type: 'win' | 'lose' | 'timeout' | 'admin_end', message?: string } | null>(null);
 
-  
+
   const matchEndedRef = useRef(false);
 
   // ✅ FIX: This is the new, robust loading and verification logic.
@@ -647,10 +657,10 @@ export default function R1CodePage() {
 
       // Handle both 'in_match' and 'in-match' formats for backward compatibility
       const isInMatch = response.currentUser?.status === 'in_match' || response.currentUser?.status === 'in-match';
-      
+
       if (response.success && isInMatch && response.session) {
         showSuccessToast("Successfully re-synced match!");
-        
+
         // Additional validation
         if (!response.session.problem) {
           console.error('[MISSING PROBLEM DATA] Session exists but problem is missing:', response.session);
@@ -659,14 +669,14 @@ export default function R1CodePage() {
           setPageIsLoading(false);
           return;
         }
-        
+
         // Convert session data to old MatchData format
         const data: MatchData = {
           opponent: {
             id: response.session.opponent?.id || '',
             username: response.session.opponent?.username,
-            rank: typeof response.session.opponent?.rank === 'number' 
-              ? response.session.opponent.rank 
+            rank: typeof response.session.opponent?.rank === 'number'
+              ? response.session.opponent.rank
               : undefined
           },
           question: {
@@ -697,10 +707,10 @@ export default function R1CodePage() {
   // Client-side timer for UI updates and as a fallback for match end.
   useEffect(() => {
     if (!matchData) return;
-    
+
     // Handle both old format (startTime + duration) and new unified schema (endTime)
     const endTime = matchData.endTime || (matchData.startTime + (matchData.duration || 0));
-    
+
     console.log('[TIMER INIT]', {
       startTime: matchData.startTime,
       duration: matchData.duration,
@@ -708,13 +718,13 @@ export default function R1CodePage() {
       calculatedEndTime: endTime,
       now: Date.now()
     });
-    
+
     const timerInterval = setInterval(() => {
       const remainingMs = endTime - Date.now();
       if (remainingMs <= 0) {
         setTimeRemaining(0);
         clearInterval(timerInterval);
-   
+
         if (!showMatchEndPopup && !matchEndedRef.current) {
           console.log('[CLIENT TIMER] Match timed out');
           matchEndedRef.current = true;
@@ -732,7 +742,7 @@ export default function R1CodePage() {
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    const handleMatchEnd = (data: { type: 'win' | 'lose' | 'timeout'| 'admin_end'}) => {
+    const handleMatchEnd = (data: { type: 'win' | 'lose' | 'timeout' | 'admin_end' }) => {
       // ✅ PRIORITY HANDLING: admin_end ALWAYS overrides other match end states
       if (data.type === 'admin_end') {
         console.log('[MATCH END] Admin override accepted, overriding any previous state');
@@ -749,7 +759,7 @@ export default function R1CodePage() {
         console.log('[MATCH END] Already handled, ignoring duplicate:', data.type);
         return;
       }
-      
+
       matchEndedRef.current = true;
       sessionStorage.removeItem('round1_match_data');
       sessionStorage.removeItem('fullscreen_violations'); // Clear violations on match end
@@ -757,17 +767,17 @@ export default function R1CodePage() {
       setMatchEndData(data);
       setShowMatchEndPopup(true);
     };
-    
+
     const handleRoundEnd = () => {
       sessionStorage.removeItem('round1_match_data');
       sessionStorage.removeItem('fullscreen_violations'); // Clear violations on round end
-      
+
       if (showMatchEndPopup) {
         console.log('[ROUND END] Popup already shown, letting user dismiss it');
         return;
       }
-      
-      
+
+
       showInfoToast('Round 1 has ended');
       console.log('[ROUND END] No popup shown, redirecting to dashboard');
       setTimeout(() => router.push("/"), 3000);
@@ -829,9 +839,9 @@ export default function R1CodePage() {
 
   const handleMatchEndClose = () => {
     setShowMatchEndPopup(false);
-    
+
     console.log('[MATCH END CLOSE] matchEndData:', matchEndData);
-    
+
     if (matchEndData?.type === 'admin_end') {
       showInfoToast('Round ended by admin. Redirecting to Dashboard...');
       console.log('[MATCH END CLOSE] Admin end - redirecting to dashboard');
