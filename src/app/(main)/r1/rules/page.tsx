@@ -55,12 +55,13 @@ export default function Rules() {
     }, [socket, isConnected, router]);
         
     const rules = [
-        "This round lasts 60 minutes.",
-        "Players are matched 1-on-1 randomly",
-        "Each match is a race: the first to solve the problem correctly wins.",
-        "There will be a cooldown time of 30 seconds after every match.",
-        "Matches continue until the global timer runs out."
+    "This is a competitive round where correctness, speed, and strategy all matter.",
+    "Your score depends on test cases passed, match outcome, submission discipline, and time left.",
+    "Winning the match gives a major advantage.",
+    "Submitting too many times removes the submission bonus.",
+    "Finishing earlier results in a higher score."
     ];
+
 
     return <RulesPage rules={rules} round="1" />;
 }

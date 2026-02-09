@@ -55,9 +55,12 @@ export default function Rules() {
     }, [socket, isConnected, router]);
         
     const rules = [
-        "Round 3 rules will be announced.",
-        "Stay tuned for more details."
-    ];
+        "Your base score depends only on the correctness of your solution.",
+        "Partial correctness is rewarded proportionally.",
+        "Submission count does not affect your score in this round.",
+        "You can hack other participants by identifying valid flaws in their solutions.",
+        "Successful hacks increase your score, while getting hacked reduces it."
+        ];
 
     return <RulesPage rules={rules} round="3" />;
 }

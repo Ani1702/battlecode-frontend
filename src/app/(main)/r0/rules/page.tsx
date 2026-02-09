@@ -55,9 +55,13 @@ export default function Rules() {
     }, [socket, isConnected, router]);
         
     const rules = [
-        "Round 0 rules will be announced.",
-        "Stay tuned for more details."
+    "This round focuses only on correctness of your solution.",
+    "Points increase as more test cases are passed.",
+    "Time taken does not matter in this round.",
+    "You are allowed limited submissions; excessive submissions(more than 2) will reduce your score.",
+    "Clean and accurate solutions are rewarded more than repeated attempts."
     ];
+
 
     return <RulesPage rules={rules} round="0" />;
 }

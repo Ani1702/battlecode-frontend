@@ -53,13 +53,15 @@ export default function Rules() {
         };
     }, [socket, isConnected, router]);
 
-    const rules = [" At the start, everyone is assigned a role: Elite or Challenger.",
-        " Elites defend themselves when challenged.",
-        " Challengers can challenge Elites to 1-on-1 matches.",
-" While waiting, both Elites and Challengers can solve bounty problems (optional side quests).",
-" Winning a challenge or completing a bounty increases your score.",
-" After each challenge, both players go into a 60 seconds cooldown before they can play again.",
-" If someone disconnects during a match and doesn't return, they lose by default."
-    ];
+    const rules = [
+        "This is a one-on-one challenger round with a fixed time limit of 20 minutes.",
+        "Scoring is based on test cases passed, match result, submission count, and time left.",
+        "Elite players receive a 25% score reduction after scoring, while non-elite players receive a 25% score boost.",
+        "In addition to the main problem, optional bounty questions are available.",
+        "Each bounty allows a maximum of 3 submissions.",
+        "Exceeding 3 submissions on a bounty converts the bounty into a negative score penalty.",
+        "Bounties are high risk and can significantly impact your total score."
+        ];
+
     return <RulesPage rules={rules} round={round} />;
 }
