@@ -266,11 +266,36 @@ export default function EliteDashboard() {
       }, 3000);
     };
 
+    const handleRound2Redirect = ({
+      target,
+      reason,
+    }: {
+      target: string;
+      reason?: string;
+    }) => {
+      if (isRedirecting) return;
+
+      console.warn("[ELITE DASHBOARD REDIRECT]", { target, reason });
+
+      setIsRedirecting(true);
+      showErrorToast(reason || "You were removed from Round 2");
+
+      // clear session state
+      sessionStorage.removeItem('r2_session_type');
+      sessionStorage.removeItem('r2_context_id');
+      sessionStorage.removeItem('r2_user_role');
+      localStorage.removeItem('battlecode-round-2-code-store');
+
+      router.replace("/dashboard");
+    };
+
+
     socket.on('round2:challengeIncoming', handleChallengeIncoming);
     socket.on('round2:matchStarted', handleMatchStarted);
     socket.on('round2:requestExpired', handleRequestExpired);
     socket.on('round2:dashboardUpdate', handleDashboardUpdate);
     socket.on('round2:ended', handleRoundEnd);
+    socket.on("round2:redirect", handleRound2Redirect);
 
     return () => {
       socket.off('round2:challengeIncoming', handleChallengeIncoming);
@@ -278,6 +303,7 @@ export default function EliteDashboard() {
       socket.off('round2:requestExpired', handleRequestExpired);
       socket.off('round2:dashboardUpdate', handleDashboardUpdate);
       socket.off('round2:ended', handleRoundEnd);
+      socket.off("round2:redirect", handleRound2Redirect);
     };
   }, [socket, router, handleRemoveChallenger, isRedirecting]);
 

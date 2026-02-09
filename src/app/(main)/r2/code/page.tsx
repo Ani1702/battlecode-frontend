@@ -471,6 +471,25 @@ export default function R2CodePage() {
   useEffect(() => {
     if (!socket || !session?.user?.email) return;
 
+    const handleRound2Redirect = ({
+      target,
+      reason,
+    }: {
+      target: string;
+      reason?: string;
+    }) => {
+      console.log("[ROUND2 REDIRECT]", { target, reason });
+
+      showErrorToast(reason || "You were removed from Round 2");
+
+      // hard reset local session
+      sessionStorage.removeItem("r2_session_type");
+      sessionStorage.removeItem("r2_context_id");
+      sessionStorage.removeItem("r2_user_role");
+
+      router.replace("/dashboard");
+    };
+
     const handleMatchResult = (data: MatchResultData) => {
       const isWinner = data.winnerId === session.user.email;
       const type = data.reason === 'timeout' ? 'timeout' : (isWinner ? 'win' : 'lose');
@@ -497,8 +516,10 @@ export default function R2CodePage() {
     socket.on('round2:timerUpdate', handleTimerUpdate);
     socket.on('round2:adminRemoved', handleAdminRemoved);
     socket.on('round2:adminAdded', handleAdminAdded);
+    socket.on("round2:redirect", handleRound2Redirect);
 
     return () => {
+      socket.off("round2:redirect", handleRound2Redirect);
       socket.off('round2:matchResult', handleMatchResult);
       socket.off('round2:bountyEnded', handleBountyEnded);
       socket.off('round2:ended', handleRoundEnd);

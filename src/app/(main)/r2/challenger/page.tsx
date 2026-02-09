@@ -154,6 +154,20 @@ export default function ChallengerDashboard() {
   useEffect(() => {
     if (!socket) return;
 
+    const handleRound2Redirect = ({ target, reason }: { target: string; reason?: string }) => {
+      console.log('[ROUND2 REDIRECT]', { target, reason });
+
+      if (isRedirecting) return;
+
+      setIsRedirecting(true);
+
+      if (target === 'lobby') {
+        showInfoToast(reason || 'You have been removed from Round 2');
+        router.replace('/dashboard');
+      }
+    };
+
+
     const handleLobbyUpdate = (data: { participants: Participant[] }) => {
       setAvailableElites(data.participants.filter(p => p.role === 'elite' && p.status === 'elite:idle'));
     };
@@ -196,6 +210,7 @@ export default function ChallengerDashboard() {
       }, 3000);
     };
 
+    socket.on('round2:redirect', handleRound2Redirect);
     socket.on('round2:lobbyUpdate', handleLobbyUpdate);
     socket.on('round2:challengeRejected', handleRequestFailed);
     socket.on('round2:challengeExpired', handleRequestFailed);
@@ -210,6 +225,7 @@ export default function ChallengerDashboard() {
       socket.off('round2:matchStarted', handleMatchStarted);
       socket.off('round2:dashboardUpdate', handleDashboardUpdate);
       socket.off('round2:ended', handleRoundEnd);
+      socket.off('round2:redirect', handleRound2Redirect);
     };
   }, [socket, router, isRedirecting]);
 

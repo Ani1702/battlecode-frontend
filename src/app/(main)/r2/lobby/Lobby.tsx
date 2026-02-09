@@ -138,6 +138,30 @@ export default function LobbyR2() {
   useEffect(() => {
     if (!socket || !isConnected) return;
 
+    const handleRound2Redirect = ({
+      target,
+      reason,
+    }: {
+      target: string;
+      reason?: string;
+    }) => {
+      console.warn("[R2 LOBBY REDIRECT]", { target, reason });
+
+      showErrorToast(reason || "You were removed from Round 2");
+
+      // prevent double navigation
+      hasNavigated.current = true;
+
+      // clean client state
+      localStorage.removeItem('battlecode-round-2-code-store');
+      sessionStorage.removeItem('r2_session_type');
+      sessionStorage.removeItem('r2_context_id');
+      sessionStorage.removeItem('r2_user_role');
+
+      router.replace("/dashboard");
+    };
+
+
     const handleStateUpdate = (stateResponse: any) => {
       console.debug('[R2 Lobby] State update:', stateResponse);
 
@@ -167,10 +191,14 @@ export default function LobbyR2() {
 
     socket.on('round2:lobby', handleLobbyUpdate);
     socket.on('round2:state', handleStateUpdate);
+    socket.on("round2:redirect", handleRound2Redirect);
+
 
     return () => {
       socket.off('round2:lobby', handleLobbyUpdate);
       socket.off('round2:state', handleStateUpdate);
+      socket.off("round2:redirect", handleRound2Redirect);
+
     };
   }, [socket, isConnected, router]);
 
