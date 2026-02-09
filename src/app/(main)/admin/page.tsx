@@ -47,6 +47,9 @@ export default function Admin() {
     const [showResetRedisConfirm, setShowResetRedisConfirm] = useState(false);
     const [matchParticipants, setMatchParticipants] = useState<Participant[]>([]);
     const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(0);
+    const [qualifyCount, setQualifyCount] = useState<number>(0);
+    const [qualifyLoading, setQualifyLoading] = useState(false);
+
     
     // Helper functions for localStorage persistence
     const saveParticipantsToStorage = useCallback((participantsList: Participant[]) => {
@@ -455,6 +458,34 @@ export default function Admin() {
     const handleConfirmResetRedis = () => {
         resetAllRedis();
     };
+
+    const handleQualifyRound3 = () => {
+        if (!socket) {
+          showErrorToast("Socket not connected");
+          return;
+        }
+
+        if (!qualifyCount || qualifyCount <= 0) {
+          showErrorToast("Enter a valid number of users to qualify");
+          return;
+        }
+
+        setQualifyLoading(true);
+
+        socket.emit(
+          "admin:qualifyRound3",
+          { count: qualifyCount },
+          (response: { success: boolean; error?: string }) => {
+            setQualifyLoading(false);
+
+            if (response?.success) {
+              showSuccessToast(`Top ${qualifyCount} users qualified for Round 3`);
+            } else {
+              showErrorToast(response?.error || "Failed to qualify users");
+            }
+          }
+        );
+      };
 
     const fetchRoundData = useCallback(async () => {
         console.log('[API] Fetching round data from API');
@@ -1072,6 +1103,41 @@ export default function Admin() {
                 </div>
               </div>
             </div>
+
+            {/* Qualify Users for Round 3 */}
+          <div className="mt-8 bg-gray-800/50 rounded-lg p-6 border border-green-500/50">
+            <h4 className="text-green-400 font-medium mb-4">
+              Qualify Users for Round 3
+            </h4>
+
+            <p className="text-gray-300 text-sm mb-4">
+              Select how many top users (by leaderboard score) should qualify for Round 3.
+              This will <span className="text-red-400 font-semibold">overwrite previous qualifications</span>.
+            </p>
+
+            <div className="flex flex-col md:flex-row gap-4 items-center">
+              <input
+                type="number"
+                min={1}
+                placeholder="Number of users (e.g. 20)"
+                value={qualifyCount || ""}
+                onChange={(e) => setQualifyCount(parseInt(e.target.value))}
+                className="w-full md:w-64 px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+              />
+
+              <button
+                onClick={handleQualifyRound3}
+                disabled={qualifyLoading || !socket}
+                className={`px-6 py-2 rounded font-medium text-white transition-all ${
+                  qualifyLoading || !socket
+                    ? "bg-gray-600 cursor-not-allowed opacity-50"
+                    : "bg-green-600 hover:bg-green-500 hover:scale-105"
+                }`}
+              >
+                {qualifyLoading ? "Qualifying..." : "Qualify for Round 3"}
+              </button>
+            </div>
+          </div>
 
             {/* End Round Section */}
             <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
