@@ -5,7 +5,7 @@ import Image from "next/image";
 import Editor, { useMonaco } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 import { useSocket } from "@/contexts/SocketContext";
-import { useAuth} from "@/contexts/AuthContext"; 
+import { useAuth } from "@/contexts/AuthContext";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import HackModal from "@/components/shared/HackModal";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
@@ -119,19 +119,19 @@ interface CodeStore {
 }
 
 interface SubmissionPayload {
-    language: string;
-    source_code: string;
-    problemId: string;
-    roundNumber: number;
-    stdin?: string;
+  language: string;
+  source_code: string;
+  problemId: string;
+  roundNumber: number;
+  stdin?: string;
 }
 
 interface SubmissionApiResponse {
-    success: boolean;
-    results?: SubmissionResult[];
-    summary?: { passed: number; total: number };
-    submission?: { status: string };
-    message?: string;
+  success: boolean;
+  results?: SubmissionResult[];
+  summary?: { passed: number; total: number };
+  submission?: { status: string };
+  message?: string;
 }
 
 
@@ -176,7 +176,7 @@ export default function Round3Page() {
   const isMountedRef = useRef(true);
   const codeRef = useRef(code);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
+
   // --- Core Hooks & Memos ---
   useEffect(() => {
     isMountedRef.current = true;
@@ -185,7 +185,7 @@ export default function Round3Page() {
 
   useEffect(() => { codeRef.current = code; }, [code]);
   useEffect(() => {
-      try { localStorage.setItem('battlecode-round-3-language', language); } catch (e) { console.error("Could not save language to localStorage", e); }
+    try { localStorage.setItem('battlecode-round-3-language', language); } catch (e) { console.error("Could not save language to localStorage", e); }
   }, [language]);
 
   useEffect(() => {
@@ -250,7 +250,7 @@ export default function Round3Page() {
       'java': 'java',
       'cpp': 'cpp',
       'c': 'c',
-      
+
     };
     return languageMap[lang] || 'python';
   };
@@ -302,6 +302,7 @@ export default function Round3Page() {
     try {
       localStorage.removeItem(`battlecode-round-${roundToClear}-code-store`);
       localStorage.removeItem(`battlecode-round-${roundToClear}-language`);
+      sessionStorage.removeItem('fullscreen_violations');
 
       setCodeStore({});
       setLanguage("python");
@@ -325,14 +326,14 @@ export default function Round3Page() {
     const handleTimerUpdate = (data: { timeRemaining?: number }) => {
       if (isMountedRef.current) {
         setTimeRemaining(data.timeRemaining || 0);
-        
+
         // Warn user when time is low
         if (data.timeRemaining && data.timeRemaining <= 60 && data.timeRemaining > 0) {
           showErrorToast(`Only ${data.timeRemaining} seconds remaining!`);
         }
       }
     };
-    
+
     const handleRoundEnd = () => {
       if (!isMountedRef.current) return;
       clearMatchContext(round);
@@ -368,6 +369,7 @@ export default function Round3Page() {
       if (!isMountedRef.current) return;
       showErrorToast('You have been removed from Round 3 by an admin');
       clearMatchContext(round);
+      sessionStorage.removeItem('fullscreen_violations');
       router.push('/dashboard');
     };
 
@@ -384,7 +386,7 @@ export default function Round3Page() {
       // Handle new Round3State structure
       if ('roundSpecific' in data) {
         const state = data as Round3State;
-        
+
         if (state.roundSpecific.questions) {
           setProblems(state.roundSpecific.questions);
           if (state.roundSpecific.questions.length > 0 && !currentProblem) {
@@ -396,11 +398,11 @@ export default function Round3Page() {
         setTimeRemaining(state.round.timeRemaining);
         setIsHackingPhase(state.roundSpecific.isHackingPhase);
         setLockedQuestionIds(state.roundSpecific.lockedQuestionIds);
-      } 
+      }
       // Handle legacy GetStateResponse structure (for backward compatibility)
       else {
         const state = data as GetStateResponse;
-        
+
         if (state.questions) {
           setProblems(state.questions);
           if (state.questions.length > 0 && !currentProblem) {
@@ -421,11 +423,19 @@ export default function Round3Page() {
           setLockedQuestionIds(state.lockedQuestionIds);
         }
       }
-      
+
       // Ensure page loading is complete when state is received
       if (pageIsLoading) {
         setPageIsLoading(false);
       }
+    };
+
+    const handleViolation = () => {
+      console.log("round3:violation event received");
+      showErrorToast("you have been removed from the round due to violation");
+      clearMatchContext(round);
+      sessionStorage.removeItem('fullscreen_violations');
+      router.push('/dashboard');
     };
 
     socket.on('round3:timer', handleTimerUpdate);
@@ -437,6 +447,7 @@ export default function Round3Page() {
     socket.on('round3:adminRemoved', handleAdminRemoved);
     socket.on('round3:adminAdded', handleAdminAdded);
     socket.on('round3:state', handleState);
+    socket.on('round3:violation', handleViolation);
 
     return () => {
       socket.off('round3:timer', handleTimerUpdate);
@@ -448,6 +459,7 @@ export default function Round3Page() {
       socket.off('round3:adminRemoved', handleAdminRemoved);
       socket.off('round3:adminAdded', handleAdminAdded);
       socket.off('round3:state', handleState);
+      socket.off('round3:violation', handleViolation);
     };
   }, [socket, isConnected, router, round, clearMatchContext, currentProblem, pageIsLoading]);
 
@@ -466,9 +478,9 @@ export default function Round3Page() {
 
     socket.emit('round3:getState', {}, (response: Round3State | StateResponse) => {
       clearTimeout(timeoutId);
-      
+
       if (!isMountedRef.current) return;
-      
+
       // Handle new Round3State structure
       if ('roundSpecific' in response && response.success) {
         const state = response as Round3State;
@@ -489,13 +501,13 @@ export default function Round3Page() {
         setIsHackingPhase(state.isHackingPhase || false);
         setLockedQuestionIds(state.lockedQuestionIds || []);
       } else {
-        const errorMessage = response?.error 
+        const errorMessage = response?.error
           ? (typeof response.error === 'string' ? response.error : response.error.message || 'No active round found.')
           : 'No active round found.';
         showErrorToast(errorMessage);
         router.push('/r3/lobby');
       }
-      
+
       setPageIsLoading(false);
     });
 
@@ -551,31 +563,31 @@ export default function Round3Page() {
   }, [monaco]);
 
   function handleEditorMount(
-      editor: monaco.editor.IStandaloneCodeEditor,
-      monacoInstance: typeof import('monaco-editor')
-    ){
-      editorRef.current = editor;
-      // Disable paste via context menu
-      editor.addAction({
-        id: "disable-paste",
-        label: "Paste",
-        keybindings: [],
-        precondition: "false",
-        run: () => {}
-      });
-      // Block DOM paste events
-      const domNode = editor.getDomNode();
-if (domNode) {
-  domNode.addEventListener("paste", (e: ClipboardEvent) => { // Fixed with the specific event type
-    e.preventDefault();
-    showErrorToast("Paste is disabled");
-  }, true);
-}
-      // Block keyboard shortcut Ctrl/Cmd+V
-      editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
-        showErrorToast("Paste shortcut is disabled");
-      });
+    editor: monaco.editor.IStandaloneCodeEditor,
+    monacoInstance: typeof import('monaco-editor')
+  ) {
+    editorRef.current = editor;
+    // Disable paste via context menu
+    editor.addAction({
+      id: "disable-paste",
+      label: "Paste",
+      keybindings: [],
+      precondition: "false",
+      run: () => { }
+    });
+    // Block DOM paste events
+    const domNode = editor.getDomNode();
+    if (domNode) {
+      domNode.addEventListener("paste", (e: ClipboardEvent) => { // Fixed with the specific event type
+        e.preventDefault();
+        showErrorToast("Paste is disabled");
+      }, true);
     }
+    // Block keyboard shortcut Ctrl/Cmd+V
+    editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV, () => {
+      showErrorToast("Paste shortcut is disabled");
+    });
+  }
 
   useEffect(() => {
     if (monaco && editorRef.current) {
@@ -623,53 +635,53 @@ if (domNode) {
   }, [monaco]);
 
   useEffect(() => {
-  if (monaco && editorRef.current) {
-    const editor = editorRef.current;
-    let internalClipboard = "";
+    if (monaco && editorRef.current) {
+      const editor = editorRef.current;
+      let internalClipboard = "";
 
-    // Intercept Copy
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-      const selection = editor.getSelection();
-      if (selection) {
-        const selectedText = editor.getModel()?.getValueInRange(selection);
-        if (selectedText) {
-          internalClipboard = selectedText;
+      // Intercept Copy
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+        const selection = editor.getSelection();
+        if (selection) {
+          const selectedText = editor.getModel()?.getValueInRange(selection);
+          if (selectedText) {
+            internalClipboard = selectedText;
+          }
         }
-      }
-    });
+      });
 
-    // Intercept Cut (FIXED)
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
-      const model = editor.getModel();
-      const selection = editor.getSelection(); // 1. Get the selection object first
+      // Intercept Cut (FIXED)
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+        const model = editor.getModel();
+        const selection = editor.getSelection(); // 1. Get the selection object first
 
-      // 2. Check that the model and selection exist
-      if (model && selection && !selection.isEmpty()) {
-        // 3. Get the text to save to the clipboard
-        const selectedText = model.getValueInRange(selection);
-        internalClipboard = selectedText;
-        
-        // 4. Perform the cut using the non-null selection object
-        editor.executeEdits("cut", [{ range: selection, text: "" }]);
-      }
-    });
+        // 2. Check that the model and selection exist
+        if (model && selection && !selection.isEmpty()) {
+          // 3. Get the text to save to the clipboard
+          const selectedText = model.getValueInRange(selection);
+          internalClipboard = selectedText;
 
-    // Intercept Paste (FIXED)
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-      const selection = editor.getSelection(); // 1. Get the current selection/cursor position
+          // 4. Perform the cut using the non-null selection object
+          editor.executeEdits("cut", [{ range: selection, text: "" }]);
+        }
+      });
 
-      // 2. Check if there's anything to paste and if there's a valid cursor position
-      if (internalClipboard && selection) {
-        // 3. Perform the paste
-        editor.executeEdits("paste", [{ range: selection, text: internalClipboard }]);
-      }
-    });
+      // Intercept Paste (FIXED)
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+        const selection = editor.getSelection(); // 1. Get the current selection/cursor position
 
-    // Disable right-click menu
-    editor.updateOptions({ contextmenu: false });
-  }
-  // The dependency array should not include '.current'
-}, [monaco]);
+        // 2. Check if there's anything to paste and if there's a valid cursor position
+        if (internalClipboard && selection) {
+          // 3. Perform the paste
+          editor.executeEdits("paste", [{ range: selection, text: internalClipboard }]);
+        }
+      });
+
+      // Disable right-click menu
+      editor.updateOptions({ contextmenu: false });
+    }
+    // The dependency array should not include '.current'
+  }, [monaco]);
 
 
   const editorOptions = { minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false, automaticLayout: true, wordWrap: 'on' as const, readOnly: isLocked };
@@ -725,8 +737,8 @@ if (domNode) {
         setSubmissionResults(result.results || []);
         const summary = result.summary || { passed: 0, total: (result.results || []).length };
         if (isFinalSubmission) {
-            if (result.submission?.status === 'ACCEPTED') { showSuccessToast(`Submission Accepted! All ${summary.total} test cases passed.`); }
-            else { showErrorToast(`${summary.passed}/${summary.total} test cases passed.`); }
+          if (result.submission?.status === 'ACCEPTED') { showSuccessToast(`Submission Accepted! All ${summary.total} test cases passed.`); }
+          else { showErrorToast(`${summary.passed}/${summary.total} test cases passed.`); }
         } else { showInfoToast(`Test run completed: ${summary.passed}/${summary.total} passed`); }
       } else { throw new Error(result.message || 'Request failed'); }
     } catch (error) { showErrorToast(`Failed to ${action.toLowerCase()}: ${error instanceof Error ? error.message : 'Unknown error'}`); }
@@ -747,33 +759,33 @@ if (domNode) {
       if (response.success) {
         showSuccessToast(response.message || "Question locked successfully!");
         setLockedQuestionIds(prev => [...prev, questionId]);
-        
+
         // Store the initial locked submissions
         if (response.submissions) {
-          setHackableSubmissions(prev => ({ 
-            ...prev, 
-            [questionId]: response.submissions || [] 
+          setHackableSubmissions(prev => ({
+            ...prev,
+            [questionId]: response.submissions || []
           }));
         }
-      } else { 
-        showErrorToast(response.error || "Failed to lock question."); 
+      } else {
+        showErrorToast(response.error || "Failed to lock question.");
       }
     });
   }, [socket]);
 
   const handleOpenHackModal = useCallback(() => {
     if (!socket || !currentProblem) return;
-    
+
     // Fetch locked submissions when opening the hack modal
     socket.emit('round3:getLockedSubmissions', { questionId: currentProblem.id }, (response: { success: boolean, error?: string, submissions?: HackableSubmission[] }) => {
       if (response.success && response.submissions) {
-        setHackableSubmissions(prev => ({ 
-          ...prev, 
-          [currentProblem.id]: response.submissions || [] 
+        setHackableSubmissions(prev => ({
+          ...prev,
+          [currentProblem.id]: response.submissions || []
         }));
       }
     });
-    
+
     setIsHackModalOpen(true);
   }, [socket, currentProblem]);
 
@@ -839,7 +851,7 @@ if (domNode) {
 
   const saveStatusDisplay = getSaveStatusDisplay();
   const timerDisplay = { time: formatTime(timeRemaining), className: timeRemaining <= 60 ? 'text-red-400' : timeRemaining <= 300 ? 'text-yellow-400' : '' };
-  
+
   return (
     <>
       <HackModal
@@ -907,19 +919,19 @@ if (domNode) {
               </div>
               <div className={`flex-1 rounded overflow-hidden border border-gray-700 ${isLocked ? 'bg-gray-800/50' : ''}`}>
                 <Editor
-  height="100%"
-  language={getMonacoLanguage(language)}
-  value={code}
-  onChange={(value) => setCode(value || "")}
-  theme="custom-dark"
-  options={editorOptions}
-  onMount={handleEditorMount}
-  loading={
-    <div className="flex items-center justify-center h-full bg-black">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
-    </div>
-  }
-/>
+                  height="100%"
+                  language={getMonacoLanguage(language)}
+                  value={code}
+                  onChange={(value) => setCode(value || "")}
+                  theme="custom-dark"
+                  options={editorOptions}
+                  onMount={handleEditorMount}
+                  loading={
+                    <div className="flex items-center justify-center h-full bg-black">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+                    </div>
+                  }
+                />
 
               </div>
             </div>
@@ -963,7 +975,7 @@ if (domNode) {
                                 {result.memory && <span className="flex items-center gap-1"><MemoryStick size={12} />{result.memory} KB</span>}
                               </div>
                             </div>
-                            
+
                             {/* Display stdout if available */}
                             {result.stdout && (
                               <div className="mt-2">
@@ -971,7 +983,7 @@ if (domNode) {
                                 <pre className="text-xs text-gray-200 whitespace-pre-wrap bg-black/40 p-2 rounded border border-gray-600 max-h-32 overflow-y-auto">{result.stdout}</pre>
                               </div>
                             )}
-                            
+
                             {(result.stderr || result.compile_output) && (
                               <details className="mt-2 text-xs">
                                 <summary className="cursor-pointer text-yellow-400">Show Error Details</summary>
