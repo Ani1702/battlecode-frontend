@@ -259,6 +259,7 @@ export default function R2CodePage() {
             showErrorToast(`${summary.passed}/${summary.total} test cases passed.`);
           } else {
             showSuccessToast('All test cases passed!');
+            socket?.emit("round2:matchEnd");
           }
         } else {
           showInfoToast(`Test run completed: ${summary.passed}/${summary.total} passed`);
@@ -372,7 +373,7 @@ export default function R2CodePage() {
     if (!newRole) {
       console.error("TriggerSessionEnd called without a new role. Aborting popup.");
       showErrorToast("Could not determine next step. Redirecting to dashboard.");
-      router.push('/dashboard');
+      router.push(`/r2/${newRole}`);
       return;
     }
     sessionStorage.removeItem('r2_session_type');
@@ -731,6 +732,7 @@ export default function R2CodePage() {
                   <button onClick={() => {
                     if (sessionData.type === 'bounty') {
                       setShowBountySubmitModal(true);
+                      socket?.emit("round2:bountyend");
                     } else {
                       executeCode(true);
                     }
