@@ -28,6 +28,20 @@ interface Participant {
   cooldownEndTime?: number;
   isReady?: boolean;
 }
+interface RoundInfo {
+  roundNumber: number;
+  status: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+  isActive: boolean;
+  isLocked: boolean;
+}
+
+interface CurrentRoundResponse extends SimpleSocketResponse {
+  currentRound?: {
+    currentRoundNumber: number;
+    currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+    rounds: RoundInfo[];
+  };
+}
 
 interface SimpleSocketResponse {
   success: boolean;
@@ -62,6 +76,46 @@ export default function LobbyR2() {
       }
     });
   };
+
+  useEffect(() => {
+    if (!socket || !isConnected || !authenticationChecked) return;
+
+    socket.emit("user:current-round", {}, (response: CurrentRoundResponse) => {
+      console.log("Current round response:", response);
+
+
+      if (!response.success) {
+        showErrorToast(response.error || "Failed to check round status");
+        router.back();
+        return;
+      }
+
+      const currentRound = response.currentRound;
+
+      if (!currentRound) {
+        showErrorToast("No active round found");
+        router.back();
+        return;
+      }
+
+
+
+      if (currentRound.currentRoundNumber !== 2) {
+        showErrorToast("Round 2 is not the current round");
+        router.back();
+        return;
+      }
+
+      if (currentRound.currentRoundStatus !== 'LOBBY') {
+        showErrorToast(`Round 2 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`);
+        console.log("Current round status:", currentRound.currentRoundStatus);
+        router.back();
+        return;
+      }
+
+      console.log("Round status valid, proceeding to get state");
+    });
+  }, [socket, isConnected, authenticationChecked, router]);
 
   // Authentication check
   useEffect(() => {

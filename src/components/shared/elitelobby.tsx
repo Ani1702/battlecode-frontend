@@ -356,10 +356,10 @@ export default function EliteDashboard() {
   }
 
   return (
-    <div className="flex bg-[url('/bg_round2.jpg')] bg-center bg-no-repeat h-screen w-full flex-col overflow-hidden orbitron">
+    <div className="flex bg-[url('/bg_elite.jpg')] bg-center bg-no-repeat h-screen w-full flex-col overflow-hidden orbitron">
       <div className="flex-1 flex items-center justify-center text-6xl orbitron white-glow relative">
-        <Image src="/bg_elite.jpg" alt="Battlecode Logo" className="h-20" width={80} height={80} />
-        ELITE
+        {/* <Image src="/bg_elite.jpg" alt="Battlecode Logo" className="h-20" width={80} height={80} /> */}
+        ⚔️ELITE
         <div className="absolute top-4 right-4 bg-black/50 text-white text-2xl p-2 px-4 rounded-lg font-mono">
           {formatTime(timeRemaining)}
         </div>

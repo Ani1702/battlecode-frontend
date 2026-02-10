@@ -5,7 +5,7 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function SecureWrapper({ children, }: { children: React.ReactNode; }) {
-    const { socket } = useSocket();
+    const { socket, isConnected } = useSocket();
     const { userId } = useAuth();
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showWarning, setShowWarning] = useState(true);
@@ -169,10 +169,12 @@ export default function SecureWrapper({ children, }: { children: React.ReactNode
 
     // Emit socket event when violations hit 5
     useEffect(() => {
-        if (fullscreenViolations.length === 5 && socket) {
+        console.log("Socket ID (frontend):", socket?.id);
+
+        if (fullscreenViolations.length === 5 && socket && isConnected) {
             console.log('CRITICAL: 5 violations reached! Emitting global:violation event');
             socket.emit('global:violation', {
-                userId,
+                userId: userId,
                 violations: fullscreenViolations,
                 timestamp: Date.now(),
                 totalCount: fullscreenViolations.length

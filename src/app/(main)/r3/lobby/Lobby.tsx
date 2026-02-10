@@ -263,7 +263,7 @@ export default function Lobbyr3() {
     socket.emit("user:current-round", {}, (response: CurrentRoundResponse) => {
       console.log("Current round response:", response);
       setIsCheckingRound(false);
-      
+
       if (!response.success) {
         showErrorToast(response.error || "Failed to check round status");
         router.back();
@@ -370,12 +370,12 @@ export default function Lobbyr3() {
     };
 
     const handleTimer = (data: TimerData) => setTimeRemaining(data.timeRemaining || 0);
-    
+
     const handleRoundEnd = () => {
       showSuccessToast('Round 3 has ended.');
       router.push('/dashboard');
     };
-    
+
     const handleError = (error: ErrorData) => {
       const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
       showErrorToast(errorMessage);
@@ -391,7 +391,7 @@ export default function Lobbyr3() {
 
     const handleAdminAdded = () => {
       console.log("You have been added to Round 3 by an admin");
-      
+
       if (!currentRoundData) {
         showErrorToast("Round data not available");
         return;
@@ -438,8 +438,8 @@ export default function Lobbyr3() {
   // Early return for loading states
   if (authLoading || !authenticationChecked || isCheckingRound) {
     return (
-      <LoadingOverlay 
-        isLoading={true} 
+      <LoadingOverlay
+        isLoading={true}
         message={authLoading ? "Loading Authentication..." : "Checking Round Status..."}
       />
     );
@@ -450,8 +450,8 @@ export default function Lobbyr3() {
       <div className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
         <p className='flex-1 flex items-end pt-8'> <span className="text-white">ROUND</span> <span className="text-orange-500">&nbsp; 3</span></p>
         <span className="text-orange-500 text-2xl pb-4">LOBBY</span>
-        
-        {(roundStarted || isRoundActive) && (
+
+        {/* {(roundStarted || isRoundActive) && (
           <div className="mt-3 flex flex-col items-center gap-2">
             {roundStarted ? (
               <>
@@ -475,7 +475,7 @@ export default function Lobbyr3() {
               </>
             )}
           </div>
-        )}
+        )}*/}
       </div>
 
       <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
@@ -565,7 +565,7 @@ export default function Lobbyr3() {
           )} */}
         </div>
       )}
-      
+
       {/* Powered by Judge0 Footer */}
       <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
         <p className="text-white/60 text-sm font-oxanium">

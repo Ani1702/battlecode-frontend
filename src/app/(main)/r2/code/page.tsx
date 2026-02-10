@@ -10,6 +10,8 @@ import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/sh
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { Lightbulb, Play } from "lucide-react";
 import LoadingOverlay from "@/components/shared/LoadingOverlay";
+import SecureWrapper from "@/components/shared/SecureWrapper";
+
 
 // --- Interfaces ---
 interface SessionData {
@@ -61,12 +63,12 @@ interface GetStateResponse {
 interface MatchResultData {
   winnerId: string;
   loserId: string;
-  reason: 'submission' | 'disconnect' | 'timeout';
+  reason: 'submission' | 'disconnect' | 'timeout' | 'violation';
   newRole: 'elite' | 'challenger';
 }
 
 interface BountyEndedData {
-  reason: 'completed' | 'incorrect' | 'timeout';
+  reason: 'completed' | 'incorrect' | 'timeout' | 'violation';
   newRole: 'elite' | 'challenger';
 }
 
@@ -79,7 +81,7 @@ interface SubmissionApiResponse {
 }
 
 interface EndPopupData {
-  type: 'win' | 'lose' | 'timeout' | 'bounty-win' | 'bounty-fail' | 'bounty-timeout' | 'admin-end';
+  type: 'win' | 'lose' | 'timeout' | 'bounty-win' | 'bounty-fail' | 'bounty-timeout' | 'admin-end' | 'violation-forfeit' | 'opponent-violation';
   newRole: 'elite' | 'challenger';
 }
 
@@ -107,6 +109,8 @@ export default function R2CodePage() {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [pageIsLoading, setPageIsLoading] = useState(true);
+  const sessionEndedRef = useRef(false);
+
 
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState(() => {
@@ -115,12 +119,14 @@ export default function R2CodePage() {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sessionTerminated, setSessionTerminated] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [submissionResults, setSubmissionResults] = useState<SubmissionResult[] | null>(null);
   const [showHints, setShowHints] = useState(false);
   const [activeTab, setActiveTab] = useState<'testcases' | 'results'>('testcases');
   const [codeEditorHeight, setCodeEditorHeight] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
+  const [matchEnded, setMatchEnded] = useState(false);
 
   const [showEndPopup, setShowEndPopup] = useState(false);
   const [endPopupData, setEndPopupData] = useState<EndPopupData | null>(null);
@@ -376,6 +382,18 @@ export default function R2CodePage() {
     setShowEndPopup(true);
   }, [router]);
 
+
+  const safeTriggerSessionEnd = useCallback(
+    (type: EndPopupData['type'], newRole: 'elite' | 'challenger') => {
+      if (sessionEndedRef.current) return;
+
+      sessionEndedRef.current = true;
+      triggerSessionEnd(type, newRole);
+    },
+    [triggerSessionEnd]
+  );
+
+
   // --- Socket Event Handlers ---
   const handleTimerUpdate = useCallback((data: { timeRemaining: number }) => {
     const remaining = data.timeRemaining * 1000; // Convert to milliseconds
@@ -388,10 +406,7 @@ export default function R2CodePage() {
 
     // Auto-submit when time is up
     if (data.timeRemaining <= 0) {
-      showErrorToast('Time\'s up! Your session has ended.');
-      const userRole = (sessionStorage.getItem('r2_user_role') as 'elite' | 'challenger') || 'challenger';
-      const type = sessionData?.type === 'bounty' ? 'bounty-timeout' : 'timeout';
-      triggerSessionEnd(type, userRole);
+      showErrorToast("Time's up. Waiting for server decision...");
     }
   }, [sessionData?.type, triggerSessionEnd]);
 
@@ -426,14 +441,14 @@ export default function R2CodePage() {
 
     const timerInterval = setInterval(() => {
       const remaining = sessionData.endTime - Date.now();
+
       if (remaining <= 0) {
         setTimeRemaining(0);
         clearInterval(timerInterval);
-        if (!showEndPopup) {
-          const userRole = (sessionStorage.getItem('r2_user_role') as 'elite' | 'challenger') || 'challenger';
-          const type = sessionData.type === 'bounty' ? 'bounty-timeout' : 'timeout';
-          triggerSessionEnd(type, userRole);
-        }
+
+
+
+        showErrorToast("Time's up. Waiting for server decision...");
       } else {
         setTimeRemaining(remaining);
       }
@@ -492,14 +507,37 @@ export default function R2CodePage() {
 
     const handleMatchResult = (data: MatchResultData) => {
       const isWinner = data.winnerId === session.user.email;
-      const type = data.reason === 'timeout' ? 'timeout' : (isWinner ? 'win' : 'lose');
-      triggerSessionEnd(type, data.newRole);
+
+      let type: EndPopupData['type'];
+
+      if (data.reason === 'violation') {
+        type = isWinner ? 'opponent-violation' : 'violation-forfeit';
+      } else if (data.reason === 'timeout') {
+        type = 'timeout';
+      } else {
+        type = isWinner ? 'win' : 'lose';
+      }
+
+      safeTriggerSessionEnd(type, data.newRole);
     };
 
+
     const handleBountyEnded = (data: BountyEndedData) => {
-      const type = data.reason === 'completed' ? 'bounty-win' : 'bounty-fail';
-      triggerSessionEnd(type, data.newRole);
+      let type: EndPopupData['type'];
+
+      if (data.reason === 'violation') {
+        type = 'violation-forfeit';
+      } else if (data.reason === 'timeout') {
+        type = 'bounty-timeout';
+      } else if (data.reason === 'completed') {
+        type = 'bounty-win';
+      } else {
+        type = 'bounty-fail';
+      }
+
+      safeTriggerSessionEnd(type, data.newRole);
     };
+
 
     const handleRoundEnd = () => {
       showInfoToast("Round 2 has ended. You will be redirected to the dashboard.");
@@ -509,6 +547,28 @@ export default function R2CodePage() {
         router.push('/dashboard');
       }, 3000);
     };
+
+    const handleViolationForfeit = () => {
+      console.warn("round2:violationForfeit received");
+
+      const userRole =
+        (sessionStorage.getItem('r2_user_role') as 'elite' | 'challenger') ||
+        'challenger';
+
+      safeTriggerSessionEnd('violation-forfeit', userRole);
+    };
+
+
+    const handleOpponentViolated = () => {
+      console.warn("round2:opponentViolated received");
+
+      const userRole =
+        (sessionStorage.getItem('r2_user_role') as 'elite' | 'challenger') ||
+        'challenger';
+
+      safeTriggerSessionEnd('opponent-violation', userRole);
+    };
+
 
     socket.on('round2:matchResult', handleMatchResult);
     socket.on('round2:bountyEnded', handleBountyEnded);
@@ -526,6 +586,8 @@ export default function R2CodePage() {
       socket.off('round2:timerUpdate', handleTimerUpdate);
       socket.off('round2:adminRemoved', handleAdminRemoved);
       socket.off('round2:adminAdded', handleAdminAdded);
+      socket.off('round2:violationForfeit', handleViolationForfeit);
+      socket.off('round2:opponentViolated', handleOpponentViolated);
     };
     // --- FIX: Added triggerSessionEnd to dependency array ---
   }, [socket, router, session?.user?.email, triggerSessionEnd, handleTimerUpdate, handleAdminRemoved, handleAdminAdded]);
@@ -605,6 +667,8 @@ export default function R2CodePage() {
       case 'bounty-fail': return { title: '💡 Attempt Logged', message: 'Your solution was incorrect. You will be redirected.', className: 'text-yellow-400' };
       case 'bounty-timeout': return { title: "⏳ Time's Up!", message: 'Your bounty attempt timed out. You will be redirected.', className: 'text-yellow-400' };
       case 'admin-end': return { title: '🛑 Session Ended', message: 'The session was ended by an admin. You will be redirected.', className: 'text-orange-400' };
+      case 'violation-forfeit': return { title: '🚫 Disqualified', message: 'You have been forfeited from this session due to multiple rule violations.', className: 'text-red-500 font-bold' };
+      case 'opponent-violation': return { title: '🚩 Opponent Disqualified', message: 'Your opponent committed a violation. You have been awarded the win!', className: 'text-green-400 font-bold' };
       default: return null;
     }
   };
@@ -613,7 +677,7 @@ export default function R2CodePage() {
 
 
   return (
-    <>
+    <SecureWrapper>
       <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
         <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
           <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">
@@ -810,6 +874,6 @@ export default function R2CodePage() {
         </div>
       )}
 
-    </>
+    </SecureWrapper>
   );
 }

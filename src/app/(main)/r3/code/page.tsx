@@ -11,6 +11,7 @@ import HackModal from "@/components/shared/HackModal";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
 import { Save, CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Play, ChevronLeft, ChevronRight, Lock, Swords, Clock, MemoryStick } from "lucide-react";
 import LoadingOverlay from "@/components/shared/LoadingOverlay";
+import SecureWrapper from "@/components/shared/SecureWrapper";
 
 
 // --- Interfaces ---
@@ -430,11 +431,15 @@ export default function Round3Page() {
       }
     };
 
-    const handleViolation = () => {
-      console.log("round3:violation event received");
-      showErrorToast("you have been removed from the round due to violation");
+    const handleViolation = (data: { success?: boolean; message?: string }) => {
+      console.warn("round3:violation event received", data);
+      showErrorToast(data.message || "You have been removed from the round due to violation");
+
+      // Clear all local state and context
       clearMatchContext(round);
       sessionStorage.removeItem('fullscreen_violations');
+
+      // Redirect to dashboard
       router.push('/dashboard');
     };
 
@@ -853,7 +858,7 @@ export default function Round3Page() {
   const timerDisplay = { time: formatTime(timeRemaining), className: timeRemaining <= 60 ? 'text-red-400' : timeRemaining <= 300 ? 'text-yellow-400' : '' };
 
   return (
-    <>
+    <SecureWrapper>
       <HackModal
         isOpen={isHackModalOpen}
         onClose={() => setIsHackModalOpen(false)}
@@ -1001,6 +1006,6 @@ export default function Round3Page() {
           </div>
         </div>
       </div>
-    </>
+    </SecureWrapper>
   );
 }
