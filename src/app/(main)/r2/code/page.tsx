@@ -502,7 +502,7 @@ export default function R2CodePage() {
       sessionStorage.removeItem("r2_context_id");
       sessionStorage.removeItem("r2_user_role");
 
-      router.replace("/dashboard");
+      router.push("/r2" + target);
     };
 
     const handleMatchResult = (data: MatchResultData) => {
