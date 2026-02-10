@@ -373,7 +373,10 @@ export default function R2CodePage() {
     if (!newRole) {
       console.error("TriggerSessionEnd called without a new role. Aborting popup.");
       showErrorToast("Could not determine next step. Redirecting to dashboard.");
-      router.push(`/r2/${newRole}`);
+      const userRole =
+        (sessionStorage.getItem('r2_user_role') as 'elite' | 'challenger') ||
+        'challenger';
+      router.push(`/r2/${userRole}`);
       return;
     }
     sessionStorage.removeItem('r2_session_type');
