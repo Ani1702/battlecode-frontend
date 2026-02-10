@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [isClient, setIsClient] = useState(false);
   const [hasShownLoginToast, setHasShownLoginToast] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(true);
 
   const prevUserRef = useRef(user);
 
@@ -287,6 +288,26 @@ export default function Dashboard() {
     };
   }, [socket, isConnected, handleLeaderboard, handleCurrentRound, handleAdminAdded]);
 
+  // Round 3 visibility check
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleRound3Check = (data: CurrentRoundData) => {
+      if (data.currentRoundNumber === 3) {
+        setShowLeaderboard(false);
+      } else {
+        setShowLeaderboard(true);
+      }
+    };
+
+    socket.on("server:currentRound", handleRound3Check);
+    socket.emit("user:current-round");
+
+    return () => {
+      socket.off("server:currentRound", handleRound3Check);
+    };
+  }, [socket, isConnected]);
+
   return (
     <>
       <div className="bg-[url('/bg-dashboard.svg')] h-screen bg-cover bg-center flex flex-col relative overflow-hidden">
@@ -427,56 +448,66 @@ export default function Dashboard() {
                 )}
               </div>
               <div className="flex-1 overflow-hidden">
-                <CustomScrollbar className="h-full overflow-y-auto px-4 pb-4">
-                  <table className="min-w-full text-left text-sm  text-white">
-                    <thead>
-                      <tr className="border-b border-gray-700">
-                        {leaderboard_titles.map((title, idx) => (
-                          <th key={idx} className="py-2 px-3 font-bold text-white">{title}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leaderboard.length > 0 ? (
-                        // Display real leaderboard data from socket or localStorage
-                        leaderboard.map((entry, idx) => (
-                          <tr key={entry.id || idx} className="border-gray-800 hover:bg-white/5 transition">
-                            <td className="py-2 px-3 text-white">{entry.rank}</td>
-                            <td className="py-2 px-3 text-white">
-                              <div className="flex flex-col">
-                                <span className="font-medium">{entry.username !== 'Not Set' ? entry.username : entry.name}</span>
-                                {entry.username !== 'Not Set' && entry.name && (
-                                  <span className="text-xs text-gray-400">{entry.name}</span>
-                                )}
+                {showLeaderboard ? (
+                  <CustomScrollbar className="h-full overflow-y-auto px-4 pb-4">
+                    <table className="min-w-full text-left text-sm  text-white">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          {leaderboard_titles.map((title, idx) => (
+                            <th key={idx} className="py-2 px-3 font-bold text-white">{title}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leaderboard.length > 0 ? (
+                          // Display real leaderboard data from socket or localStorage
+                          leaderboard.map((entry, idx) => (
+                            <tr key={entry.id || idx} className="border-gray-800 hover:bg-white/5 transition">
+                              <td className="py-2 px-3 text-white">{entry.rank}</td>
+                              <td className="py-2 px-3 text-white">
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{entry.username !== 'Not Set' ? entry.username : entry.name}</span>
+                                  {entry.username !== 'Not Set' && entry.name && (
+                                    <span className="text-xs text-gray-400">{entry.name}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2 px-3 text-white">{entry.score}</td>
+
+                            </tr>
+                          ))
+                        ) : isInitialLoad ? (
+                          // Show loading state only on very first load
+                          <tr>
+                            <td colSpan={4} className="py-8 text-center text-gray-400">
+                              <div className="flex items-center justify-center space-x-2">
+                                <div className="w-4 h-4 bg-orange-500 rounded-full animate-pulse"></div>
+                                <span>Loading leaderboard...</span>
                               </div>
                             </td>
-                            <td className="py-2 px-3 text-white">{entry.score}</td>
-
                           </tr>
-                        ))
-                      ) : isInitialLoad ? (
-                        // Show loading state only on very first load
-                        <tr>
-                          <td colSpan={4} className="py-8 text-center text-gray-400">
-                            <div className="flex items-center justify-center space-x-2">
-                              <div className="w-4 h-4 bg-orange-500 rounded-full animate-pulse"></div>
-                              <span>Loading leaderboard...</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        // Display fallback data only if no cached data exists
-                        fallbackLeaderboard.map((row, idx) => (
-                          <tr key={idx} className="border-gray-800 hover:bg-white/5 transition opacity-50">
-                            {row.map((cell, cidx) => (
-                              <td key={cidx} className="py-2 px-3 text-white">{cell}</td>
-                            ))}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </CustomScrollbar>
+                        ) : (
+                          // Display fallback data only if no cached data exists
+                          fallbackLeaderboard.map((row, idx) => (
+                            <tr key={idx} className="border-gray-800 hover:bg-white/5 transition opacity-50">
+                              {row.map((cell, cidx) => (
+                                <td key={cidx} className="py-2 px-3 text-white">{cell}</td>
+                              ))}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </CustomScrollbar>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-16 h-16 mb-4 opacity-20">
+                      <Image src="/leaderboard-img.svg" alt="Leaderboard Hidden" width={64} height={64} />
+                    </div>
+                    <p className="text-xl font-medium text-orange-500/80 orbitron">Leaderboard Restricted</p>
+                    <p className="text-gray-400 mt-2 text-sm">Leaderboard data is hidden during the final round.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
