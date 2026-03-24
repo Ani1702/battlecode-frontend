@@ -1,20 +1,26 @@
 "use client";
-import { useState, useEffect, useCallback, memo } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { useSocket } from '@/contexts/SocketContext';
-import { showSuccessToast, showErrorToast, showInfoToast } from '@/components/shared/CustomToast';
-import CustomScrollbar from '@/components/shared/CustomScrollbar';
-import IncomingEliteCard from '@/components/shared/IncomingEliteCard';
-import BountyQuestionCard, { BountyQuestion } from '@/components/shared/BountyQuestionCard';
-import LoadingOverlay from '@/components/shared/LoadingOverlay';
+import { useState, useEffect, useCallback, memo } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useSocket } from "@/contexts/SocketContext";
+import {
+  showSuccessToast,
+  showErrorToast,
+  showInfoToast,
+} from "@/components/shared/CustomToast";
+import CustomScrollbar from "@/components/shared/CustomScrollbar";
+import IncomingEliteCard from "@/components/shared/IncomingEliteCard";
+import BountyQuestionCard, {
+  BountyQuestion,
+} from "@/components/shared/BountyQuestionCard";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 // --- Interfaces ---
 interface Participant {
   id: string;
   username: string;
   status: string;
-  role?: 'elite' | 'challenger';
+  role?: "elite" | "challenger";
   expiresAt?: number;
 }
 
@@ -23,7 +29,7 @@ interface SimpleSocketResponse {
   message?: string;
 }
 
-interface ServerBountyQuestion extends Omit<BountyQuestion, 'name'> {
+interface ServerBountyQuestion extends Omit<BountyQuestion, "name"> {
   title: string;
   isSolvedByAnyone?: boolean;
   isAttemptedByUser?: boolean;
@@ -32,109 +38,128 @@ interface ServerBountyQuestion extends Omit<BountyQuestion, 'name'> {
 const formatTime = (ms: number) => {
   if (ms <= 0) return "00:00";
   const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+  const minutes = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
   return `${minutes}:${seconds}`;
 };
 
-const RequestTimer = memo(({ expiresAt, onExpire }: { expiresAt: number | undefined, onExpire: () => void }) => {
-  const calculateTimeLeft = useCallback(() => {
-    if (!expiresAt) return 0;
-    return Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-  }, [expiresAt]);
+const RequestTimer = memo(
+  ({
+    expiresAt,
+    onExpire,
+  }: {
+    expiresAt: number | undefined;
+    onExpire: () => void;
+  }) => {
+    const calculateTimeLeft = useCallback(() => {
+      if (!expiresAt) return 0;
+      return Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+    }, [expiresAt]);
 
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft);
+    const [timeLeft, setTimeLeft] = useState(calculateTimeLeft);
 
-  useEffect(() => {
-    if (!expiresAt) return;
+    useEffect(() => {
+      if (!expiresAt) return;
 
-    if (calculateTimeLeft() <= 0) {
-      onExpire();
-      return;
+      if (calculateTimeLeft() <= 0) {
+        onExpire();
+        return;
+      }
+
+      const intervalId = setInterval(() => {
+        const remaining = calculateTimeLeft();
+        setTimeLeft(remaining);
+        if (remaining <= 0) {
+          clearInterval(intervalId);
+          onExpire();
+        }
+      }, 1000);
+
+      return () => clearInterval(intervalId);
+    }, [expiresAt, onExpire, calculateTimeLeft]);
+
+    if (timeLeft <= 0) {
+      return <span className="text-sm text-red-500 font-mono">Expired</span>;
     }
 
-    const intervalId = setInterval(() => {
-      const remaining = calculateTimeLeft();
-      setTimeLeft(remaining);
-      if (remaining <= 0) {
-        clearInterval(intervalId);
-        onExpire();
-      }
-    }, 1000);
+    return (
+      <span className="text-sm text-yellow-400 relative right-[248px] top-[20px] font-mono">
+        Expires in {timeLeft}s
+      </span>
+    );
+  },
+);
+RequestTimer.displayName = "RequestTimer";
 
-    return () => clearInterval(intervalId);
-  }, [expiresAt, onExpire, calculateTimeLeft]);
+const ChallengerRequestRow = memo(
+  ({
+    player,
+    onAccept,
+    onDeny,
+    onRemove,
+  }: {
+    player: Participant;
+    onAccept: (id: string) => void;
+    onDeny: (id: string) => void;
+    onRemove: (id: string) => void;
+  }) => {
+    const handleExpire = useCallback(() => {
+      onRemove(player.id);
+    }, [player.id, onRemove]);
 
-  if (timeLeft <= 0) {
-    return <span className="text-sm text-red-500 font-mono">Expired</span>;
-  }
-
-  return <span className="text-sm text-yellow-400 relative right-[248px] top-[20px] font-mono">Expires in {timeLeft}s</span>;
-});
-RequestTimer.displayName = 'RequestTimer';
-
-const ChallengerRequestRow = memo(({ player, onAccept, onDeny, onRemove }: {
-  player: Participant;
-  onAccept: (id: string) => void;
-  onDeny: (id: string) => void;
-  onRemove: (id: string) => void;
-}) => {
-  const handleExpire = useCallback(() => {
-    onRemove(player.id);
-  }, [player.id, onRemove]);
-
-  return (
-    <div className="relative mb-2">
-      <IncomingEliteCard
-        username={player.username}
-        onAccept={() => onAccept(player.id)}
-        onDeny={() => onDeny(player.id)}
-      />
-      <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none">
-        <RequestTimer
-          expiresAt={player.expiresAt}
-          onExpire={handleExpire}
+    return (
+      <div className="relative mb-2">
+        <IncomingEliteCard
+          username={player.username}
+          onAccept={() => onAccept(player.id)}
+          onDeny={() => onDeny(player.id)}
         />
+        <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none">
+          <RequestTimer expiresAt={player.expiresAt} onExpire={handleExpire} />
+        </div>
       </div>
-    </div>
-  );
-});
-ChallengerRequestRow.displayName = 'ChallengerRequestRow';
-
+    );
+  },
+);
+ChallengerRequestRow.displayName = "ChallengerRequestRow";
 
 export default function EliteDashboard() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
 
-  const [incomingChallengers, setIncomingChallengers] = useState<Participant[]>([]);
+  const [incomingChallengers, setIncomingChallengers] = useState<Participant[]>(
+    [],
+  );
   const [bountyQuestions, setBountyQuestions] = useState<BountyQuestion[]>([]);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [userRole, setUserRole] = useState<'elite' | 'challenger' | null>(null);
+  const [userRole, setUserRole] = useState<"elite" | "challenger" | null>(null);
   const [hasActiveSession, setHasActiveSession] = useState(false);
 
   const handleRemoveChallenger = useCallback((challengerId: string) => {
-    setIncomingChallengers(prev => prev.filter(p => p.id !== challengerId));
+    setIncomingChallengers((prev) => prev.filter((p) => p.id !== challengerId));
   }, []);
 
   // Fetch initial state and dashboard data using state-based approach
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    console.debug('[Elite] Fetching round2 state...');
+    console.debug("[Elite] Fetching round2 state...");
 
     // Set a timeout to prevent infinite loading
     const stateTimeout = setTimeout(() => {
-      console.error('[Elite] GetState/Dashboard timeout');
+      console.error("[Elite] GetState/Dashboard timeout");
       setIsLoading(false);
-      showErrorToast('Failed to load dashboard. Please refresh.');
+      showErrorToast("Failed to load dashboard. Please refresh.");
     }, 10000); // 10 second timeout
 
     // Listen for state updates from server
     const handleStateUpdate = (stateResponse: any) => {
-      console.debug('[Elite] State response:', stateResponse);
+      console.debug("[Elite] State response:", stateResponse);
 
       if (!stateResponse.success) {
         clearTimeout(stateTimeout);
@@ -145,8 +170,10 @@ export default function EliteDashboard() {
 
       const role = stateResponse.roundSpecific?.role;
       const session = stateResponse.session;
-      const bountyQuestions = stateResponse.roundSpecific?.bountyQuestions || [];
-      const incomingRequests = stateResponse.roundSpecific?.incomingRequests || [];
+      const bountyQuestions =
+        stateResponse.roundSpecific?.bountyQuestions || [];
+      const incomingRequests =
+        stateResponse.roundSpecific?.incomingRequests || [];
 
       setUserRole(role);
       setHasActiveSession(!!session);
@@ -157,18 +184,18 @@ export default function EliteDashboard() {
         setIsLoading(false);
         showInfoToast("Resuming your active session...");
         setTimeout(() => {
-          router.push('/r2/code');
+          router.push("/r2/code");
         }, 1000);
         return;
       }
 
       // If user is not an elite, redirect
-      if (role !== 'elite') {
+      if (role !== "elite") {
         clearTimeout(stateTimeout);
         setIsLoading(false);
         showErrorToast("Access denied. Redirecting...");
         setTimeout(() => {
-          router.push(role ? `/r2/${role}` : '/dashboard');
+          router.push(role ? `/r2/${role}` : "/dashboard");
         }, 1000);
         return;
       }
@@ -176,30 +203,33 @@ export default function EliteDashboard() {
       // User is an elite with no active session - set dashboard data from state
       setRoundEndTime(stateResponse.round?.endTime || null);
       const transformedBounties = bountyQuestions.map((q: any) => ({
-        ...q, name: q.title,
+        ...q,
+        name: q.title,
       }));
       setBountyQuestions(transformedBounties);
-      setIncomingChallengers(incomingRequests.map((req: any) => ({
-        id: req.userId,
-        username: req.username,
-        rank: req.rank,
-        expiresAt: req.expiresAt,
-        role: 'challenger',
-        status: 'challenger:idle'
-      })));
+      setIncomingChallengers(
+        incomingRequests.map((req: any) => ({
+          id: req.userId,
+          username: req.username,
+          rank: req.rank,
+          expiresAt: req.expiresAt,
+          role: "challenger",
+          status: "challenger:idle",
+        })),
+      );
 
       clearTimeout(stateTimeout);
       setIsLoading(false);
     };
 
     // Register listener
-    socket.on('round2:state', handleStateUpdate);
+    socket.on("round2:state", handleStateUpdate);
 
     // Request state from server
-    socket.emit('round2:getState');
+    socket.emit("round2:getState");
 
     return () => {
-      socket.off('round2:state', handleStateUpdate);
+      socket.off("round2:state", handleStateUpdate);
       clearTimeout(stateTimeout);
     };
   }, [socket, isConnected, router]);
@@ -215,9 +245,11 @@ export default function EliteDashboard() {
         // --- FIX: Redirect when timer hits zero ---
         if (!isRedirecting) {
           setIsRedirecting(true);
-          showInfoToast("Round 2 has ended. You will be redirected to the dashboard.");
+          showInfoToast(
+            "Round 2 has ended. You will be redirected to the dashboard.",
+          );
           setTimeout(() => {
-            router.push('/dashboard');
+            router.push("/dashboard");
           }, 3000);
         }
       }
@@ -230,19 +262,24 @@ export default function EliteDashboard() {
 
     const handleChallengeIncoming = (data: { challenger: Participant }) => {
       showInfoToast(`${data.challenger.username} has challenged you!`);
-      setIncomingChallengers(prev => [...prev.filter(c => c.id !== data.challenger.id), data.challenger]);
+      setIncomingChallengers((prev) => [
+        ...prev.filter((c) => c.id !== data.challenger.id),
+        data.challenger,
+      ]);
     };
 
     const handleMatchStarted = (data: { matchId: string }) => {
       showSuccessToast("Match starting! Redirecting...");
       try {
-        sessionStorage.setItem('r2_session_type', 'match');
-        sessionStorage.setItem('r2_context_id', data.matchId);
-        sessionStorage.setItem('r2_user_role', 'elite');
+        sessionStorage.setItem("r2_session_type", "match");
+        sessionStorage.setItem("r2_context_id", data.matchId);
+        sessionStorage.setItem("r2_user_role", "elite");
         router.push(`/r2/code`);
       } catch (error) {
         console.error("Session storage is unavailable.", error);
-        showErrorToast("Could not save session. Please enable cookies/storage.");
+        showErrorToast(
+          "Could not save session. Please enable cookies/storage.",
+        );
       }
     };
 
@@ -250,7 +287,9 @@ export default function EliteDashboard() {
       handleRemoveChallenger(data.challengerId);
     };
 
-    const handleDashboardUpdate = (data: { incomingRequests?: Participant[] }) => {
+    const handleDashboardUpdate = (data: {
+      incomingRequests?: Participant[];
+    }) => {
       if (data.incomingRequests) {
         setIncomingChallengers(data.incomingRequests);
       }
@@ -260,9 +299,11 @@ export default function EliteDashboard() {
       // --- FIX: Use safeguard to prevent double redirection ---
       if (isRedirecting) return;
       setIsRedirecting(true);
-      showInfoToast("Round 2 has ended. You will be redirected to the dashboard.");
+      showInfoToast(
+        "Round 2 has ended. You will be redirected to the dashboard.",
+      );
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push("/dashboard");
       }, 3000);
     };
 
@@ -281,78 +322,99 @@ export default function EliteDashboard() {
       showErrorToast(reason || "You were removed from Round 2");
 
       // clear session state
-      sessionStorage.removeItem('r2_session_type');
-      sessionStorage.removeItem('r2_context_id');
-      sessionStorage.removeItem('r2_user_role');
-      localStorage.removeItem('battlecode-round-2-code-store');
+      sessionStorage.removeItem("r2_session_type");
+      sessionStorage.removeItem("r2_context_id");
+      sessionStorage.removeItem("r2_user_role");
+      localStorage.removeItem("battlecode-round-2-code-store");
 
       router.replace("/dashboard");
     };
 
-
-    socket.on('round2:challengeIncoming', handleChallengeIncoming);
-    socket.on('round2:matchStarted', handleMatchStarted);
-    socket.on('round2:requestExpired', handleRequestExpired);
-    socket.on('round2:dashboardUpdate', handleDashboardUpdate);
-    socket.on('round2:ended', handleRoundEnd);
+    socket.on("round2:challengeIncoming", handleChallengeIncoming);
+    socket.on("round2:matchStarted", handleMatchStarted);
+    socket.on("round2:requestExpired", handleRequestExpired);
+    socket.on("round2:dashboardUpdate", handleDashboardUpdate);
+    socket.on("round2:ended", handleRoundEnd);
     socket.on("round2:redirect", handleRound2Redirect);
 
     return () => {
-      socket.off('round2:challengeIncoming', handleChallengeIncoming);
-      socket.off('round2:matchStarted', handleMatchStarted);
-      socket.off('round2:requestExpired', handleRequestExpired);
-      socket.off('round2:dashboardUpdate', handleDashboardUpdate);
-      socket.off('round2:ended', handleRoundEnd);
+      socket.off("round2:challengeIncoming", handleChallengeIncoming);
+      socket.off("round2:matchStarted", handleMatchStarted);
+      socket.off("round2:requestExpired", handleRequestExpired);
+      socket.off("round2:dashboardUpdate", handleDashboardUpdate);
+      socket.off("round2:ended", handleRoundEnd);
       socket.off("round2:redirect", handleRound2Redirect);
     };
   }, [socket, router, handleRemoveChallenger, isRedirecting]);
 
   const handleStartBounty = (questionId: string) => {
     if (!socket) return;
-    socket.emit('round2:bountyBeginQuestion', { questionId }, (response: SimpleSocketResponse) => {
-      if (response.success) {
-        showSuccessToast("Starting bounty... good luck!");
-        try {
-          sessionStorage.setItem('r2_session_type', 'bounty');
-          sessionStorage.setItem('r2_context_id', questionId);
-          sessionStorage.setItem('r2_user_role', 'elite');
-          router.push(`/r2/code`);
-        } catch (error) {
-          console.error("Session storage is unavailable.", error);
-          showErrorToast("Could not save session. Please enable cookies/storage.");
+    socket.emit(
+      "round2:bountyBeginQuestion",
+      { questionId },
+      (response: SimpleSocketResponse) => {
+        if (response.success) {
+          showSuccessToast("Starting bounty... good luck!");
+          try {
+            sessionStorage.setItem("r2_session_type", "bounty");
+            sessionStorage.setItem("r2_context_id", questionId);
+            sessionStorage.setItem("r2_user_role", "elite");
+            router.push(`/r2/code`);
+          } catch (error) {
+            console.error("Session storage is unavailable.", error);
+            showErrorToast(
+              "Could not save session. Please enable cookies/storage.",
+            );
+          }
+        } else {
+          showErrorToast(response.message || "Could not start bounty.");
         }
-      } else {
-        showErrorToast(response.message || "Could not start bounty.");
-      }
-    });
+      },
+    );
   };
 
-  const handleAcceptChallenge = useCallback((challengerId: string) => {
-    if (!socket) return;
-    socket.emit('round2:challengeAccept', { challengerId }, (response: SimpleSocketResponse) => {
-      if (!response.success) {
-        showErrorToast(response.message || "Failed to accept challenge.");
-        if (response.message?.includes("active session")) {
-          router.refresh();
-        }
-      }
-    });
-  }, [socket, router]);
+  const handleAcceptChallenge = useCallback(
+    (challengerId: string) => {
+      if (!socket) return;
+      socket.emit(
+        "round2:challengeAccept",
+        { challengerId },
+        (response: SimpleSocketResponse) => {
+          if (!response.success) {
+            showErrorToast(response.message || "Failed to accept challenge.");
+            if (response.message?.includes("active session")) {
+              router.refresh();
+            }
+          }
+        },
+      );
+    },
+    [socket, router],
+  );
 
-  const handleDenyChallenge = useCallback((challengerId: string) => {
-    if (!socket) return;
-    socket.emit('round2:challengeReject', { challengerId }, (response: SimpleSocketResponse) => {
-      if (response.success) {
-        showSuccessToast("Challenge rejected.");
-        handleRemoveChallenger(challengerId);
-      } else {
-        showErrorToast(response.message || "Failed to reject challenge.");
-      }
-    });
-  }, [socket, handleRemoveChallenger]);
+  const handleDenyChallenge = useCallback(
+    (challengerId: string) => {
+      if (!socket) return;
+      socket.emit(
+        "round2:challengeReject",
+        { challengerId },
+        (response: SimpleSocketResponse) => {
+          if (response.success) {
+            showSuccessToast("Challenge rejected.");
+            handleRemoveChallenger(challengerId);
+          } else {
+            showErrorToast(response.message || "Failed to reject challenge.");
+          }
+        },
+      );
+    },
+    [socket, handleRemoveChallenger],
+  );
 
   if (isLoading) {
-    return <LoadingOverlay isLoading={true} message="Loading Elite Dashboard..." />;
+    return (
+      <LoadingOverlay isLoading={true} message="Loading Elite Dashboard..." />
+    );
   }
 
   return (
@@ -367,7 +429,9 @@ export default function EliteDashboard() {
       <div className="flex-4 flex flex-row">
         <div className="flex-1">
           <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
-            <h2 className="text-2xl font-bold text-white mb-4 orbitron">Incoming Challengers</h2>
+            <h2 className="text-2xl font-bold text-white mb-4 orbitron">
+              Incoming Challengers
+            </h2>
             <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto overflow-x-hidden pr-2">
               {incomingChallengers.length > 0 ? (
                 incomingChallengers.map((player) => (
@@ -390,7 +454,9 @@ export default function EliteDashboard() {
         </div>
         <div className="flex-1">
           <div className="h-[80%] w-[80%] glass-box rounded-lg m-auto mt-10 p-5">
-            <h2 className="text-2xl font-bold text-white mb-4 orbitron">Bounty Questions</h2>
+            <h2 className="text-2xl font-bold text-white mb-4 orbitron">
+              Bounty Questions
+            </h2>
             <CustomScrollbar className="h-[calc(100%-3rem)] overflow-y-auto pr-2">
               <div className="grid grid-cols-4 gap-2">
                 {bountyQuestions.map((question, index) => (

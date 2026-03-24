@@ -7,7 +7,11 @@ interface TimeSliderProps {
   className?: string;
 }
 
-export default function TimeSlider({ value, onChange, className = "" }: TimeSliderProps) {
+export default function TimeSlider({
+  value,
+  onChange,
+  className = "",
+}: TimeSliderProps) {
   const allowedValues = useMemo(() => [15, 30, 45, 60, 75, 90], []);
   const [sliderValue, setSliderValue] = useState(allowedValues.indexOf(value));
 
@@ -32,18 +36,14 @@ export default function TimeSlider({ value, onChange, className = "" }: TimeSlid
           onChange={handleSliderChange}
           className="w-full h-1 rounded-lg appearance-none cursor-pointer border-0"
           style={{
-            background: 'linear-gradient(to right, #fbbf24, #f59e0b, #dc2626)',
-            transition: 'all 0.3s ease-in-out'
+            background: "linear-gradient(to right, #fbbf24, #f59e0b, #dc2626)",
+            transition: "all 0.3s ease-in-out",
           }}
         />
       </div>
       <div className="bg-white rounded-lg px-4 py-2 min-w-[80px]">
-        <div className="text-black font-bold text-lg text-center">
-          {value}
-        </div>
-        <div className="text-gray-600 text-xs text-center">
-          minutes
-        </div>
+        <div className="text-black font-bold text-lg text-center">{value}</div>
+        <div className="text-gray-600 text-xs text-center">minutes</div>
       </div>
     </div>
   );

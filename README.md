@@ -21,12 +21,14 @@ Provide a concise description of:
 The BattleCode frontend is a modern Next.js 16 application built with a focus on real-time interactivity and secure competitive environments.
 
 ### Core Components:
+
 - **Authentication:** Integrated with Supabase Auth (Google OAuth) and a custom `AuthContext` to verify sessions against a backend API.
 - **Real-time Engine:** Uses Socket.IO (`SocketContext`) to handle live match status, matchmaking cycles, and the event-driven leaderboard.
 - **Problem Solving Environment:** A custom coding interface using Monaco Editor that handles code submission and provides real-time test verification via Judge0 integration.
 - **Security & Integrity:** The `SecureWrapper` component enforces fullscreen mode and monitors for tab-switching or developer tool usage to maintain fair play.
 
 ### Data Flow:
+
 - **Session Management:** Auth state is managed via Supabase SSR and Next.js middleware, ensuring protected routes are properly gated.
 - **Live Updates:** The backend pushes round-specific state updates (Round 0-3) over WebSockets, which are consumed by round-specific lobbies and dashboards.
 - **Execution:** User code is sent to the backend proxy, executed via Judge0, and the results are returned to the `CodePage` for immediate display.
@@ -35,12 +37,12 @@ The BattleCode frontend is a modern Next.js 16 application built with a focus on
 
 ## Tech Stack
 
-| Layer        | Technology Used |
-|-------------|-----------------|
-| Frontend    | Next.js 16 (App Router), React 19, TypeScript |
-| Backend     | Node.js / Express (Separate Repository) |
-| Database    | Supabase (PostgreSQL), Redis (for session/round state) |
-| Layout / UI | Tailwind CSS 4, Framer Motion |
+| Layer       | Technology Used                                         |
+| ----------- | ------------------------------------------------------- |
+| Frontend    | Next.js 16 (App Router), React 19, TypeScript           |
+| Backend     | Node.js / Express (Separate Repository)                 |
+| Database    | Supabase (PostgreSQL), Redis (for session/round state)  |
+| Layout / UI | Tailwind CSS 4, Framer Motion                           |
 | Other Tools | Monaco Editor, Socket.IO Client, Chart.js, Lucide React |
 
 ---
@@ -61,6 +63,7 @@ src/
 ├── types/                # TypeScript interfaces for questions and round state
 └── utils/                # Helper functions for Supabase and general logic
 ```
+
 ---
 
 ## ⚙️ Setup Instructions
@@ -105,6 +108,7 @@ docker build -t battlecode-frontend .
 ```bash
 docker run -p 3000:3000 battlecode-frontend
 ```
+
 ---
 
 ## Git Hooks Setup
@@ -116,7 +120,9 @@ After cloning the repository, run the following command once:
 ```bash
 git config core.hooksPath .hooks
 ```
+
 This enables:
+
 - Commit message validation
 - Blocking direct pushes to `main`
 
@@ -124,20 +130,21 @@ This enables:
 
 ## Environment Variables
 
-| Variable Name | Description |
-|--------------|------------|
-| NEXT_PUBLIC_SUPABASE_URL | Supabase project URL |
-| NEXT_PUBLIC_SUPABASE_ANON_KEY | Supabase public anonymous key |
-| NEXT_PUBLIC_SOCKET_URL | WebSocket server URL (Socket.IO) |
-| NEXT_PUBLIC_API_URL | Backend API server URL |
+| Variable Name                 | Description                      |
+| ----------------------------- | -------------------------------- |
+| NEXT_PUBLIC_SUPABASE_URL      | Supabase project URL             |
+| NEXT_PUBLIC_SUPABASE_ANON_KEY | Supabase public anonymous key    |
+| NEXT_PUBLIC_SOCKET_URL        | WebSocket server URL (Socket.IO) |
+| NEXT_PUBLIC_API_URL           | Backend API server URL           |
 
 ---
 
 ## Deployment
 
-The project is optimized for deployment on the **Vercel Platform**. 
+The project is optimized for deployment on the **Vercel Platform**.
 
 **Build Steps:**
+
 1. Configure environment variables in the Vercel dashboard.
 2. Run `npm run build` to generate the production optimized bundle.
 3. Deploy the resulting `.next` output.
@@ -151,11 +158,12 @@ Currently, unit testing is in the planning phase. To run linting checks:
 ```bash
 npm run lint
 ```
+
 ---
 
 ## Project Status
 
-- 🟢 In Development  
+- 🟢 In Development
 
 ---
 

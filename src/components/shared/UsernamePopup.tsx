@@ -15,7 +15,7 @@ export default function UsernamePopup({ isOpen, onClose }: UsernamePopupProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!username.trim()) {
       setError("Username is required");
       return;
@@ -49,7 +49,7 @@ export default function UsernamePopup({ isOpen, onClose }: UsernamePopupProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      
+
       {/* Modal */}
       <div className="relative glass-box rounded-lg p-8 max-w-md w-full mx-4 animate-fadeIn">
         <div className="text-center mb-6">

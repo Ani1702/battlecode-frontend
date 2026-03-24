@@ -8,17 +8,17 @@ interface BaseRoundState {
   error?: string;
   timestamp: number;
   roundNumber: number;
-  
+
   // Round Status
   round: {
     isActive: boolean;
-    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED';
+    status: "LOBBY" | "IN_PROGRESS" | "COMPLETED" | "LOCKED";
     startTime: number | null;
     endTime: number | null;
     timeRemaining: number;
     duration: number;
   };
-  
+
   // Participant Data
   participants: {
     total: number;
@@ -33,13 +33,13 @@ interface BaseRoundState {
     };
     all: Array<Participant>;
   };
-  
+
   // Current User
   currentUser: Participant | null;
-  
+
   // Session Data (when applicable)
   session?: {
-    type: 'match' | 'bounty' | 'problem';
+    type: "match" | "bounty" | "problem";
     id: string;
     startTime: number;
     endTime: number;
@@ -54,28 +54,28 @@ interface BaseRoundState {
     currentProblemIndex?: number;
     totalProblems?: number;
   };
-  
+
   // Round-specific data
   roundSpecific?: {
     // Round 0
     progress?: UserProgress;
-    
+
     // Round 1
     nextMatchmakingCycle?: number;
     globalTimeRemaining?: number;
-    
+
     // Round 2
-    role?: 'elite' | 'challenger';
+    role?: "elite" | "challenger";
     incomingRequests?: Array<ChallengeRequest>;
     pendingRequests?: Array<string>;
     bountyQuestions?: Array<BountyQuestion>;
-    
+
     // Round 3
     lockedQuestionIds?: Array<string>;
     questions?: Array<Problem>;
     isHackingPhase?: boolean;
   };
-  
+
   message?: string;
 }
 
@@ -135,4 +135,12 @@ interface BountyQuestion extends Problem {
   isAttemptedByUser: boolean;
 }
 
-export type { BaseRoundState, Round3State, Participant, Problem, UserProgress, ChallengeRequest, BountyQuestion };
+export type {
+  BaseRoundState,
+  Round3State,
+  Participant,
+  Problem,
+  UserProgress,
+  ChallengeRequest,
+  BountyQuestion,
+};

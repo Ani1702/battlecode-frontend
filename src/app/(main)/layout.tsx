@@ -35,11 +35,8 @@ export default function MainLayout({ children }: { children: ReactNode }) {
       <div className="flex-1">
         <main className="h-full font-oxanium relative z-0">{children}</main>
       </div>
-      
-      <UsernamePopup 
-        isOpen={showUsernamePopup} 
-        onClose={handlePopupClose}
-      />
+
+      <UsernamePopup isOpen={showUsernamePopup} onClose={handlePopupClose} />
     </div>
   );
 }

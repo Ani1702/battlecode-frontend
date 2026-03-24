@@ -30,29 +30,34 @@ const Hero = () => {
     }
   };
 
-  const handleKeyPress = useCallback((event: KeyboardEvent) => {
-    if (event.key === 'Enter' && user) {
-      setIsExiting(true);
-      setTimeout(() => {
-
-        router.push('/dashboard');
-      }, 1000); // Wait for animation to complete
-    }
-  }, [user, router]);
+  const handleKeyPress = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === "Enter" && user) {
+        setIsExiting(true);
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 1000); // Wait for animation to complete
+      }
+    },
+    [user, router],
+  );
 
   useEffect(() => {
     // Add event listener for keydown
-    window.addEventListener('keydown', handleKeyPress);
+    window.addEventListener("keydown", handleKeyPress);
 
     // Cleanup event listener on component unmount
     return () => {
-      window.removeEventListener('keydown', handleKeyPress);
+      window.removeEventListener("keydown", handleKeyPress);
     };
   }, [handleKeyPress]);
 
   return (
-    <div className={`bg-[url(/Landingpage.svg)] bg-cover h-screen transform transition-transform duration-1000 overflow-x-hidden overflow-y-hidden ease-out ${isExiting ? '-translate-y-full' : 'translate-y-0'
-      }`}>
+    <div
+      className={`bg-[url(/Landingpage.svg)] bg-cover h-screen transform transition-transform duration-1000 overflow-x-hidden overflow-y-hidden ease-out ${
+        isExiting ? "-translate-y-full" : "translate-y-0"
+      }`}
+    >
       <div className="h-full z-1 orbitron text-white bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
         {/* Logout button in top right */}
         {user && (
@@ -78,20 +83,14 @@ const Hero = () => {
           <div className="absolute topHUD left-0 top-50 lg:top-2 h-[6rem] w-full flex items-center justify-center">
             <div className="text-white h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 tracking-wider">
               IEEE COMPUTER SOCIETY
-
             </div>
             <div className="text-white h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
               IEEE COMPUTER SOCIETY
-
             </div>
             <div className="text-white h-full w-full bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
               IEEE COMPUTER SOCIETY
-
-
             </div>
-
           </div>
-
 
           <div className="absolute leftHUD left-10 top-0 h-full w-[6rem] flex items-center justify-center">
             <div className="h-full w-full  lg:bg-[url(/LeftLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
@@ -144,7 +143,13 @@ const Hero = () => {
               aria-hidden
             >
               <defs>
-                <linearGradient id="judgeZeroGradient" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient
+                  id="judgeZeroGradient"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
                   <stop offset="0%" stopColor="#FDBA74" />
                   <stop offset="55%" stopColor="#F97316" />
                   <stop offset="100%" stopColor="#C2410C" />
@@ -174,14 +179,7 @@ const Hero = () => {
               />
 
               {/* inner cutout */}
-              <rect
-                x="19"
-                y="12"
-                width="22"
-                height="66"
-                rx="7"
-                fill="black"
-              />
+              <rect x="19" y="12" width="22" height="66" rx="7" fill="black" />
 
               {/* center dot */}
               <circle
@@ -192,38 +190,31 @@ const Hero = () => {
                 mask="url(#judgeZeroNoise)"
               />
             </svg>
-
           </div>
 
-
-
-
-
-
-
-
-          <div className="relative ">
-
-          </div>
+          <div className="relative "></div>
 
           <button
             onClick={handleAuthClick}
             disabled={isLoading}
             className="hidden lg:block relative gradient-border-button text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md mt-8"
           >
-            {isLoading ? "LOADING..." : user ? "DASHBOARD" : "SIGN IN WITH GOOGLE"}
+            {isLoading
+              ? "LOADING..."
+              : user
+                ? "DASHBOARD"
+                : "SIGN IN WITH GOOGLE"}
           </button>
-
         </div>
 
         <div className="w-[27rem] quote   flex relative bottom-50 lg:bottom-8 z-10 left-1/2 transform -translate-x-1/2 justify-center">
           <p className="z-1 text-center uppercase text-white tracking-[4px] absolute bottom-[5rem] text-[0.80rem] lg:text-[0.80rem] px-8 lg:px-0">
-            This is more than just programming—it&apos;s precision under pressure.
-            Enter the match with intent. Exit with impact.
+            This is more than just programming—it&apos;s precision under
+            pressure. Enter the match with intent. Exit with impact.
           </p>
           <p className="text-center uppercase text-white tracking-[4px] absolute bottom-[5rem] blur-md text-[0.85rem]">
-            This is more than just programming—it&apos;s precision under pressure.
-            Enter the match with intent. Exit with impact.
+            This is more than just programming—it&apos;s precision under
+            pressure. Enter the match with intent. Exit with impact.
           </p>
         </div>
         <div className="sm:hidden justify-center text-white flex relative bottom-42 lg:bottom-8 z-10 left-1/2 transform -translate-x-1/2 text-center text-white text-sm lg:text-md font-medium ">

@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 
 export const createClient = async (cookieStore?: ReadonlyRequestCookies) => {
-  const cookieHandler = cookieStore || await cookies();
-  
+  const cookieHandler = cookieStore || (await cookies());
+
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -16,7 +16,7 @@ export const createClient = async (cookieStore?: ReadonlyRequestCookies) => {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieHandler.set(name, value, options)
+              cookieHandler.set(name, value, options),
             );
           } catch {
             // The `setAll` method was called from a Server Component.
@@ -25,6 +25,6 @@ export const createClient = async (cookieStore?: ReadonlyRequestCookies) => {
           }
         },
       },
-    }
+    },
   );
 };

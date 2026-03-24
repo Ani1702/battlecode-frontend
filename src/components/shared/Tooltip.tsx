@@ -1,6 +1,12 @@
-import React from 'react';
+import React from "react";
 
-const Tooltip = ({ text, children }: { text: string, children: React.ReactNode }) => {
+const Tooltip = ({
+  text,
+  children,
+}: {
+  text: string;
+  children: React.ReactNode;
+}) => {
   return (
     <div className="relative group">
       {children}

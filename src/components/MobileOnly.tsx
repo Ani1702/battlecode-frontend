@@ -16,9 +16,10 @@ const MobileOnly = ({ children }: { children: React.ReactNode }) => {
     // Now we can access window.opera directly.
     // We also wrap `ua` in String() to safely handle any potential non-string values before calling toLowerCase().
     const ua = navigator.userAgent || navigator.vendor || window.opera;
-    const mobileCheck = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
-      String(ua).toLowerCase()
-    );
+    const mobileCheck =
+      /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+        String(ua).toLowerCase(),
+      );
     setIsMobile(mobileCheck);
   }, []);
 

@@ -3,12 +3,15 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Rocket } from "lucide-react";
-import PlayerCard from '@/components/shared/PlayerCard';
-import CustomScrollbar from '@/components/shared/CustomScrollbar';
-import { useSocket } from '@/contexts/SocketContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
-import LoadingOverlay from '@/components/shared/LoadingOverlay';
+import PlayerCard from "@/components/shared/PlayerCard";
+import CustomScrollbar from "@/components/shared/CustomScrollbar";
+import { useSocket } from "@/contexts/SocketContext";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  showSuccessToast,
+  showErrorToast,
+} from "@/components/shared/CustomToast";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 // --- TYPE DEFINITIONS ---
 
@@ -44,8 +47,8 @@ interface Problem {
 interface TestCase {
   stdin?: string;
   expected_output?: string;
-  input?: { stdin?: string; json?: unknown; };
-  output?: { stdout?: string; json?: unknown; };
+  input?: { stdin?: string; json?: unknown };
+  output?: { stdout?: string; json?: unknown };
   explanation?: string;
 }
 
@@ -55,7 +58,7 @@ interface Round3State {
   roundNumber: number;
   round: {
     isActive: boolean;
-    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED';
+    status: "LOBBY" | "IN_PROGRESS" | "COMPLETED";
     startTime: number | null;
     endTime: number | null;
     timeRemaining: number;
@@ -90,7 +93,7 @@ interface LobbyData {
   roundNumber: number;
   round: {
     isActive: boolean;
-    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED';
+    status: "LOBBY" | "IN_PROGRESS" | "COMPLETED" | "LOCKED";
     startTime: number | null;
     endTime: number | null;
     timeRemaining: number;
@@ -131,7 +134,7 @@ interface SimpleSocketResponse {
 
 interface RoundInfo {
   roundNumber: number;
-  status: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+  status: "LOBBY" | "COMPLETED" | "LOCKED" | "IN_PROGRESS";
   isActive: boolean;
   isLocked: boolean;
 }
@@ -139,7 +142,7 @@ interface RoundInfo {
 interface CurrentRoundResponse extends SimpleSocketResponse {
   currentRound?: {
     currentRoundNumber: number;
-    currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+    currentRoundStatus: "LOBBY" | "COMPLETED" | "LOCKED" | "IN_PROGRESS";
     rounds: RoundInfo[];
   };
 }
@@ -168,9 +171,11 @@ export default function Lobbyr3() {
   const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
   const [isCheckingRound, setIsCheckingRound] = useState(true);
-  const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundResponse['currentRound'] | null>(null);
+  const [currentRoundData, setCurrentRoundData] = useState<
+    CurrentRoundResponse["currentRound"] | null
+  >(null);
 
-  const isAdmin = userRole === 'ADMIN';
+  const isAdmin = userRole === "ADMIN";
 
   // Debug: Log participants whenever they change
   useEffect(() => {
@@ -182,78 +187,103 @@ export default function Lobbyr3() {
   }, [participants]);
 
   // Functions
-  const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 19);
+  const formatTime = (seconds: number) =>
+    new Date(seconds * 1000).toISOString().substring(14, 19);
 
   const handleStartRound = () => {
     if (!socket || participants.length === 0) return;
-    localStorage.removeItem('battlecode-round-3-code-store');
-    socket.emit('round3:ready', {}, (response: SimpleSocketResponse) => {
+    localStorage.removeItem("battlecode-round-3-code-store");
+    socket.emit("round3:ready", {}, (response: SimpleSocketResponse) => {
       if (response.success) {
-        showSuccessToast('Round 3 started successfully');
+        showSuccessToast("Round 3 started successfully");
       } else {
-        showErrorToast(response.error || 'Failed to start the round');
+        showErrorToast(response.error || "Failed to start the round");
       }
     });
   };
 
-  const handleState = useCallback((response: Round3State) => {
-    console.log("🔵 [R3 Lobby] handleState called with response:", response);
-    setIsLoading(false);
-    setHasAttemptedJoin(true);
+  const handleState = useCallback(
+    (response: Round3State) => {
+      console.log("🔵 [R3 Lobby] handleState called with response:", response);
+      setIsLoading(false);
+      setHasAttemptedJoin(true);
 
-    if (!response.success) {
-      console.error("❌ [R3 Lobby] State response failed:", response.error);
-      showErrorToast(response.error || "Could not sync with the server.");
-      return;
-    }
-
-    // Update participants from the new state structure
-    if (response.participants?.byStatus) {
-      console.log("👥 [R3 Lobby] Participants by status:", response.participants.byStatus);
-      // Show participants in lobby and waiting status
-      const lobbyParticipants = [
-        ...(response.participants.byStatus.lobby || []),
-        ...(response.participants.byStatus.waiting || [])
-      ];
-      console.log("✅ [R3 Lobby] Combined lobby participants:", lobbyParticipants);
-      console.log("📊 [R3 Lobby] Total participants count:", lobbyParticipants.length);
-      setParticipants(lobbyParticipants);
-    } else {
-      console.warn("⚠️ [R3 Lobby] No participants.byStatus in response");
-    }
-
-    // Update round active status
-    setIsRoundActive(response.round.isActive);
-    setTimeRemaining(response.round.timeRemaining);
-    console.log("⏰ [R3 Lobby] Round active:", response.round.isActive, "Time remaining:", response.round.timeRemaining);
-
-    // Check current user status
-    if (response.currentUser) {
-      console.log("👤 [R3 Lobby] Current user:", response.currentUser);
-      if (response.currentUser.status === "IN_MATCH") {
-        console.log("🎮 [R3 Lobby] User in match, redirecting to code page");
-        router.push("/r3/code");
+      if (!response.success) {
+        console.error("❌ [R3 Lobby] State response failed:", response.error);
+        showErrorToast(response.error || "Could not sync with the server.");
+        return;
       }
-    } else {
-      console.log("🔄 [R3 Lobby] User not in round, attempting to join");
-      // User is not in the round, attempt to join
-      socket?.emit("round3:join", { userId, username: user?.user_metadata?.full_name || user?.id }, (joinResponse: SimpleSocketResponse) => {
-        console.log("📥 [R3 Lobby] Join response:", joinResponse);
-        if (joinResponse.success) {
-          showSuccessToast("Successfully joined Round 3 lobby");
-          console.log("✅ [R3 Lobby] User joined successfully");
-        } else {
-          showErrorToast(joinResponse.error || "Failed to join lobby");
-          console.error("❌ [R3 Lobby] Failed to join:", joinResponse.error);
+
+      // Update participants from the new state structure
+      if (response.participants?.byStatus) {
+        console.log(
+          "👥 [R3 Lobby] Participants by status:",
+          response.participants.byStatus,
+        );
+        // Show participants in lobby and waiting status
+        const lobbyParticipants = [
+          ...(response.participants.byStatus.lobby || []),
+          ...(response.participants.byStatus.waiting || []),
+        ];
+        console.log(
+          "✅ [R3 Lobby] Combined lobby participants:",
+          lobbyParticipants,
+        );
+        console.log(
+          "📊 [R3 Lobby] Total participants count:",
+          lobbyParticipants.length,
+        );
+        setParticipants(lobbyParticipants);
+      } else {
+        console.warn("⚠️ [R3 Lobby] No participants.byStatus in response");
+      }
+
+      // Update round active status
+      setIsRoundActive(response.round.isActive);
+      setTimeRemaining(response.round.timeRemaining);
+      console.log(
+        "⏰ [R3 Lobby] Round active:",
+        response.round.isActive,
+        "Time remaining:",
+        response.round.timeRemaining,
+      );
+
+      // Check current user status
+      if (response.currentUser) {
+        console.log("👤 [R3 Lobby] Current user:", response.currentUser);
+        if (response.currentUser.status === "IN_MATCH") {
+          console.log("🎮 [R3 Lobby] User in match, redirecting to code page");
+          router.push("/r3/code");
         }
-      });
-    }
-  }, [router, socket, userId, user]);
+      } else {
+        console.log("🔄 [R3 Lobby] User not in round, attempting to join");
+        // User is not in the round, attempt to join
+        socket?.emit(
+          "round3:join",
+          { userId, username: user?.user_metadata?.full_name || user?.id },
+          (joinResponse: SimpleSocketResponse) => {
+            console.log("📥 [R3 Lobby] Join response:", joinResponse);
+            if (joinResponse.success) {
+              showSuccessToast("Successfully joined Round 3 lobby");
+              console.log("✅ [R3 Lobby] User joined successfully");
+            } else {
+              showErrorToast(joinResponse.error || "Failed to join lobby");
+              console.error(
+                "❌ [R3 Lobby] Failed to join:",
+                joinResponse.error,
+              );
+            }
+          },
+        );
+      }
+    },
+    [router, socket, userId, user],
+  );
 
   // Authentication check useEffect
   useEffect(() => {
     if (!authLoading) setAuthenticationChecked(true);
-    if (!authLoading && !userId) router.push('/dashboard');
+    if (!authLoading && !userId) router.push("/dashboard");
   }, [authLoading, userId, router]);
 
   // Check current round useEffect
@@ -286,8 +316,10 @@ export default function Lobbyr3() {
         return;
       }
 
-      if (currentRound.currentRoundStatus !== 'LOBBY') {
-        showErrorToast(`Round 3 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`);
+      if (currentRound.currentRoundStatus !== "LOBBY") {
+        showErrorToast(
+          `Round 3 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`,
+        );
         console.log("Current round status:", currentRound.currentRoundStatus);
         router.back();
         return;
@@ -299,12 +331,24 @@ export default function Lobbyr3() {
 
   // Emit getState useEffect
   useEffect(() => {
-    if (!socket || !isConnected || !authenticationChecked || hasAttemptedJoin || isCheckingRound)
+    if (
+      !socket ||
+      !isConnected ||
+      !authenticationChecked ||
+      hasAttemptedJoin ||
+      isCheckingRound
+    )
       return;
 
     console.log("🚀 [R3 Lobby] Emitting round3:getState");
     socket.emit("round3:getState");
-  }, [socket, isConnected, authenticationChecked, hasAttemptedJoin, isCheckingRound]);
+  }, [
+    socket,
+    isConnected,
+    authenticationChecked,
+    hasAttemptedJoin,
+    isCheckingRound,
+  ]);
 
   // Listen to state response useEffect
   useEffect(() => {
@@ -326,28 +370,42 @@ export default function Lobbyr3() {
       console.log("🔄 [R3 Lobby] Lobby update received:", data);
       setIsLoading(false);
       if (data.participants?.byStatus?.lobby) {
-        console.log("👥 [R3 Lobby] Updating participants from lobby update:", data.participants.byStatus.lobby);
+        console.log(
+          "👥 [R3 Lobby] Updating participants from lobby update:",
+          data.participants.byStatus.lobby,
+        );
         setParticipants(data.participants.byStatus.lobby);
       }
       if (data.round?.isActive !== undefined) {
-        console.log("🏁 [R3 Lobby] Round active status update:", data.round.isActive);
+        console.log(
+          "🏁 [R3 Lobby] Round active status update:",
+          data.round.isActive,
+        );
         setIsRoundActive(data.round.isActive);
       }
       if (data.round?.timeRemaining !== undefined) {
-        console.log("⏰ [R3 Lobby] Time remaining update:", data.round.timeRemaining);
+        console.log(
+          "⏰ [R3 Lobby] Time remaining update:",
+          data.round.timeRemaining,
+        );
         setTimeRemaining(data.round.timeRemaining);
       }
     };
 
     const handleRoundStart = (data: RoundStartData) => {
-      if (data && typeof data === 'object' && data.questions && data.startTime) {
+      if (
+        data &&
+        typeof data === "object" &&
+        data.questions &&
+        data.startTime
+      ) {
         try {
           const dataToStore = {
             problems: data.questions,
             startTime: data.startTime,
-            duration: data.duration || 1200
+            duration: data.duration || 1200,
           };
-          sessionStorage.setItem('round3_data', JSON.stringify(dataToStore));
+          sessionStorage.setItem("round3_data", JSON.stringify(dataToStore));
         } catch (error) {
           console.error("Failed to save round data to sessionStorage:", error);
           showErrorToast("Error preparing round. Please try again.");
@@ -361,32 +419,36 @@ export default function Lobbyr3() {
 
       setRoundStarted(true);
       setIsRoundActive(true);
-      localStorage.removeItem('battlecode-round-3-code-store');
-      showSuccessToast('Round 3 has started! Redirecting...');
+      localStorage.removeItem("battlecode-round-3-code-store");
+      showSuccessToast("Round 3 has started! Redirecting...");
 
       setTimeout(() => {
-        router.push('/r3/code');
+        router.push("/r3/code");
       }, 1500);
     };
 
-    const handleTimer = (data: TimerData) => setTimeRemaining(data.timeRemaining || 0);
+    const handleTimer = (data: TimerData) =>
+      setTimeRemaining(data.timeRemaining || 0);
 
     const handleRoundEnd = () => {
-      showSuccessToast('Round 3 has ended.');
-      router.push('/dashboard');
+      showSuccessToast("Round 3 has ended.");
+      router.push("/dashboard");
     };
 
     const handleError = (error: ErrorData) => {
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
+      const errorMessage =
+        typeof error === "string"
+          ? error
+          : error?.message || "An error occurred";
       showErrorToast(errorMessage);
     };
 
     const handleAdminRemoved = () => {
       console.log("You have been removed from Round 3 by an admin");
       showErrorToast("You have been removed from Round 3 by an admin");
-      localStorage.removeItem('battlecode-round-3-code-store');
-      sessionStorage.removeItem('round3_data');
-      router.push('/');
+      localStorage.removeItem("battlecode-round-3-code-store");
+      sessionStorage.removeItem("round3_data");
+      router.push("/");
     };
 
     const handleAdminAdded = () => {
@@ -404,34 +466,36 @@ export default function Lobbyr3() {
         return;
       }
 
-      if (currentRoundStatus === 'LOBBY') {
+      if (currentRoundStatus === "LOBBY") {
         showSuccessToast("You have been added to Round 3! Already in lobby.");
-      } else if (currentRoundStatus === 'IN_PROGRESS') {
-        showSuccessToast("You have been added to Round 3! Redirecting to coding environment...");
-        setTimeout(() => router.push('/r3/code'), 1500);
-      } else if (currentRoundStatus === 'COMPLETED') {
+      } else if (currentRoundStatus === "IN_PROGRESS") {
+        showSuccessToast(
+          "You have been added to Round 3! Redirecting to coding environment...",
+        );
+        setTimeout(() => router.push("/r3/code"), 1500);
+      } else if (currentRoundStatus === "COMPLETED") {
         showErrorToast("Round 3 has already completed");
-      } else if (currentRoundStatus === 'LOCKED') {
+      } else if (currentRoundStatus === "LOCKED") {
         showErrorToast("Round 3 is currently locked");
       }
     };
 
-    socket.on('lobby:round3', handleLobbyUpdate);
-    socket.on('round3:start', handleRoundStart);
-    socket.on('round3:timer', handleTimer);
-    socket.on('round3:end', handleRoundEnd);
-    socket.on('round3:error', handleError);
-    socket.on('round3:adminRemoved', handleAdminRemoved);
-    socket.on('round3:adminAdded', handleAdminAdded);
+    socket.on("lobby:round3", handleLobbyUpdate);
+    socket.on("round3:start", handleRoundStart);
+    socket.on("round3:timer", handleTimer);
+    socket.on("round3:end", handleRoundEnd);
+    socket.on("round3:error", handleError);
+    socket.on("round3:adminRemoved", handleAdminRemoved);
+    socket.on("round3:adminAdded", handleAdminAdded);
 
     return () => {
-      socket.off('lobby:round3', handleLobbyUpdate);
-      socket.off('round3:start', handleRoundStart);
-      socket.off('round3:timer', handleTimer);
-      socket.off('round3:end', handleRoundEnd);
-      socket.off('round3:error', handleError);
-      socket.off('round3:adminRemoved', handleAdminRemoved);
-      socket.off('round3:adminAdded', handleAdminAdded);
+      socket.off("lobby:round3", handleLobbyUpdate);
+      socket.off("round3:start", handleRoundStart);
+      socket.off("round3:timer", handleTimer);
+      socket.off("round3:end", handleRoundEnd);
+      socket.off("round3:error", handleError);
+      socket.off("round3:adminRemoved", handleAdminRemoved);
+      socket.off("round3:adminAdded", handleAdminAdded);
     };
   }, [socket, router, currentRoundData]);
 
@@ -440,15 +504,24 @@ export default function Lobbyr3() {
     return (
       <LoadingOverlay
         isLoading={true}
-        message={authLoading ? "Loading Authentication..." : "Checking Round Status..."}
+        message={
+          authLoading ? "Loading Authentication..." : "Checking Round Status..."
+        }
       />
     );
   }
 
   return (
     <div className="flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
-      <div className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
-        <p className='flex-1 flex items-end pt-8'> <span className="text-white">ROUND</span> <span className="text-orange-500">&nbsp; 3</span></p>
+      <div
+        className="flex-shrink-0 orbitron items-center flex flex-col text-7xl"
+        style={{ textShadow: "0 0 10px rgba(217, 119, 6, 1)" }}
+      >
+        <p className="flex-1 flex items-end pt-8">
+          {" "}
+          <span className="text-white">ROUND</span>{" "}
+          <span className="text-orange-500">&nbsp; 3</span>
+        </p>
         <span className="text-orange-500 text-2xl pb-4">LOBBY</span>
 
         {/* {(roundStarted || isRoundActive) && (
@@ -478,7 +551,7 @@ export default function Lobbyr3() {
         )}*/}
       </div>
 
-      <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
+      <div className="flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white">
         Participants: {participants.length}
       </div>
 
@@ -517,18 +590,32 @@ export default function Lobbyr3() {
                 <p className="text-red-400">Connecting to server...</p>
                 <div className="flex justify-center items-center gap-2 mt-2">
                   <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse"></div>
-                  <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <div
+                    className="bg-red-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "0.5s" }}
+                  ></div>
+                  <div
+                    className="bg-red-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "1s" }}
+                  ></div>
                 </div>
               </div>
             ) : participants.length > 0 ? (
               <div>
-                <p className="text-green-400">Connected to lobby. Waiting for more participants...</p>
+                <p className="text-green-400">
+                  Connected to lobby. Waiting for more participants...
+                </p>
                 {!isLoading && (
                   <div className="flex justify-center items-center gap-2 mt-2">
                     <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                    <div
+                      className="bg-green-500 rounded-full h-2 w-2 animate-pulse"
+                      style={{ animationDelay: "0.5s" }}
+                    ></div>
+                    <div
+                      className="bg-green-500 rounded-full h-2 w-2 animate-pulse"
+                      style={{ animationDelay: "1s" }}
+                    ></div>
                   </div>
                 )}
               </div>
@@ -537,17 +624,31 @@ export default function Lobbyr3() {
                 <p className="text-blue-400">Joining lobby...</p>
                 <div className="flex justify-center items-center gap-2 mt-2">
                   <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"></div>
-                  <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <div
+                    className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "0.5s" }}
+                  ></div>
+                  <div
+                    className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "1s" }}
+                  ></div>
                 </div>
               </div>
             ) : (
               <div>
-                <p className="text-green-400">Connected. Waiting for participants to join...</p>
+                <p className="text-green-400">
+                  Connected. Waiting for participants to join...
+                </p>
                 <div className="flex justify-center items-center gap-2 mt-2">
                   <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse"></div>
-                  <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <div
+                    className="bg-orange-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "0.5s" }}
+                  ></div>
+                  <div
+                    className="bg-orange-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "1s" }}
+                  ></div>
                 </div>
               </div>
             )}
@@ -569,7 +670,8 @@ export default function Lobbyr3() {
       {/* Powered by Judge0 Footer */}
       <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
         <p className="text-white/60 text-sm font-oxanium">
-          Powered by <span className="text-orange-500 font-semibold">Judge0</span>
+          Powered by{" "}
+          <span className="text-orange-500 font-semibold">Judge0</span>
         </p>
       </div>
     </div>

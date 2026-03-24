@@ -4,9 +4,12 @@ import { useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import CodePage from "./CodePage";
-import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/shared/CustomToast";
+import {
+  showSuccessToast,
+  showErrorToast,
+  showInfoToast,
+} from "@/components/shared/CustomToast";
 import LoadingOverlay from "@/components/shared/LoadingOverlay";
-
 
 // --- Interfaces ---
 interface Problem {
@@ -25,8 +28,8 @@ interface Problem {
 interface TestCase {
   stdin?: string;
   expected_output?: string;
-  input?: { stdin?: string; json?: Record<string, unknown>; };
-  output?: { stdout?: string; json?: Record<string, unknown>; };
+  input?: { stdin?: string; json?: Record<string, unknown> };
+  output?: { stdout?: string; json?: Record<string, unknown> };
   explanation?: string;
 }
 
@@ -70,7 +73,7 @@ interface StateResponse {
 
   round?: {
     isActive: boolean;
-    status: 'LOBBY' | 'IN_PROGRESS' | 'COMPLETED' | 'LOCKED';
+    status: "LOBBY" | "IN_PROGRESS" | "COMPLETED" | "LOCKED";
     startTime: number | null;
     endTime: number | null;
     timeRemaining: number;
@@ -93,7 +96,7 @@ interface StateResponse {
   currentUser?: Participant | null;
 
   session?: {
-    type: 'match' | 'bounty' | 'problem';
+    type: "match" | "bounty" | "problem";
     id: string;
     startTime: number;
     endTime: number;
@@ -141,17 +144,26 @@ export default function R0Code() {
 
   useEffect(() => {
     isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   // --- Socket Event Listeners ---
   useEffect(() => {
     if (!socket || !isConnected) {
-      console.log("[Socket Listeners] Socket not ready. Socket:", !!socket, "Connected:", isConnected);
+      console.log(
+        "[Socket Listeners] Socket not ready. Socket:",
+        !!socket,
+        "Connected:",
+        isConnected,
+      );
       return;
     }
 
-    console.log("[Socket Listeners] Setting up socket event listeners for round0");
+    console.log(
+      "[Socket Listeners] Setting up socket event listeners for round0",
+    );
 
     const handleTimerUpdate = (data: TimerData) => {
       if (isMountedRef.current) setTimeRemaining(data.timeRemaining || 0);
@@ -161,28 +173,35 @@ export default function R0Code() {
       if (!isMountedRef.current) return;
 
       localStorage.removeItem(`battlecode-round-0-code-store`);
-      sessionStorage.removeItem('round0_data');
-      sessionStorage.removeItem('fullscreen_violations');
+      sessionStorage.removeItem("round0_data");
+      sessionStorage.removeItem("fullscreen_violations");
 
       setIsRoundActive(false);
-      showInfoToast(data.message || 'Round 0 has ended!');
+      showInfoToast(data.message || "Round 0 has ended!");
       setTimeout(() => {
-        if (isMountedRef.current) router.push('/dashboard');
+        if (isMountedRef.current) router.push("/dashboard");
       }, 3000);
     };
 
     const handleAdminRemoved = () => {
       console.log("You have been removed from Round 0 by an admin");
       showErrorToast("You have been removed from Round 0 by an admin");
-      localStorage.removeItem('battlecode-round-0-code-store');
-      sessionStorage.removeItem('round0_data');
-      sessionStorage.removeItem('fullscreen_violations');
-      router.push('/');
+      localStorage.removeItem("battlecode-round-0-code-store");
+      sessionStorage.removeItem("round0_data");
+      sessionStorage.removeItem("fullscreen_violations");
+      router.push("/");
     };
 
     const handleAdminAdded = () => {
-      console.log("handleAdminAdded triggered - You have been added to Round 0 by an admin");
-      console.log("Socket available:", !!socket, "Socket connected:", isConnected);
+      console.log(
+        "handleAdminAdded triggered - You have been added to Round 0 by an admin",
+      );
+      console.log(
+        "Socket available:",
+        !!socket,
+        "Socket connected:",
+        isConnected,
+      );
 
       if (!socket || !isConnected) {
         console.error("Socket not available or not connected");
@@ -192,77 +211,101 @@ export default function R0Code() {
 
       // Check current round status
       console.log("Emitting user:current-round request...");
-      socket.emit("user:current-round", {}, (response: { success: boolean; currentRound?: { currentRoundNumber: number; currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS'; }; error?: string }) => {
-        console.log("user:current-round response received:", response);
+      socket.emit(
+        "user:current-round",
+        {},
+        (response: {
+          success: boolean;
+          currentRound?: {
+            currentRoundNumber: number;
+            currentRoundStatus:
+              | "LOBBY"
+              | "COMPLETED"
+              | "LOCKED"
+              | "IN_PROGRESS";
+          };
+          error?: string;
+        }) => {
+          console.log("user:current-round response received:", response);
 
-        if (!response.success || !response.currentRound) {
-          console.error("Failed to get current round:", response);
-          showErrorToast("Failed to check round status");
-          return;
-        }
+          if (!response.success || !response.currentRound) {
+            console.error("Failed to get current round:", response);
+            showErrorToast("Failed to check round status");
+            return;
+          }
 
-        const { currentRoundNumber, currentRoundStatus } = response.currentRound;
-        console.log("Current round number:", currentRoundNumber, "Status:", currentRoundStatus);
+          const { currentRoundNumber, currentRoundStatus } =
+            response.currentRound;
+          console.log(
+            "Current round number:",
+            currentRoundNumber,
+            "Status:",
+            currentRoundStatus,
+          );
 
-        if (currentRoundNumber !== 0) {
-          showErrorToast("Round 0 is not the current round");
-          return;
-        }
+          if (currentRoundNumber !== 0) {
+            showErrorToast("Round 0 is not the current round");
+            return;
+          }
 
-        if (currentRoundStatus === 'LOBBY') {
-          showSuccessToast("You have been added to Round 0! Redirecting to lobby...");
-          setTimeout(() => router.push('/r0/lobby'), 1500);
-        } else if (currentRoundStatus === 'IN_PROGRESS') {
-          showSuccessToast("You have been added to Round 0! Joining the round...");
-          setTimeout(() => window.location.reload(), 1500);
-        } else if (currentRoundStatus === 'COMPLETED') {
-          showErrorToast("Round 0 has already completed");
-        } else if (currentRoundStatus === 'LOCKED') {
-          showErrorToast("Round 0 is currently locked");
-        }
-      });
+          if (currentRoundStatus === "LOBBY") {
+            showSuccessToast(
+              "You have been added to Round 0! Redirecting to lobby...",
+            );
+            setTimeout(() => router.push("/r0/lobby"), 1500);
+          } else if (currentRoundStatus === "IN_PROGRESS") {
+            showSuccessToast(
+              "You have been added to Round 0! Joining the round...",
+            );
+            setTimeout(() => window.location.reload(), 1500);
+          } else if (currentRoundStatus === "COMPLETED") {
+            showErrorToast("Round 0 has already completed");
+          } else if (currentRoundStatus === "LOCKED") {
+            showErrorToast("Round 0 is currently locked");
+          }
+        },
+      );
     };
 
     const handleViolation = () => {
       console.log("round0:violation event received");
       showErrorToast("you have been removed from the round due to violation");
-      localStorage.removeItem('battlecode-round-0-code-store');
-      sessionStorage.removeItem('round0_data');
-      sessionStorage.removeItem('fullscreen_violations');
-      router.push('/dashboard');
+      localStorage.removeItem("battlecode-round-0-code-store");
+      sessionStorage.removeItem("round0_data");
+      sessionStorage.removeItem("fullscreen_violations");
+      router.push("/dashboard");
     };
 
-    socket.on('round0:timer', handleTimerUpdate);
-    socket.on('round0:ended', handleRoundEnd);
-    socket.on('round0:adminRemoved', handleAdminRemoved);
-    socket.on('round0:adminAdded', handleAdminAdded);
-    socket.on('round0:violation', handleViolation);
+    socket.on("round0:timer", handleTimerUpdate);
+    socket.on("round0:ended", handleRoundEnd);
+    socket.on("round0:adminRemoved", handleAdminRemoved);
+    socket.on("round0:adminAdded", handleAdminAdded);
+    socket.on("round0:violation", handleViolation);
 
     return () => {
-      socket.off('round0:timer', handleTimerUpdate);
-      socket.off('round0:ended', handleRoundEnd);
-      socket.off('round0:adminRemoved', handleAdminRemoved);
-      socket.off('round0:adminAdded', handleAdminAdded);
-      socket.off('round0:violation', handleViolation);
+      socket.off("round0:timer", handleTimerUpdate);
+      socket.off("round0:ended", handleRoundEnd);
+      socket.off("round0:adminRemoved", handleAdminRemoved);
+      socket.off("round0:adminAdded", handleAdminAdded);
+      socket.off("round0:violation", handleViolation);
     };
   }, [socket, isConnected, router]);
 
-
   // --- Main Initialization Logic ---
   useEffect(() => {
-    const isAppReady = !isAuthLoading && !isSocketLoading && user && socket && isConnected;
+    const isAppReady =
+      !isAuthLoading && !isSocketLoading && user && socket && isConnected;
     if (!isAppReady || hasInitialized.current) {
       return;
     }
     hasInitialized.current = true;
 
     // PRIMARY METHOD: Attempt to load data from sessionStorage
-    const storedDataRaw = sessionStorage.getItem('round0_data');
+    const storedDataRaw = sessionStorage.getItem("round0_data");
     if (storedDataRaw) {
-
       try {
         const storedData = JSON.parse(storedDataRaw);
-        sessionStorage.removeItem('round0_data'); // Clean up immediately
+        sessionStorage.removeItem("round0_data"); // Clean up immediately
 
         const { problems: initialProblems, duration, startTime } = storedData;
 
@@ -297,16 +340,16 @@ export default function R0Code() {
           setRoundDuration(response.round.duration || 600);
           setIsRoundActive(true);
         } else {
-          const errorMessage = response?.error || 'No active round found.';
+          const errorMessage = response?.error || "No active round found.";
 
           showErrorToast(errorMessage);
           localStorage.removeItem(`battlecode-round-0-code-store`);
-          router.push('/dashboard');
+          router.push("/dashboard");
         }
       } catch (error) {
-        console.error('Error processing round state:', error);
-        showErrorToast('Failed to load round data. Please try again.');
-        router.push('/dashboard');
+        console.error("Error processing round state:", error);
+        showErrorToast("Failed to load round data. Please try again.");
+        router.push("/dashboard");
       } finally {
         setPageIsLoading(false);
       }
@@ -315,22 +358,20 @@ export default function R0Code() {
     const handleStateError = (err: { error?: string }) => {
       if (!isMountedRef.current) return;
 
-      showErrorToast(err?.error || 'Failed to fetch round state');
+      showErrorToast(err?.error || "Failed to fetch round state");
       setPageIsLoading(false);
-      router.push('/dashboard');
+      router.push("/dashboard");
     };
 
-    socket.once('round0:state', handleState);
-    socket.once('round0:state:error', handleStateError);
-    socket.emit('round0:getState');
-
-
+    socket.once("round0:state", handleState);
+    socket.once("round0:state:error", handleStateError);
+    socket.emit("round0:getState");
   }, [isAuthLoading, isSocketLoading, user, socket, isConnected, router]);
 
   // --- User Action Handlers ---
   const handleNextQuestion = async () => {
     if (!socket || !isConnected) {
-      showErrorToast('Not connected to server');
+      showErrorToast("Not connected to server");
       return;
     }
 
@@ -347,7 +388,7 @@ export default function R0Code() {
         setTimeRemaining(response.timeRemaining || 0);
 
         showSuccessToast(
-          `Moved to question ${(response.problemIndex ?? 0) + 1}`
+          `Moved to question ${(response.problemIndex ?? 0) + 1}`,
         );
 
         setPageIsLoading(false);
@@ -356,29 +397,27 @@ export default function R0Code() {
       const handleNextError = (err: { error?: string }) => {
         if (!isMountedRef.current) return;
 
-        showErrorToast(err?.error || 'Failed to get next question');
+        showErrorToast(err?.error || "Failed to get next question");
         setPageIsLoading(false);
       };
 
-      socket.once('round0:next', handleNext);
-      socket.once('round0:next:error', handleNextError);
-      socket.emit('round0:nextQuestion');
-
+      socket.once("round0:next", handleNext);
+      socket.once("round0:next:error", handleNextError);
+      socket.emit("round0:nextQuestion");
     } catch (error) {
       if (isMountedRef.current) {
         const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
+          error instanceof Error ? error.message : "Unknown error";
         showErrorToast(`Error getting next question: ${errorMessage}`);
         setPageIsLoading(false);
       }
     }
   };
 
-
   const handleReturnToLobby = () => {
-    showInfoToast('Round-0 has ended.');
-    router.push('/dashboard');
-  }
+    showInfoToast("Round-0 has ended.");
+    router.push("/dashboard");
+  };
 
   // --- Render ---
   return (

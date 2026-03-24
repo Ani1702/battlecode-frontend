@@ -1,11 +1,14 @@
-import React from 'react';
+import React from "react";
 
 interface CustomScrollbarProps {
   children: React.ReactNode;
   className?: string;
 }
 
-export default function CustomScrollbar({ children, className = "" }: CustomScrollbarProps) {
+export default function CustomScrollbar({
+  children,
+  className = "",
+}: CustomScrollbarProps) {
   return (
     <>
       <style jsx>{`
@@ -30,9 +33,7 @@ export default function CustomScrollbar({ children, className = "" }: CustomScro
           scrollbar-color: #f97316 rgba(0, 0, 0, 0.1);
         }
       `}</style>
-      <div className={`custom-scrollbar ${className}`}>
-        {children}
-      </div>
+      <div className={`custom-scrollbar ${className}`}>{children}</div>
     </>
   );
 }

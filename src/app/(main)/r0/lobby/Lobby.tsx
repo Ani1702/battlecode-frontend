@@ -3,12 +3,15 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Rocket } from "lucide-react";
-import PlayerCard from '@/components/shared/PlayerCard';
-import CustomScrollbar from '@/components/shared/CustomScrollbar';
-import { useSocket } from '@/contexts/SocketContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { showSuccessToast, showErrorToast } from '@/components/shared/CustomToast';
-import LoadingOverlay from '@/components/shared/LoadingOverlay';
+import PlayerCard from "@/components/shared/PlayerCard";
+import CustomScrollbar from "@/components/shared/CustomScrollbar";
+import { useSocket } from "@/contexts/SocketContext";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  showSuccessToast,
+  showErrorToast,
+} from "@/components/shared/CustomToast";
+import LoadingOverlay from "@/components/shared/LoadingOverlay";
 
 // --- TYPE DEFINITIONS ---
 
@@ -16,7 +19,7 @@ interface Participant {
   id: string;
   userId: string;
   username: string;
-  status: 'WAITING' | 'IN_MATCH' | 'DISCONNECTED' | 'FINISHED';
+  status: "WAITING" | "IN_MATCH" | "DISCONNECTED" | "FINISHED";
   joinedAt: string;
   isReady: boolean;
   disconnectedAt?: string;
@@ -50,7 +53,7 @@ interface GetStateResponse extends SimpleSocketResponse {
 
 interface RoundInfo {
   roundNumber: number;
-  status: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+  status: "LOBBY" | "COMPLETED" | "LOCKED" | "IN_PROGRESS";
   isActive: boolean;
   isLocked: boolean;
 }
@@ -58,7 +61,7 @@ interface RoundInfo {
 interface CurrentRoundResponse extends SimpleSocketResponse {
   currentRound?: {
     currentRoundNumber: number;
-    currentRoundStatus: 'LOBBY' | 'COMPLETED' | 'LOCKED' | 'IN_PROGRESS';
+    currentRoundStatus: "LOBBY" | "COMPLETED" | "LOCKED" | "IN_PROGRESS";
     rounds: RoundInfo[];
   };
 }
@@ -95,56 +98,67 @@ export default function Lobbyr0() {
   const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
   const [isCheckingRound, setIsCheckingRound] = useState(true);
-  const [currentRoundData, setCurrentRoundData] = useState<CurrentRoundResponse['currentRound'] | null>(null);
+  const [currentRoundData, setCurrentRoundData] = useState<
+    CurrentRoundResponse["currentRound"] | null
+  >(null);
 
-  const isAdmin = userRole === 'ADMIN';
+  const isAdmin = userRole === "ADMIN";
 
   // Functions
-  const formatTime = (seconds: number) => new Date(seconds * 1000).toISOString().substring(14, 19);
+  const formatTime = (seconds: number) =>
+    new Date(seconds * 1000).toISOString().substring(14, 19);
 
   const handleStartRound = () => {
     if (!socket || participants.length === 0) return;
     localStorage.removeItem(`battlecode-round-0-code-store`);
-    socket.emit('round0:ready', {}, (response: SimpleSocketResponse) => {
+    socket.emit("round0:ready", {}, (response: SimpleSocketResponse) => {
       if (response.success) {
-        showSuccessToast('Round 0 started successfully');
+        showSuccessToast("Round 0 started successfully");
       } else {
-        showErrorToast(response.error || 'Failed to start the round');
+        showErrorToast(response.error || "Failed to start the round");
       }
     });
   };
 
-  const handleState = useCallback((response: GetStateResponse) => {
-    console.log("Round 0 state response:", response);
+  const handleState = useCallback(
+    (response: GetStateResponse) => {
+      console.log("Round 0 state response:", response);
 
-    setIsLoading(false);
-    setHasAttemptedJoin(true);
+      setIsLoading(false);
+      setHasAttemptedJoin(true);
 
-    if (!response.success) {
-      // Don't show error toast for "User state not found" - this is expected in lobby
-      if (response.error && !response.error.includes('User state not found')) {
-        showErrorToast(response.error);
+      if (!response.success) {
+        // Don't show error toast for "User state not found" - this is expected in lobby
+        if (
+          response.error &&
+          !response.error.includes("User state not found")
+        ) {
+          showErrorToast(response.error);
+        }
+        return;
       }
-      return;
-    }
 
-    if (response.allParticipants) {
-      setParticipants(response.allParticipants.filter(p => p.status === "WAITING"));
-    }
-
-    setIsRoundActive(response.isActive ?? false);
-
-    if (response.participant) {
-      if (response.participant.status === "IN_MATCH") {
-        router.push("/r0/code");
+      if (response.allParticipants) {
+        setParticipants(
+          response.allParticipants.filter((p) => p.status === "WAITING"),
+        );
       }
-    }
-  }, [router]);
+
+      setIsRoundActive(response.isActive ?? false);
+
+      if (response.participant) {
+        if (response.participant.status === "IN_MATCH") {
+          router.push("/r0/code");
+        }
+      }
+    },
+    [router],
+  );
 
   // Authentication check useEffect
   useEffect(() => {
     if (!authLoading) setAuthenticationChecked(true);
-    if (!authLoading && !userId) router.push('/dashboard');
+    if (!authLoading && !userId) router.push("/dashboard");
   }, [authLoading, userId, router]);
 
   // Check current round useEffect
@@ -154,7 +168,7 @@ export default function Lobbyr0() {
     socket.emit("user:current-round", {}, (response: CurrentRoundResponse) => {
       console.log("Current round response:", response);
       setIsCheckingRound(false);
-      
+
       if (!response.success) {
         showErrorToast(response.error || "Failed to check round status");
         router.back();
@@ -177,8 +191,10 @@ export default function Lobbyr0() {
         return;
       }
 
-      if (currentRound.currentRoundStatus !== 'LOBBY') {
-        showErrorToast(`Round 0 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`);
+      if (currentRound.currentRoundStatus !== "LOBBY") {
+        showErrorToast(
+          `Round 0 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`,
+        );
         console.log("Current round status:", currentRound.currentRoundStatus);
         router.back();
         return;
@@ -189,14 +205,14 @@ export default function Lobbyr0() {
   }, [socket, isConnected, authenticationChecked, router]);
 
   useEffect(() => {
-  if (!socket || !isConnected || !authenticationChecked || isCheckingRound) return;
+    if (!socket || !isConnected || !authenticationChecked || isCheckingRound)
+      return;
 
-  console.log("Emitting round0:join");
-  socket.emit("round0:join",{}, (response: GetStateResponse) => {
-    console.log("round0:join response:", response);
-  });
-
-}, [socket, isConnected, authenticationChecked, isCheckingRound]);
+    console.log("Emitting round0:join");
+    socket.emit("round0:join", {}, (response: GetStateResponse) => {
+      console.log("round0:join response:", response);
+    });
+  }, [socket, isConnected, authenticationChecked, isCheckingRound]);
 
   // Listen to state response useEffect
   useEffect(() => {
@@ -215,18 +231,19 @@ export default function Lobbyr0() {
     const handleLobbyUpdate = (lobbyData: LobbyData) => {
       setIsLoading(false);
       if (lobbyData.participants) setParticipants(lobbyData.participants);
-      if (lobbyData.isActive !== undefined) setIsRoundActive(lobbyData.isActive);
+      if (lobbyData.isActive !== undefined)
+        setIsRoundActive(lobbyData.isActive);
     };
 
     const handleRoundStart = (data: RoundStartData) => {
-      if (data && typeof data === 'object' && data.problems && data.startTime) {
+      if (data && typeof data === "object" && data.problems && data.startTime) {
         try {
           const dataToStore = {
             problems: data.problems,
             startTime: data.startTime,
-            duration: data.duration || 1200
+            duration: data.duration || 1200,
           };
-          sessionStorage.setItem('round0_data', JSON.stringify(dataToStore));
+          sessionStorage.setItem("round0_data", JSON.stringify(dataToStore));
         } catch (error) {
           console.error("Failed to save round data to sessionStorage:", error);
           showErrorToast("Error preparing round. Please try again.");
@@ -240,37 +257,41 @@ export default function Lobbyr0() {
 
       setRoundStarted(true);
       setIsRoundActive(true);
-      localStorage.removeItem('battlecode-round-0-code-store');
-      showSuccessToast('Round 0 has started! Redirecting...');
+      localStorage.removeItem("battlecode-round-0-code-store");
+      showSuccessToast("Round 0 has started! Redirecting...");
 
       setTimeout(() => {
-        router.push('/r0/code');
+        router.push("/r0/code");
       }, 1500);
     };
 
-    const handleTimer = (data: TimerData) => setTimeRemaining(data.timeRemaining || 0);
-    
+    const handleTimer = (data: TimerData) =>
+      setTimeRemaining(data.timeRemaining || 0);
+
     const handleRoundEnd = () => {
-      showSuccessToast('Round 0 has ended.');
-      router.push('/dashboard');
+      showSuccessToast("Round 0 has ended.");
+      router.push("/dashboard");
     };
-    
+
     const handleError = (error: ErrorData) => {
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
+      const errorMessage =
+        typeof error === "string"
+          ? error
+          : error?.message || "An error occurred";
       showErrorToast(errorMessage);
     };
 
     const handleAdminRemoved = () => {
       console.log("You have been removed from Round 0 by an admin");
       showErrorToast("You have been removed from Round 0 by an admin");
-      localStorage.removeItem('battlecode-round-0-code-store');
-      sessionStorage.removeItem('round0_data');
-      router.push('/dashboard');
+      localStorage.removeItem("battlecode-round-0-code-store");
+      sessionStorage.removeItem("round0_data");
+      router.push("/dashboard");
     };
 
     const handleAdminAdded = () => {
       console.log("You have been added to Round 0 by an admin");
-      
+
       if (!currentRoundData) {
         showErrorToast("Round data not available");
         return;
@@ -283,73 +304,96 @@ export default function Lobbyr0() {
         return;
       }
 
-      if (currentRoundStatus === 'LOBBY') {
+      if (currentRoundStatus === "LOBBY") {
         showSuccessToast("You have been added to Round 0! Already in lobby.");
-      } else if (currentRoundStatus === 'IN_PROGRESS') {
-        showSuccessToast("You have been added to Round 0! Redirecting to coding environment...");
-        setTimeout(() => router.push('/r0/code'), 1500);
-      } else if (currentRoundStatus === 'COMPLETED') {
+      } else if (currentRoundStatus === "IN_PROGRESS") {
+        showSuccessToast(
+          "You have been added to Round 0! Redirecting to coding environment...",
+        );
+        setTimeout(() => router.push("/r0/code"), 1500);
+      } else if (currentRoundStatus === "COMPLETED") {
         showErrorToast("Round 0 has already completed");
-      } else if (currentRoundStatus === 'LOCKED') {
+      } else if (currentRoundStatus === "LOCKED") {
         showErrorToast("Round 0 is currently locked");
       }
     };
 
-    socket.on('lobby:round0', handleLobbyUpdate);
-    socket.on('round0:start', handleRoundStart);
-    socket.on('round0:timer', handleTimer);
-    socket.on('round0:end', handleRoundEnd);
-    socket.on('round0:error', handleError);
-    socket.on('round0:adminRemoved', handleAdminRemoved);
-    socket.on('round0:adminAdded', handleAdminAdded);
+    socket.on("lobby:round0", handleLobbyUpdate);
+    socket.on("round0:start", handleRoundStart);
+    socket.on("round0:timer", handleTimer);
+    socket.on("round0:end", handleRoundEnd);
+    socket.on("round0:error", handleError);
+    socket.on("round0:adminRemoved", handleAdminRemoved);
+    socket.on("round0:adminAdded", handleAdminAdded);
 
     return () => {
-      socket.off('lobby:round0', handleLobbyUpdate);
-      socket.off('round0:start', handleRoundStart);
-      socket.off('round0:timer', handleTimer);
-      socket.off('round0:end', handleRoundEnd);
-      socket.off('round0:error', handleError);
-      socket.off('round0:adminRemoved', handleAdminRemoved);
-      socket.off('round0:adminAdded', handleAdminAdded);
+      socket.off("lobby:round0", handleLobbyUpdate);
+      socket.off("round0:start", handleRoundStart);
+      socket.off("round0:timer", handleTimer);
+      socket.off("round0:end", handleRoundEnd);
+      socket.off("round0:error", handleError);
+      socket.off("round0:adminRemoved", handleAdminRemoved);
+      socket.off("round0:adminAdded", handleAdminAdded);
     };
   }, [socket, router, currentRoundData]);
 
   // Early return for loading states
   if (authLoading || !authenticationChecked || isCheckingRound) {
     return (
-      <LoadingOverlay 
-        isLoading={true} 
-        message={authLoading ? "Loading Authentication..." : "Checking Round Status..."}
+      <LoadingOverlay
+        isLoading={true}
+        message={
+          authLoading ? "Loading Authentication..." : "Checking Round Status..."
+        }
       />
     );
   }
 
   return (
     <div className="flex flex-col bg-[url('/r0_lobby_bg.svg')] bg-center bg-cover h-screen">
-      <div className="flex-shrink-0 orbitron items-center flex flex-col text-7xl" style={{ textShadow: '0 0 10px rgba(217, 119, 6, 1)' }}>
-        <p className='flex-1 flex items-end pt-8'> <span className="text-white">ROUND</span> <span className="text-orange-500">&nbsp; 0</span></p>
+      <div
+        className="flex-shrink-0 orbitron items-center flex flex-col text-7xl"
+        style={{ textShadow: "0 0 10px rgba(217, 119, 6, 1)" }}
+      >
+        <p className="flex-1 flex items-end pt-8">
+          {" "}
+          <span className="text-white">ROUND</span>{" "}
+          <span className="text-orange-500">&nbsp; 0</span>
+        </p>
         <span className="text-orange-500 text-2xl pb-4">LOBBY</span>
-        
+
         {(roundStarted || isRoundActive) && (
           <div className="mt-3 flex flex-col items-center gap-2">
             {roundStarted ? (
               <>
-                <div className="text-base text-center text-green-400">Round 0 Started!</div>
+                <div className="text-base text-center text-green-400">
+                  Round 0 Started!
+                </div>
                 <div className="text-gray-200 text-center text-sm">
                   <p>Redirecting to coding environment...</p>
                   <div className="flex justify-center items-center gap-2 mt-2">
                     <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                    <div
+                      className="bg-green-500 rounded-full h-2 w-2 animate-pulse"
+                      style={{ animationDelay: "0.5s" }}
+                    ></div>
+                    <div
+                      className="bg-green-500 rounded-full h-2 w-2 animate-pulse"
+                      style={{ animationDelay: "1s" }}
+                    ></div>
                   </div>
                 </div>
               </>
             ) : (
               <>
-                <div className="text-base text-center text-green-400">Round 0 Active</div>
+                <div className="text-base text-center text-green-400">
+                  Round 0 Active
+                </div>
                 <div className="text-gray-200 text-center text-sm">
                   <p>Round is currently in progress</p>
-                  <p className="text-orange-400 font-bold mt-1">Time Remaining: {formatTime(timeRemaining)}</p>
+                  <p className="text-orange-400 font-bold mt-1">
+                    Time Remaining: {formatTime(timeRemaining)}
+                  </p>
                 </div>
               </>
             )}
@@ -357,7 +401,7 @@ export default function Lobbyr0() {
         )}
       </div>
 
-      <div className='flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white'>
+      <div className="flex-shrink-0 text-2xl orbitron ml-40 pb-4 text-white">
         Participants: {participants.length}
       </div>
 
@@ -396,18 +440,32 @@ export default function Lobbyr0() {
                 <p className="text-red-400">Connecting to server...</p>
                 <div className="flex justify-center items-center gap-2 mt-2">
                   <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse"></div>
-                  <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <div className="bg-red-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <div
+                    className="bg-red-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "0.5s" }}
+                  ></div>
+                  <div
+                    className="bg-red-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "1s" }}
+                  ></div>
                 </div>
               </div>
             ) : participants.length > 0 ? (
               <div>
-                <p className="text-green-400">Connected to lobby. Waiting for more participants...</p>
+                <p className="text-green-400">
+                  Connected to lobby. Waiting for more participants...
+                </p>
                 {!isLoading && (
                   <div className="flex justify-center items-center gap-2 mt-2">
                     <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse"></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                    <div className="bg-green-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                    <div
+                      className="bg-green-500 rounded-full h-2 w-2 animate-pulse"
+                      style={{ animationDelay: "0.5s" }}
+                    ></div>
+                    <div
+                      className="bg-green-500 rounded-full h-2 w-2 animate-pulse"
+                      style={{ animationDelay: "1s" }}
+                    ></div>
                   </div>
                 )}
               </div>
@@ -416,17 +474,31 @@ export default function Lobbyr0() {
                 <p className="text-blue-400">Joining lobby...</p>
                 <div className="flex justify-center items-center gap-2 mt-2">
                   <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"></div>
-                  <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <div className="bg-blue-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <div
+                    className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "0.5s" }}
+                  ></div>
+                  <div
+                    className="bg-blue-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "1s" }}
+                  ></div>
                 </div>
               </div>
             ) : (
               <div>
-                <p className="text-green-400">Connected. Waiting for participants to join...</p>
+                <p className="text-green-400">
+                  Connected. Waiting for participants to join...
+                </p>
                 <div className="flex justify-center items-center gap-2 mt-2">
                   <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse"></div>
-                  <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <div className="bg-orange-500 rounded-full h-2 w-2 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <div
+                    className="bg-orange-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "0.5s" }}
+                  ></div>
+                  <div
+                    className="bg-orange-500 rounded-full h-2 w-2 animate-pulse"
+                    style={{ animationDelay: "1s" }}
+                  ></div>
                 </div>
               </div>
             )}
@@ -444,11 +516,12 @@ export default function Lobbyr0() {
           )} */}
         </div>
       )}
-      
+
       {/* Powered by Judge0 Footer */}
       <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
         <p className="text-white/60 text-sm font-oxanium">
-          Powered by <span className="text-orange-500 font-semibold">Judge0</span>
+          Powered by{" "}
+          <span className="text-orange-500 font-semibold">Judge0</span>
         </p>
       </div>
     </div>
