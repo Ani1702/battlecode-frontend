@@ -1,0 +1,9 @@
+#!/bin/sh
+
+echo "Running ESLint..."
+npx eslint . || exit 1
+
+echo "Checking formatting..."
+npx prettier --check . || exit 1
+
+echo "Pre-commit checks passed"
