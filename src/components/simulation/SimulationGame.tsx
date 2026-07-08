@@ -1,51 +1,13 @@
 "use client";
 
-import type { GameState } from "@/game/engine/types";
 import AttemptsBadge from "./AttemptsBadge";
+import GridBoard from "./GridBoard";
 import LivesHud from "./LivesHud";
+import OpponentMoveReveal from "./OpponentMoveReveal";
 import SimulationLayout from "./SimulationLayout";
-import TurnInputPlain from "./TurnInputPlain";
+import StaticCommander from "./StaticCommander";
+import TurnInput from "./TurnInput";
 import { useSimulationGame } from "@/game/hooks/useSimulationGame";
-
-function DebugBoard({ state }: { state: GameState }) {
-  const { grid, player, opponent } = state;
-
-  return (
-    <div className="glass-box overflow-x-auto rounded-lg p-4 font-mono text-xs">
-      {grid.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex gap-1">
-          {row.map((tile, colIndex) => {
-            let cell = tile === "WALL" ? "#" : ".";
-            if (
-              player.row === rowIndex &&
-              player.col === colIndex &&
-              player.lives > 0
-            ) {
-              cell = "P";
-            }
-            if (
-              opponent.row === rowIndex &&
-              opponent.col === colIndex &&
-              opponent.lives > 0
-            ) {
-              cell = "O";
-            }
-
-            return (
-              <span
-                key={`${rowIndex}-${colIndex}`}
-                className="inline-flex h-8 w-8 items-center justify-center rounded border border-white/10 bg-black/30"
-              >
-                {cell}
-              </span>
-            );
-          })}
-        </div>
-      ))}
-      <p className="mt-3 text-white/50">P = you, O = bot, # = wall</p>
-    </div>
-  );
-}
 
 function OutcomePanel({
   title,
@@ -81,11 +43,17 @@ export default function SimulationGame() {
     phase,
     save,
     gameState,
+    beamPaths,
+    isAnimating,
     opponentInstructionLabel,
     inputError,
     submitInstruction,
     retryAfterLoss,
   } = useSimulationGame();
+
+  const inputDisabled = phase !== "playing";
+  const showPlayingBoard =
+    (phase === "playing" || phase === "animating") && gameState;
 
   if (phase === "loading" || !save) {
     return (
@@ -104,30 +72,34 @@ export default function SimulationGame() {
           <h1 className="orbitron text-2xl">BattleCode Simulation</h1>
           <p className="mt-1 text-sm text-white/60">{config.id}</p>
         </div>
-        {phase === "playing" ? (
+        {showPlayingBoard ? (
           <AttemptsBadge attemptsRemaining={save.attemptsRemaining} />
         ) : null}
       </div>
 
-      {phase === "playing" && gameState ? (
-        <div className="flex flex-1 flex-col gap-4">
-          <DebugBoard state={gameState} />
-          <LivesHud
-            cycle={gameState.cycle}
-            playerLives={gameState.player.lives}
-            opponentLives={gameState.opponent.lives}
-          />
-          {opponentInstructionLabel ? (
-            <p className="text-sm text-white/70">
-              Opponent:{" "}
-              <span className="font-mono">{opponentInstructionLabel}</span>
-            </p>
-          ) : null}
-          <TurnInputPlain
-            disabled={false}
-            onSubmit={submitInstruction}
-            error={inputError}
-          />
+      {showPlayingBoard ? (
+        <div className="flex flex-1 flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-6">
+          <GridBoard state={gameState} beamPaths={beamPaths} />
+
+          <div className="flex flex-col gap-4">
+            <StaticCommander />
+            <LivesHud
+              cycle={gameState.cycle}
+              playerLives={gameState.player.lives}
+              opponentLives={gameState.opponent.lives}
+            />
+            <OpponentMoveReveal instructionLabel={opponentInstructionLabel} />
+            <TurnInput
+              disabled={inputDisabled}
+              onSubmit={submitInstruction}
+              error={inputError}
+            />
+            {isAnimating ? (
+              <p className="text-xs uppercase tracking-wider text-orange-300/80">
+                Resolving attack...
+              </p>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

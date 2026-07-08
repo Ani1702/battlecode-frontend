@@ -6,6 +6,8 @@ export const STARTING_ATTEMPTS = 2 as const;
 
 export const DEFAULT_MAX_CYCLES = 50;
 
+export const BEAM_ANIMATION_MS = 500;
+
 export const ALL_DIRECTIONS: Direction[] = ["UP", "DOWN", "LEFT", "RIGHT"];
 
 export const INSTRUCTION_STRINGS = [

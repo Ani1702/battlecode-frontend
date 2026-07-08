@@ -264,6 +264,101 @@ input[type="range"].question-count-slider::-moz-range-thumb:active {
   filter: drop-shadow(0 0 8px #f4b56f);
 }
 
+/* Simulation mini-game */
+.sim-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.sim-grid-cell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sim-grid-cell--empty {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sim-grid-cell--wall {
+  background: #374151;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sim-grid-cell--beam {
+  background: rgba(249, 115, 22, 0.45);
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.35);
+  animation: sim-beam-flash 500ms ease-out;
+}
+
+@keyframes sim-beam-flash {
+  0% {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 4px rgba(249, 115, 22, 0.2);
+  }
+
+  40% {
+    background: rgba(249, 115, 22, 0.75);
+    box-shadow: 0 0 18px rgba(249, 115, 22, 0.55);
+  }
+
+  100% {
+    background: rgba(249, 115, 22, 0.45);
+    box-shadow: 0 0 12px rgba(249, 115, 22, 0.35);
+  }
+}
+
+.sim-bot--player {
+  background: #f97316;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.45);
+}
+
+.sim-bot--opponent {
+  background: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.sim-bot--shield {
+  animation: sim-shield-pulse 1s ease-in-out infinite;
+  box-shadow:
+    0 0 0 2px rgba(59, 130, 246, 0.8),
+    0 0 14px rgba(59, 130, 246, 0.45);
+}
+
+@keyframes sim-shield-pulse {
+  0%,
+  100% {
+    outline: 0 solid rgba(59, 130, 246, 0.35);
+  }
+
+  50% {
+    outline: 3px solid rgba(59, 130, 246, 0.2);
+  }
+}
+
+.sim-legend {
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.sim-legend--player {
+  background: #f97316;
+}
+
+.sim-legend--opponent {
+  background: #ef4444;
+}
+
+.sim-legend--wall {
+  background: #374151;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
