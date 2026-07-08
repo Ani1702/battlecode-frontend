@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+
+const MOBILE_ALLOWED_PATHS = ["/", "/simulations"];
 
 // By declaring the 'opera' property on the global Window interface,
 // TypeScript will recognize it without needing to use 'as any'.
@@ -10,6 +13,7 @@ declare global {
 }
 
 const MobileOnly = ({ children }: { children: React.ReactNode }) => {
+  const pathname = usePathname();
   const [isMobile, setIsMobile] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -27,7 +31,7 @@ const MobileOnly = ({ children }: { children: React.ReactNode }) => {
     return null; // Wait until the check is complete before rendering anything.
   }
 
-  if (isMobile) {
+  if (isMobile && !MOBILE_ALLOWED_PATHS.includes(pathname)) {
     return (
       <div className="bg-[url(/Landingpage.svg)] bg-cover h-screen overflow-hidden">
         <div className="h-full orbitron text-white bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)] flex flex-col justify-between items-center">
