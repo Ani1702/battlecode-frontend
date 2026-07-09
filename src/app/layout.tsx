@@ -3,6 +3,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { SocketProvider } from "@/contexts/SocketContext";
 import { Toaster } from "react-hot-toast";
 import type { Metadata } from "next";
+import Script from "next/script";
 // import { Orbitron, Oxanium } from "next/font/google";
 import "./globals.css";
 import MobileOnly from "@/components/MobileOnly";
@@ -11,6 +12,8 @@ export const metadata: Metadata = {
   title: "BattleCode IEEE-CS VIT",
   description: "One v One Gamified Programming Platform",
 };
+
+const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 // const oxanium = Oxanium({
 //   variable: "--font-oxanium",
@@ -30,6 +33,22 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`oxanium antialiased`}>
+        {gaMeasurementId ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga-init" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${gaMeasurementId}');
+              `}
+            </Script>
+          </>
+        ) : null}
         <AuthProvider>
           <SocketProvider>
             <MobileOnly>

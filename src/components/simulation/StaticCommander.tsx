@@ -1,9 +1,15 @@
+import Image from "next/image";
+
 export default function StaticCommander() {
   return (
     <div className="glass-box flex items-center gap-4 rounded-lg p-4">
-      <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-orange-500/40 bg-orange-500/10 orbitron text-xs uppercase tracking-wider text-orange-300">
-        CMD
-      </div>
+      <Image
+        src="/simulation/commander-placeholder.svg"
+        alt="Commander"
+        width={64}
+        height={64}
+        className="h-16 w-16 rounded-lg border border-orange-500/40 bg-orange-500/10"
+      />
       <div>
         <p className="orbitron text-sm uppercase tracking-wider text-white/90">
           Commander

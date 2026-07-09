@@ -1,9 +1,40 @@
 import type { Monaco } from "@monaco-editor/react";
-import { INSTRUCTION_STRINGS } from "@/game/engine/constants";
+import { ALL_DIRECTIONS, INSTRUCTION_STRINGS } from "@/game/engine/constants";
+import type { Direction } from "@/game/engine/types";
 
 const LANGUAGE_ID = "battlecode-instruction";
 
 let registered = false;
+let playableInstructions: readonly string[] = INSTRUCTION_STRINGS;
+
+export function setPlayableInstructionSuggestions(
+  instructions: readonly string[],
+): void {
+  playableInstructions = instructions;
+}
+
+function matchSuggestions(text: string): string[] {
+  const normalized = text.trim().toUpperCase();
+
+  if (!normalized) {
+    return [...playableInstructions];
+  }
+
+  const prefixMatches = playableInstructions.filter((label) =>
+    label.startsWith(normalized),
+  );
+  if (prefixMatches.length > 0) {
+    return prefixMatches;
+  }
+
+  if (ALL_DIRECTIONS.includes(normalized as Direction)) {
+    return playableInstructions.filter((label) =>
+      label.includes(`(${normalized})`),
+    );
+  }
+
+  return [];
+}
 
 export function registerInstructionLanguage(monaco: Monaco): void {
   if (registered) {
@@ -34,9 +65,7 @@ export function registerInstructionLanguage(monaco: Monaco): void {
     triggerCharacters: "MADSH(".split(""),
     provideCompletionItems: (model) => {
       const text = model.getValue();
-      const suggestions = INSTRUCTION_STRINGS.filter((label) =>
-        label.startsWith(text),
-      ).map((label) => ({
+      const suggestions = matchSuggestions(text).map((label) => ({
         label,
         kind: monaco.languages.CompletionItemKind.Enum,
         insertText: label,

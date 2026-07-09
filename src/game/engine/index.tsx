@@ -8,6 +8,11 @@ export * from "./resolver";
 export * from "./runner";
 
 export { chooseOpponentInstruction } from "./opponent";
-export { parseInstruction, getCompletions, isValidInstruction } from "./parser";
+export {
+  parseInstruction,
+  getCompletions,
+  isValidInstruction,
+  getPlayableInstructionStrings,
+} from "./parser";
 export { resolveCycle } from "./resolver";
 export { createInitialState, step } from "./runner";

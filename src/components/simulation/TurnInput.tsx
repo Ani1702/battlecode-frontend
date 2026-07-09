@@ -2,26 +2,32 @@
 
 import Editor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isValidInstruction } from "@/game/engine/parser";
 import {
   LANGUAGE_ID,
   registerInstructionLanguage,
+  setPlayableInstructionSuggestions,
 } from "./instructionLanguage";
+
+const PLACEHOLDER = "MOVE(LEFT)";
 
 export default function TurnInput({
   disabled,
   onSubmit,
   error,
+  playableInstructions,
 }: {
   disabled: boolean;
   onSubmit: (value: string) => void;
   error: string | null;
+  playableInstructions: string[];
 }) {
   const monaco = useMonaco();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const disabledRef = useRef(disabled);
   const onSubmitRef = useRef(onSubmit);
+  const [isEmpty, setIsEmpty] = useState(true);
 
   useEffect(() => {
     disabledRef.current = disabled;
@@ -29,10 +35,15 @@ export default function TurnInput({
   }, [disabled, onSubmit]);
 
   useEffect(() => {
+    setPlayableInstructionSuggestions(playableInstructions);
+  }, [playableInstructions]);
+
+  useEffect(() => {
     if (monaco) {
       registerInstructionLanguage(monaco);
+      setPlayableInstructionSuggestions(playableInstructions);
     }
-  }, [monaco]);
+  }, [monaco, playableInstructions]);
 
   useEffect(() => {
     const instance = editorRef.current;
@@ -56,6 +67,7 @@ export default function TurnInput({
 
     onSubmitRef.current(value);
     instance.setValue("");
+    setIsEmpty(true);
   };
 
   return (
@@ -63,7 +75,15 @@ export default function TurnInput({
       <label className="mb-2 block text-sm uppercase tracking-wider text-white/70">
         Your instruction
       </label>
-      <div className="overflow-hidden rounded-md border border-white/20 bg-black/40">
+      <div className="relative overflow-hidden rounded-md border border-white/20 bg-black/40">
+        {isEmpty ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-3 top-3 z-10 font-mono text-sm text-white/30"
+          >
+            {PLACEHOLDER}
+          </div>
+        ) : null}
         <Editor
           height="48px"
           language={LANGUAGE_ID}
@@ -97,6 +117,27 @@ export default function TurnInput({
           onMount={(instance, monacoInstance) => {
             editorRef.current = instance;
             registerInstructionLanguage(monacoInstance);
+            setPlayableInstructionSuggestions(playableInstructions);
+
+            instance.onDidChangeModelContent(() => {
+              const model = instance.getModel();
+              if (!model) {
+                return;
+              }
+
+              const value = model.getValue();
+              setIsEmpty(value.length === 0);
+
+              const upper = value.toUpperCase();
+              if (value !== upper) {
+                const position = instance.getPosition();
+                model.setValue(upper);
+                if (position) {
+                  instance.setPosition(position);
+                }
+                setIsEmpty(upper.length === 0);
+              }
+            });
 
             instance.addCommand(monacoInstance.KeyCode.Enter, () => {
               submitFromEditor();
@@ -109,7 +150,7 @@ export default function TurnInput({
         />
       </div>
       <p className="mt-2 text-xs text-white/50">
-        Type to autocomplete · Tab to accept · Enter to submit
+        Type a command like MOVE(LEFT). Tab picks a valid move · Enter submits
       </p>
       {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
       <button

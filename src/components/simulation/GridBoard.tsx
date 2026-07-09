@@ -51,7 +51,10 @@ export default function GridBoard({
             );
 
             return (
-              <div key={`${rowIndex}-${colIndex}`} className="relative">
+              <div
+                key={`${rowIndex}-${colIndex}`}
+                className="relative overflow-visible"
+              >
                 <GridCell tile={tile} isBeamHighlight={isBeamHighlight} />
                 {hasPlayer ? <BotMarker bot={player} /> : null}
                 {hasOpponent ? <BotMarker bot={opponent} /> : null}
@@ -61,12 +64,6 @@ export default function GridBoard({
         )}
       </div>
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-white/50">
-        <span className="flex items-center gap-2">
-          <span className="sim-legend sim-legend--player" /> You
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="sim-legend sim-legend--opponent" /> Bot
-        </span>
         <span className="flex items-center gap-2">
           <span className="sim-legend sim-legend--wall" /> Wall
         </span>

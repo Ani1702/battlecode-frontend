@@ -1,5 +1,10 @@
-import { INSTRUCTION_MAP, INSTRUCTION_STRINGS } from "./constants";
-import type { Instruction } from "./types";
+import {
+  ALL_DIRECTIONS,
+  INSTRUCTION_MAP,
+  INSTRUCTION_STRINGS,
+} from "./constants";
+import { offsetPosition, positionsEqual } from "./grid";
+import type { Direction, GameState, Instruction } from "./types";
 
 export function parseInstruction(input: string): Instruction | null {
   const normalized = input.trim();
@@ -24,4 +29,44 @@ export function getCompletions(partial: string): string[] {
 
 export function isValidInstruction(input: string): boolean {
   return parseInstruction(input) !== null;
+}
+
+function canPlayerMoveTo(state: GameState, direction: Direction): boolean {
+  const playerFrom = { row: state.player.row, col: state.player.col };
+  const opponentFrom = { row: state.opponent.row, col: state.opponent.col };
+  const target = offsetPosition(playerFrom, direction);
+  const { grid } = state;
+
+  if (
+    target.row < 0 ||
+    target.row >= grid.length ||
+    target.col < 0 ||
+    target.col >= grid[0].length
+  ) {
+    return false;
+  }
+
+  if (grid[target.row][target.col] !== "EMPTY") {
+    return false;
+  }
+
+  return !positionsEqual(target, opponentFrom);
+}
+
+export function getPlayableInstructionStrings(state: GameState): string[] {
+  const instructions: string[] = [];
+
+  for (const direction of ALL_DIRECTIONS) {
+    if (canPlayerMoveTo(state, direction)) {
+      instructions.push(`MOVE(${direction})`);
+    }
+  }
+
+  for (const direction of ALL_DIRECTIONS) {
+    instructions.push(`ATTACK(${direction})`);
+  }
+
+  instructions.push("SHIELD()");
+
+  return instructions;
 }

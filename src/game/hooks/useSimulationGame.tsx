@@ -8,9 +8,11 @@ import { ACTIVE_SIMULATION } from "../simulations/active";
 import {
   createFreshSave,
   gameStateToSave,
+  getTutorialDone,
   loadSimulation,
   saveSimulation,
   saveToGameState,
+  setTutorialDone,
   type SimulationSave,
   type SimulationStatus,
 } from "../storage/simulationStorage";
@@ -20,14 +22,44 @@ import type {
   Instruction,
   StepResult,
 } from "../engine/types";
+import { SimEvents } from "@/lib/analytics";
 
 export type GamePhase =
   | "loading"
+  | "tutorial"
   | "playing"
   | "animating"
   | "won"
   | "lost"
   | "exhausted";
+
+function resolvePlayingPhase(): GamePhase {
+  return getTutorialDone() ? "playing" : "tutorial";
+}
+
+function resolvePhaseFromSave(save: SimulationSave): GamePhase {
+  if (save.status !== "playing") {
+    return save.status;
+  }
+
+  return resolvePlayingPhase();
+}
+
+function trackOutcomePhase(phase: GamePhase, save: SimulationSave): void {
+  if (phase === "won") {
+    SimEvents.win(save.cyclesToWin ?? 0);
+    return;
+  }
+
+  if (phase === "lost") {
+    SimEvents.loss(save.attemptsRemaining);
+    return;
+  }
+
+  if (phase === "exhausted") {
+    SimEvents.attemptsExhausted();
+  }
+}
 
 interface PendingTransition {
   save: SimulationSave;
@@ -95,7 +127,7 @@ export function useSimulationGame() {
   const syncPhaseFromSave = useCallback((loaded: SimulationSave) => {
     setSave(loaded);
     setGameState(saveToGameState(loaded));
-    setPhase(loaded.status === "playing" ? "playing" : loaded.status);
+    setPhase(resolvePhaseFromSave(loaded));
   }, []);
 
   useEffect(() => {
@@ -108,7 +140,7 @@ export function useSimulationGame() {
     const fresh = createFreshSave(config);
     persistSave(fresh);
     setGameState(saveToGameState(fresh));
-    setPhase("playing");
+    setPhase(resolvePlayingPhase());
   }, [config.id, persistSave, syncPhaseFromSave]);
 
   useEffect(() => {
@@ -118,6 +150,7 @@ export function useSimulationGame() {
 
     const timeoutId = window.setTimeout(() => {
       persistSave(pendingTransition.save);
+      trackOutcomePhase(pendingTransition.phase, pendingTransition.save);
       setPhase(pendingTransition.phase);
       setPendingTransition(null);
       setBeamPaths(null);
@@ -134,7 +167,9 @@ export function useSimulationGame() {
 
       const instruction = parseInstruction(rawInput);
       if (!instruction) {
-        setInputError("Enter a valid instruction, e.g. MOVE(UP) or SHIELD()");
+        setInputError(
+          "Use a full command like MOVE(LEFT), ATTACK(UP), or SHIELD()",
+        );
         return;
       }
 
@@ -142,6 +177,7 @@ export function useSimulationGame() {
       const result = step(gameState, instruction, config);
       const transition = resolveOutcome(result, save);
 
+      SimEvents.cycleSubmit(result.nextState.cycle);
       setLastStep(result);
       setGameState(result.nextState);
 
@@ -158,6 +194,7 @@ export function useSimulationGame() {
 
       setBeamPaths(null);
       persistSave(transition.save);
+      trackOutcomePhase(transition.phase, transition.save);
       setPhase(transition.phase);
     },
     [phase, gameState, save, config, persistSave],
@@ -179,6 +216,18 @@ export function useSimulationGame() {
     setPhase("playing");
   }, [save, config, persistSave]);
 
+  const completeTutorial = useCallback(() => {
+    setTutorialDone(true);
+    SimEvents.tutorialComplete();
+    setPhase("playing");
+  }, []);
+
+  const skipTutorial = useCallback(() => {
+    setTutorialDone(true);
+    SimEvents.tutorialSkip();
+    setPhase("playing");
+  }, []);
+
   const opponentInstruction: Instruction | null =
     lastStep?.opponentInstruction ?? null;
 
@@ -197,5 +246,7 @@ export function useSimulationGame() {
     inputError,
     submitInstruction,
     retryAfterLoss,
+    completeTutorial,
+    skipTutorial,
   };
 }
