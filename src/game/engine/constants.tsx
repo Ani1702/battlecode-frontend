@@ -6,7 +6,36 @@ export const STARTING_ATTEMPTS = 2 as const;
 
 export const DEFAULT_MAX_CYCLES = 50;
 
-export const BEAM_ANIMATION_MS = 500;
+export const MOVE_ANIMATION_MS = 180;
+export const ATTACK_CHARGE_MS = 80;
+export const BEAM_TRAVEL_MS = 120;
+export const COMBAT_HOLD_MS = 450;
+export const BEAM_FADE_MS = 100;
+
+/** @deprecated Use getCycleAnimationDurationMs */
+export const BEAM_ANIMATION_MS =
+  MOVE_ANIMATION_MS +
+  ATTACK_CHARGE_MS +
+  BEAM_TRAVEL_MS +
+  COMBAT_HOLD_MS +
+  BEAM_FADE_MS;
+
+export function getCycleAnimationDurationMs(hasAttack: boolean): number {
+  if (!hasAttack) {
+    return MOVE_ANIMATION_MS;
+  }
+
+  return BEAM_ANIMATION_MS;
+}
+
+export function cycleHasAttack(
+  playerInstruction: Instruction,
+  opponentInstruction: Instruction,
+): boolean {
+  return (
+    playerInstruction.type === "ATTACK" || opponentInstruction.type === "ATTACK"
+  );
+}
 
 export const ALL_DIRECTIONS: Direction[] = ["UP", "DOWN", "LEFT", "RIGHT"];
 

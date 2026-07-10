@@ -43,11 +43,15 @@ export interface GameState {
 
 export type GameOutcome = "continue" | "win" | "loss";
 
+export type CombatScenario = "none" | "clash" | "shield_block" | "hit" | "miss";
+
 export interface BeamPath {
   attacker: BotId;
+  direction: Direction;
   cells: Position[];
   hit: boolean;
   blockedByWall: boolean;
+  truncatedAt?: Position;
 }
 
 export type GameEvent =
@@ -60,6 +64,12 @@ export type GameEvent =
       blocked: boolean;
     }
   | { type: "ATTACK"; bot: BotId; path: BeamPath }
+  | {
+      type: "CLASH";
+      clashPoint: Position;
+      playerPath: BeamPath;
+      opponentPath: BeamPath;
+    }
   | { type: "DAMAGE"; bot: BotId; blockedByShield: boolean }
   | { type: "CYCLE_END"; cycle: number };
 
@@ -70,4 +80,6 @@ export interface StepResult {
   beamPaths: BeamPath[];
   events: GameEvent[];
   outcome: GameOutcome;
+  combatScenario: CombatScenario;
+  clashPoint?: Position;
 }

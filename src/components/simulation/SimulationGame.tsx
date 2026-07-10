@@ -20,7 +20,13 @@ export default function SimulationGame() {
     phase,
     save,
     gameState,
-    beamPaths,
+    combatVfx,
+    animationPhase,
+    moveTweens,
+    hitFlashBot,
+    beamProgress,
+    fadeOpacity,
+    vfxPulse,
     isAnimating,
     opponentInstructionLabel,
     inputError,
@@ -63,7 +69,16 @@ export default function SimulationGame() {
 
       {showPlayingBoard ? (
         <div className="flex flex-1 flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-6">
-          <GridBoard state={gameState} beamPaths={beamPaths} />
+          <GridBoard
+            state={gameState}
+            combatVfx={combatVfx}
+            animationPhase={animationPhase}
+            moveTweens={moveTweens}
+            hitFlashBot={hitFlashBot}
+            beamProgress={beamProgress}
+            fadeOpacity={fadeOpacity}
+            vfxPulse={vfxPulse}
+          />
 
           <div className="flex flex-col gap-4">
             <StaticCommander />
@@ -77,7 +92,11 @@ export default function SimulationGame() {
             />
             {isAnimating ? (
               <p className="text-xs uppercase tracking-wider text-orange-300/80">
-                Resolving attack...
+                {animationPhase === "move"
+                  ? "Moving..."
+                  : animationPhase === "charge"
+                    ? "Charging..."
+                    : "Resolving combat..."}
               </p>
             ) : null}
           </div>

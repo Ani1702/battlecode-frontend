@@ -2,7 +2,8 @@
 
 > **Companion to:** [`ARCHITECTURE.md`](./ARCHITECTURE.md) (rules & product spec)  
 > **Phased build plan:** [`PHASES.md`](./PHASES.md) (testable phases — start here)  
-> **Status:** Pre-implementation  
+> **Status:** v1 shipped; **v2 specified** (click input + cooldowns) — implementation pending (PR 8)  
+> **Last updated:** 10 July 2026  
 > **Route:** `/simulations`
 
 This document specifies **how to build** the simulation mini-game: visual theme, every file, exports, responsibilities, props, and build order. Game rules live in `ARCHITECTURE.md`; this doc does not redefine them.
@@ -28,6 +29,7 @@ This document specifies **how to build** the simulation mini-game: visual theme,
 15. [Component Layout Wireframes](#15-component-layout-wireframes)
 16. [Implementation Phases & PR Plan](#16-implementation-phases--pr-plan)
 17. [Definition of Done](#17-definition-of-done)
+18. [Implementation Status (v1 snapshot)](#18-implementation-status-v1-snapshot)
 
 ---
 
@@ -51,24 +53,29 @@ page.tsx
 ### Runtime data flow (one cycle)
 
 ```
-TurnInput submit
-  → parseInstruction(text)
-  → chooseOpponentInstruction(state)
-  → step(state, playerInstr, config) → { nextState, beamPaths, outcome, events }
-  → GridBoard plays beam animation (500ms)
-  → saveSimulation(simId, save)
-  → if win/loss → ShareCard | ExhaustedView
-  → else → clear input, prompt next cycle
+TurnInput submit                    ← v1 (deprecated)
+ActionPanel + GridBoard click       ← v2
+  → instructionFromSelection(mode, state, cell)  // or SHIELD without cell
+  → validate canUseAction(bot, ATTACK|SHIELD)
+  → chooseOpponentInstruction(state)  // cooldown-aware
+  → step(state, playerInstr, config) → StepResult
+  → animation phases (unchanged)
+  → saveSimulation(simId, save)     // includes cooldown fields
+  → outcome screens
 ```
+
+**Move-only cycles** skip charge/beam/hold/fade (~180ms total).
 
 ### What we are not building in v1
 
-- Landing page link to `/simulations`
 - Registration CTA
 - Commander dialogue
 - Simulation archive UI
 - Backend / auth integration
-- Automated tests (optional phase — no test runner in repo today)
+- Automated test runner in CI
+- Full interactive tutorial sandbox (text modal shipped as interim)
+- **v2 in scope:** click-based ActionPanel, grid selection, cooldowns (see PR 8)
+- **v2 out of UI:** Monaco `TurnInput` for player (keep parser for dev/tests)
 
 ---
 
@@ -92,23 +99,26 @@ TurnInput submit
 
 ### Simulation-specific design tokens (add to `globals.css` or inline Tailwind)
 
-| Token                  | Value                    | Usage                     |
-| ---------------------- | ------------------------ | ------------------------- |
-| `--sim-player-color`   | `#F97316` (orange)       | Player bot marker         |
-| `--sim-opponent-color` | `#EF4444` (red)          | Opponent bot marker       |
-| `--sim-wall-color`     | `#374151` (gray-700)     | Wall cells                |
-| `--sim-cell-empty`     | `rgba(255,255,255,0.03)` | Empty cell background     |
-| `--sim-beam-color`     | `rgba(249,115,22,0.6)`   | Beam animation overlay    |
-| `--sim-shield-color`   | `rgba(59,130,246,0.5)`   | Shield active ring on bot |
-| `--sim-grid-gap`       | `4px`                    | CSS grid gap              |
-| `--sim-beam-duration`  | `500ms`                  | Animation timing          |
+| Token                      | Value                        | Usage                           |
+| -------------------------- | ---------------------------- | ------------------------------- |
+| `--sim-player-color`       | `#F97316` (orange)           | Player bot marker               |
+| `--sim-opponent-color`     | `#EF4444` (red)              | Opponent bot marker             |
+| `--sim-wall-color`         | `#374151` (gray-700)         | Wall cells                      |
+| `--sim-cell-empty`         | `rgba(255,255,255,0.03)`     | Empty cell background           |
+| `--sim-beam-player-glow`   | `rgba(249,115,22,0.25)`      | Player outer beam glow          |
+| `--sim-beam-opponent-glow` | `rgba(239,68,68,0.25)`       | Opponent outer beam glow        |
+| `--sim-beam-core`          | `#FFFFFF`                    | Beam inner core (1–2px)         |
+| `--sim-clash-orb`          | `#FDE68A` + white hot center | Clash orb (brightest on screen) |
+| `--sim-shield-color`       | `rgba(56,189,248,0.45)`      | Shield barrier cyan/blue        |
+| `--sim-shield-edge`        | `rgba(34,211,238,0.9)`       | Shield edge highlight           |
+| `--sim-grid-gap`           | `4px`                        | CSS grid gap                    |
 
-### Bot markers
+### Bot markers (implemented)
 
-- **Player:** rounded square or circle, orange fill, thin white border, optional outer glow.
-- **Opponent:** same shape, red fill.
-- **Shield active:** pulsing blue ring around bot (CSS animation).
-- **Dead (0 lives):** bot hidden or grayed ghost on last position (prefer **hidden**).
+- **Player:** orange fill, **YOU** label on marker, hearts below (Minecraft-style).
+- **Opponent:** red fill, **BOT** label, hearts below.
+- **Shield active:** pulsing cyan ring during combat replay (barrier VFX in `CombatVfxLayer`).
+- **Dead (0 lives):** marker hidden.
 
 ### Wall cells
 
@@ -151,11 +161,13 @@ src/
 │   │   ├── constants.tsx                   [NEW]
 │   │   ├── grid.tsx                          [NEW]
 │   │   ├── parser.tsx                       [NEW]
-│   │   ├── beam.tsx                         [NEW]
-│   │   ├── opponent.tsx                     [NEW]
-│   │   ├── resolver.tsx                     [NEW]
-│   │   ├── runner.tsx                       [NEW]
-│   │   └── index.tsx                        [NEW] re-exports
+│   │   ├── beam.tsx                         [SHIPPED] paths, adjacent head-on clash
+│   │   ├── combatScenario.tsx               [SHIPPED] deriveCombatScenario
+│   │   ├── opponent.tsx                     [SHIPPED]
+│   │   ├── resolver.tsx                     [SHIPPED]
+│   │   ├── runner.tsx                       [SHIPPED]
+│   │   ├── index.tsx                        [SHIPPED]
+│   │   └── __fixtures__/tiny.tsx            [SHIPPED] dev fixture
 │   ├── simulations/
 │   │   ├── active.tsx                       [NEW]
 │   │   ├── validate.tsx                     [NEW]
@@ -174,9 +186,12 @@ src/
 │       ├── GridBoard.tsx                   [NEW]
 │       ├── GridCell.tsx                    [NEW]
 │       ├── BotMarker.tsx                     [NEW]
-│       ├── BeamOverlay.tsx                 [NEW]
-│       ├── TurnInput.tsx                   [NEW]
-│       ├── instructionLanguage.tsx          [NEW] Monaco language + completions
+│       ├── CombatVfxLayer.tsx              [SHIPPED] canvas combat VFX
+│       ├── combatVfxTypes.tsx                [SHIPPED] VFX payload + animation types
+│       ├── ActionPanel.tsx             [v2 NEW] Move / Attack / Shield + Submit
+│       ├── actionSelection.tsx         [v2 NEW] click → Instruction + validation
+│       ├── TurnInput.tsx               [v1 shipped → v2 deprecated in UI]
+│       ├── instructionLanguage.tsx     [v1 shipped → v2 deprecated in UI]
 │       ├── LivesHud.tsx                    [NEW]
 │       ├── AttemptsBadge.tsx               [NEW]
 │       ├── StaticCommander.tsx             [NEW]
@@ -198,8 +213,8 @@ docs/simulation/
 └── IMPLEMENTATION.md                       [THIS FILE]
 ```
 
-**New files:** ~32  
-**Modified files:** 3 (`layout.tsx`, `MobileOnly.tsx`, `globals.css`)
+**New files:** ~35 (simulation feature)  
+**Modified files:** `layout.tsx`, `MobileOnly.tsx`, `globals.css`, `Hero.tsx`
 
 ---
 
@@ -230,6 +245,8 @@ export interface Bot {
   col: number;
   lives: 0 | 1 | 2;
   shieldActive: boolean;
+  attackCooldown: number; // v2 — 0 = ready
+  shieldCooldown: number; // v2 — 0 = ready
 }
 
 export type Instruction =
@@ -258,15 +275,25 @@ export type GameOutcome = "continue" | "win" | "loss";
 
 export interface BeamPath {
   attacker: BotId;
+  direction: Direction;
   cells: Position[];
   hit: boolean;
   blockedByWall: boolean;
+  truncatedAt?: Position; // set when beam ends at head-on clash point
 }
+
+export type CombatScenario = "none" | "clash" | "shield_block" | "hit" | "miss";
 
 export type GameEvent =
   | { type: "SHIELD_UP"; bot: BotId }
   | { type: "MOVE"; bot: BotId; from: Position; to: Position; blocked: boolean }
   | { type: "ATTACK"; bot: BotId; path: BeamPath }
+  | {
+      type: "CLASH";
+      clashPoint: Position;
+      playerPath: BeamPath;
+      opponentPath: BeamPath;
+    }
   | { type: "DAMAGE"; bot: BotId; blockedByShield: boolean }
   | { type: "CYCLE_END"; cycle: number };
 
@@ -277,8 +304,25 @@ export interface StepResult {
   beamPaths: BeamPath[];
   events: GameEvent[];
   outcome: GameOutcome;
+  combatScenario: CombatScenario;
+  clashPoint?: Position;
 }
 ```
+
+---
+
+### `combatScenario.tsx`
+
+**Purpose:** Map resolved events + beam paths to UI combat scenario.
+
+**Exports:**
+
+| Function                                  | Behavior                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| `deriveCombatScenario(events, beamPaths)` | `clash` if `CLASH` event; else `hit` / `shield_block` / `miss` / `none` |
+| `getClashPoint(events)`                   | Returns `clashPoint` from first `CLASH` event                           |
+
+Called from `runner.step()` after `resolveCycle()`.
 
 ---
 
@@ -304,6 +348,21 @@ export const INSTRUCTION_STRINGS: readonly string[] = [
   "ATTACK(RIGHT)",
   "SHIELD()",
 ];
+
+// Combat VFX timing (UI replay — see ARCHITECTURE §11)
+export const MOVE_ANIMATION_MS = 180;
+export const ATTACK_CHARGE_MS = 80;
+export const BEAM_TRAVEL_MS = 120;
+export const COMBAT_HOLD_MS = 450;
+export const BEAM_FADE_MS = 100;
+
+// v2 cooldowns
+export const ATTACK_COOLDOWN_TURNS = 2;
+export const SHIELD_COOLDOWN_TURNS = 2;
+
+export function cycleHasAttack(playerInstruction, opponentInstruction): boolean;
+export function getCycleAnimationDurationMs(hasAttack: boolean): number;
+export function canUseAction(bot: Bot, action: "ATTACK" | "SHIELD"): boolean;
 ```
 
 ---
@@ -334,12 +393,13 @@ export const INSTRUCTION_STRINGS: readonly string[] = [
 
 **Exports:**
 
-| Function                                               | Behavior                                        |
-| ------------------------------------------------------ | ----------------------------------------------- |
-| `parseInstruction(input: string): Instruction \| null` | Trim; exact match against `INSTRUCTION_STRINGS` |
-| `instructionToString(instr: Instruction): string`      | Canonical pseudo-code string                    |
-| `getCompletions(partial: string): string[]`            | Prefix filter on valid strings for autocomplete |
-| `isValidInstruction(input: string): boolean`           | `parseInstruction !== null`                     |
+| Function                                               | Behavior                                                               |
+| ------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `parseInstruction(input: string): Instruction \| null` | Trim; exact match against `INSTRUCTION_STRINGS`                        |
+| `instructionToString(instr: Instruction): string`      | Canonical pseudo-code string                                           |
+| `getCompletions(partial: string): string[]`            | Prefix filter on valid strings for autocomplete                        |
+| `getPlayableInstructionStrings(state): string[]`       | Legal moves for MOVE (dev/tests); v2 UI uses `actionSelection` instead |
+| `isValidInstruction(input: string): boolean`           | `parseInstruction !== null`                                            |
 
 **Parsing:** use a `Map<string, Instruction>` built from constants — no regex execution of user code.
 
@@ -347,32 +407,34 @@ export const INSTRUCTION_STRINGS: readonly string[] = [
 
 ### `beam.tsx`
 
-**Purpose:** Beam path calculation and hit detection.
+**Purpose:** Beam path calculation, hit detection, head-on clash detection.
 
 **Exports:**
 
-| Function                                                                    | Behavior                                                                                                     |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `getBeamCells(grid, attackerPos, direction): Position[]`                    | Cells beam travels through (excludes attacker); stops before/at wall — cells up to wall included, not beyond |
-| `getBeamPath(grid, attacker: Bot, direction): BeamPath`                     | Full path + whether opponent is hit + wall blocked flag                                                      |
-| `wouldBeamHitPlayer(grid, opponent, player): { canHit, direction } \| null` | For opponent AI — checks row align first, then column                                                        |
-
-**Hit logic:** scan cells in order; if opponent position in path before wall end → hit.
+| Function                                               | Behavior                                                             |
+| ------------------------------------------------------ | -------------------------------------------------------------------- |
+| `getBeamCells(...)`                                    | Cells beam travels through; stops at wall                            |
+| `getBeamPath(...)`                                     | Path to target (stops at opponent cell); hit flag                    |
+| `detectHeadOnClash(state, playerInstr, opponentInstr)` | Opposing ATTACK on same axis → clash (incl. **adjacent** gap=1)      |
+| `buildClashBeamPath(...)`                              | Internal — truncated paths with optional empty `cells` when adjacent |
+| `getAttackDirectionTowardPlayer(state)`                | Opponent AI helper                                                   |
 
 ---
 
-### `opponent.tsx`
+### `actionSelection.tsx` — **v2 NEW**
 
-**Purpose:** Logical hardcoded opponent AI (see ARCHITECTURE §8).
+**Purpose:** Convert grid clicks into `Instruction` + preview cell lists (see ARCHITECTURE §10).
+
+**Recommended location:** `src/game/engine/actionSelection.tsx` (pure, testable) or `src/components/simulation/actionSelection.tsx`.
 
 **Exports:**
 
-| Function                                                   | Behavior                                                                      |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `chooseOpponentInstruction(state: GameState): Instruction` | Attack toward player if hittable; else move toward player; stuck → `SHIELD()` |
-| `getMoveTowardPlayer(state): Instruction`                  | Deterministic Manhattan step with tie-breaks                                  |
-
-**Private helpers (not exported):** `tryMoveDirection`, `canMoveTo`, `getAttackDirectionTowardPlayer`.
+| Function                                      | Behavior                                                   |
+| --------------------------------------------- | ---------------------------------------------------------- |
+| `getMoveTargetIfValid(state, cell)`           | `{ direction }` if legal one-step move, else `null`        |
+| `getAttackFromCell(state, cell)`              | `{ direction, pathCells }` if aligned row/col, else `null` |
+| `instructionFromSelection(mode, state, cell)` | `Instruction \| null`                                      |
+| `getAttackPreviewCells(state, direction)`     | Highlight cells for attack preview                         |
 
 ---
 
@@ -382,17 +444,38 @@ export const INSTRUCTION_STRINGS: readonly string[] = [
 
 **Exports:**
 
-| Function                                                                                                | Behavior                                               |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `resolveCycle(state, playerInstr, opponentInstr, maxCycles): { nextState, events, beamPaths, outcome }` | Runs shield → move → attack → cleanup → terminal check |
+| Function            | Behavior                                                                 |
+| ------------------- | ------------------------------------------------------------------------ |
+| `resolveCycle(...)` | Runs shield → move → attack (clash pre-check) → cleanup → terminal check |
 
-**Internal phases (private):** `applyShields`, `applyMoves`, `applyAttacks`, `applyCleanup`, `checkOutcome`.
+**Internal phases (private):** `applyShields`, `applyMoves`, `resolveAttacks`, `applyCleanup`, `checkOutcome`.
 
-**Move collision:** if both target same cell or swap → neither moves.
+**Head-on clash:** opposing ATTACK on same axis (incl. adjacent) → `CLASH`, no damage.
 
-**Mutual elimination:** both 0 lives → `outcome: "loss"`.
+**v2 — cleanup order:**
 
-**Timeout:** after cleanup increment, if `cycle >= maxCycles` and still playing → `outcome: "loss"`.
+1. Clear `shieldActive`
+2. Decrement both cooldowns by 1 (min 0)
+3. If instruction was `ATTACK` → `attackCooldown = ATTACK_COOLDOWN_TURNS`
+4. If instruction was `SHIELD` → `shieldCooldown = SHIELD_COOLDOWN_TURNS`
+5. Increment `cycle`
+
+**v2 — validation:** reject instructions that use ATTACK/SHIELD while respective cooldown `> 0`.
+
+---
+
+### `opponent.tsx`
+
+**Purpose:** Logical hardcoded opponent AI (see ARCHITECTURE §8).
+
+**Exports:**
+
+| Function                           | Behavior                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------- |
+| `chooseOpponentInstruction(state)` | Attack if hittable **and off cooldown**; else move; stuck → `SHIELD()` if off cooldown |
+| `getMoveTowardPlayer(state)`       | Deterministic Manhattan step                                                           |
+
+**v2:** gate ATTACK/SHIELD branches with `canUseAction(opponent, ...)`.
 
 ---
 
@@ -402,12 +485,12 @@ export const INSTRUCTION_STRINGS: readonly string[] = [
 
 **Exports:**
 
-| Function                                             | Behavior                                           |
-| ---------------------------------------------------- | -------------------------------------------------- |
-| `createInitialState(config): GameState`              | Cycle 0, bots at spawns, 2 lives, grid from config |
-| `step(state, playerInstruction, config): StepResult` | Calls `chooseOpponentInstruction` + `resolveCycle` |
-| `gameStateToSave(state, meta): SimulationSave`       | Merge engine state + save metadata                 |
-| `saveToGameState(save): GameState`                   | Extract grid + bots + cycle from save              |
+| Function                                             | Behavior                                                                    |
+| ---------------------------------------------------- | --------------------------------------------------------------------------- |
+| `createInitialState(config): GameState`              | Cycle 0, bots at spawns, 2 lives, grid from config                          |
+| `step(state, playerInstruction, config): StepResult` | Calls `chooseOpponentInstruction` + `resolveCycle` + `deriveCombatScenario` |
+| `gameStateToSave(state, meta): SimulationSave`       | Merge engine state + save metadata                                          |
+| `saveToGameState(save): GameState`                   | Extract grid + bots + cycle from save                                       |
 
 ---
 
@@ -514,27 +597,49 @@ export { validateSimulationConfig } from "./validate";
 
 ```typescript
 {
-  phase: "loading" | "tutorial" | "playing" | "animating" | "won" | "lost" | "exhausted";
+  phase:
+    | "loading"
+    | "tutorial"
+    | "playing"
+    | "animating"
+    | "won"
+    | "lost"
+    | "exhausted";
+  animationPhase: "idle" | "move" | "charge" | "beam" | "hold" | "fade";
   config: SimulationConfig;
-  gameState: GameState | null;
+  gameState: GameState | null; // displayState during animating; committed after fade
   save: SimulationSave | null;
   lastStep: StepResult | null;
-  beamAnimation: BeamPath[] | null;
-  submitInstruction: (text: string) => void;
+  combatVfx: CombatVfxPayload | null;
+  moveTweens: Partial<Record<BotId, MoveTween>>;
+  beamProgress: number;
+  fadeOpacity: number;
+  vfxPulse: number;
+  hitFlashBot: BotId | null;
+  isAnimating: boolean;
+  opponentInstructionLabel: string | null;
+  // v2 click input
+  actionMode: "move" | "attack" | "shield" | null;
+  previewCells: Position[];
+  invalidFlashCell: Position | null;
+  canSubmit: boolean;
+  setActionMode: (mode: "move" | "attack" | "shield") => void;
+  handleCellClick: (cell: Position) => void;
+  submitSelection: () => void;
   skipTutorial: () => void;
   completeTutorial: () => void;
   retryAfterLoss: () => void;
-  clearAnimation: () => void;
 }
 ```
 
-**Internal responsibilities:**
+**Internal responsibilities (v2 additions):**
 
-- On mount: `loadSimulation(ACTIVE_SIMULATION.id)` or `createFreshSave`
-- Map `save.status` → initial `phase`
-- `submitInstruction`: parse → step → set animating → after timeout persist + transition phase
-- On loss: decrement attempts, set status lost/exhausted, fire analytics
-- On win: set cyclesToWin, playerLivesRemaining
+- Track `actionMode`, `previewCells`, `invalidFlashCell` while `phase === "playing"`.
+- `handleCellClick`: call `actionSelection` helpers; valid → set preview; invalid → trigger red flash timer (~250ms).
+- `setActionMode`: clear preview; ignore ATTACK/SHIELD if `canUseAction(player, ...)` false.
+- `submitSelection`: build `Instruction` → `step()` → animation (same as v1 flow).
+- Reset selection after submit / when animation starts.
+- `createInitialState` / save must include `attackCooldown: 0`, `shieldCooldown: 0`.
 
 ---
 
@@ -551,7 +656,7 @@ export { validateSimulationConfig } from "./validate";
 - `SimulationLayout` wrapper
 - Phase switch:
   - `tutorial` → `TutorialOverlay`
-  - `playing` | `animating` → grid + HUD + input + commander
+  - `playing` | `animating` → grid + HUD + **ActionPanel** + commander
   - `won` | `lost` → `ShareCard`
   - `exhausted` → `ExhaustedView`
 - Calls `useSimulationGame()`
@@ -577,7 +682,7 @@ export { validateSimulationConfig } from "./validate";
 
 ### `TutorialOverlay.tsx`
 
-**Purpose:** Full-screen glass modal, skippable.
+**Purpose:** Tutorial UI. **Shipped:** text modal. **Planned:** interactive sandbox (ARCHITECTURE §12).
 
 **Props:**
 
@@ -590,7 +695,9 @@ export { validateSimulationConfig } from "./validate";
 
 **State:** `stepIndex: number`
 
-**Renders:** step from `tutorialSteps.tsx`, Next / Skip buttons, progress dots.
+**Renders (planned):** embedded `GridBoard` + `TurnInput` + `CombatVfxLayer`; **Try it** steps require correct command.
+
+**Renders (shipped):** step from `tutorialSteps.tsx`, Next / Skip buttons, progress dots.
 
 **Analytics:** `sim_tutorial_complete` / `sim_tutorial_skip`.
 
@@ -598,109 +705,150 @@ export { validateSimulationConfig } from "./validate";
 
 ### `tutorialSteps.tsx`
 
-**Purpose:** Static tutorial content (copy TBD — use placeholders in implementation).
+**Purpose:** Tutorial content + scenario definitions (sandbox planned).
 
 **Exports:**
 
 ```typescript
-export interface TutorialStep {
-  title: string;
-  body: string;
-  hint?: string;
-}
+export type TutorialStep =
+  | { type: "watch"; title: string; body: string; demoScript: unknown }
+  | {
+      type: "practice";
+      title: string;
+      body: string;
+      hint: string;
+      scenario: unknown;
+      expected: string;
+    };
+
 export const TUTORIAL_STEPS: TutorialStep[];
-// 6 steps per ARCHITECTURE §12
 ```
 
 ---
 
 ### `GridBoard.tsx`
 
-**Purpose:** Render grid + bots + delegate beam animation.
+**Purpose:** Render clickable grid + bot markers + selection preview layer.
 
-**Props:**
+**Props (v2 additions):**
 
 ```typescript
 {
-  grid: Grid;
-  player: Bot;
-  opponent: Bot;
-  beamPaths: BeamPath[] | null;
-  isAnimating: boolean;
-  onAnimationComplete: () => void;
+  state: GameState;
+  combatVfx: CombatVfxPayload | null;
+  animationPhase: AnimationPhase;
+  moveTweens: Partial<Record<BotId, MoveTween>>;
+  hitFlashBot: BotId | null;
+  beamProgress: number;
+  fadeOpacity: number;
+  vfxPulse: number;
+  // v2
+  previewCells: Position[];
+  invalidFlashCell: Position | null;
+  onCellClick: (cell: Position) => void;
+  interactionEnabled: boolean;
 }
 ```
 
-**Renders:** CSS Grid of `GridCell`, `BotMarker` overlays, `BeamOverlay` when animating.
-
-**Cell sizing:** `width: min(calc(100vw - 32px) / cols, 64px)` per cell.
+**Renders:** CSS Grid of clickable `GridCell`, `BotMarker`, `CombatVfxLayer` overlay.
 
 ---
 
 ### `GridCell.tsx`
 
-**Props:** `{ tile: Tile; size: number; row; col; isBeamHighlight: boolean }`
+**Props (v2):**
 
-**Renders:** empty or wall styling; beam highlight class when active.
-
----
-
-### `BotMarker.tsx`
-
-**Props:** `{ bot: Bot; cellSize: number }`
-
-**Renders:** positioned absolute within cell; orange/red; shield ring if `shieldActive`.
-
----
-
-### `BeamOverlay.tsx`
-
-**Purpose:** Animate beam highlights sequentially or all-at-once across cells.
-
-**Props:** `{ paths: BeamPath[]; gridDimensions; onComplete: () => void }`
-
-**Behavior:** apply highlight class to path cells; `setTimeout(BEAM_DURATION)` → `onComplete`.
+```typescript
+{
+  tile: Tile;
+  row: number;
+  col: number;
+  isPreview?: boolean;       // move target or attack path cell
+  isInvalidFlash?: boolean;  // red flash animation
+  onClick?: () => void;
+  disabled?: boolean;        // during animating or walls for move mode
+}
+```
 
 ---
 
-### `TurnInput.tsx`
+### `ActionPanel.tsx` — **v2 NEW**
 
-**Purpose:** Monaco single-line pseudo-code input with inline completions.
+**Purpose:** Side action buttons + Submit + cooldown display.
 
 **Props:**
 
 ```typescript
 {
+  actionMode: "move" | "attack" | "shield" | null;
+  attackCooldown: number;
+  shieldCooldown: number;
+  canSubmit: boolean;
   disabled: boolean;
-  onSubmit: (value: string) => void;
-  cycle: number;
+  onSelectMove: () => void;
+  onSelectAttack: () => void;
+  onSelectShield: () => void;
+  onSubmit: () => void;
 }
 ```
 
-**Implementation details:**
+**Renders:**
 
-- Dynamic import Monaco (`@monaco-editor/react`) with `ssr: false`
-- Height ~40px, `wordWrap: off`, hide minimap, line numbers off
-- Register language from `instructionLanguage.tsx`
-- `Enter` → if valid, call `onSubmit` and clear
-- `Tab` → accept completion
-- Show helper text: `Tab · Enter to submit`
+- Three `gradient-border-button` or toggle buttons: **Move**, **Attack**, **Shield**
+- Attack/Shield disabled + muted when respective cooldown `> 0`; optional badge with remaining turns
+- Active mode highlighted (orange ring)
+- **Submit** primary button — disabled until valid preview (or shield mode ready)
+
+**Layout:** right panel on desktop (`SimulationLayout`); horizontal button row above Submit on mobile.
 
 ---
 
-### `instructionLanguage.tsx`
+### `TurnInput.tsx` — **deprecated v2**
 
-**Purpose:** Monaco monarch language + completion provider.
+Remove from `SimulationGame` render tree. File may remain for reference until deleted. Player no longer types pseudo-code.
 
-**Exports:**
+### `BotMarker.tsx`
+
+**Props:** `{ bot: Bot; style?: CSSProperties }` — supports move slide / hit knockback.
+
+**Renders:** labeled marker + Minecraft-style hearts below.
+
+---
+
+### `CombatVfxLayer.tsx` — **shipped**
+
+**Purpose:** Canvas combat VFX per ARCHITECTURE §11.
+
+**Props:**
 
 ```typescript
-export function registerInstructionLanguage(monaco: Monaco): void;
+{
+  state: GameState;
+  payload: CombatVfxPayload | null;
+  phase: AnimationPhase;
+  beamProgress: number;
+  fadeOpacity: number;
+  pulse: number;
+}
 ```
 
-**Completions:** filter `INSTRUCTION_STRINGS` by prefix; trigger on `(`, letters.
+**Behaviour:**
+
+- **Charge:** pulsing glow at each attacker's cell center.
+- **Beam / hold / fade:** three-layer beams from origin to computed endpoint.
+- **Clash:** endpoints at midpoint between bot centers; clash orb at midpoint.
+- **Shield block:** beam stops at shield radius inset; shield circle drawn **after** beams.
+- **Miss/hit:** endpoint at last path cell.
+
+**Helpers (private):** `getBeamEndpoint`, `stopPointBeforeTarget`, `drawBeam`, `drawClashOrb`, `drawShieldBarrier`.
+
+**Replaces:** legacy `.sim-grid-cell--beam` cell flash.
 
 ---
+
+### `TurnInput.tsx` / `instructionLanguage.tsx`
+
+**Status:** v1 shipped, **v2 deprecated** — not mounted in player UI. Parser retained in engine for tests.
 
 ### `LivesHud.tsx`
 
@@ -709,12 +857,10 @@ export function registerInstructionLanguage(monaco: Monaco): void;
 ```typescript
 {
   cycle: number;
-  playerLives: number;
-  opponentLives: number;
 }
 ```
 
-**Renders:** `Cycle 7` + `You ♥♥` + `Bot ♥` (filled/empty hearts).
+**Renders:** `Cycle 7` only — lives shown on grid under each bot marker.
 
 ---
 
@@ -844,17 +990,19 @@ Optional pattern: `page.tsx` client + `layout.tsx` server for title only.
 
 ---
 
-### `src/components/MobileOnly.tsx` [MODIFY]
+### `src/components/MobileOnly.tsx` [MODIFIED — shipped]
 
 Add pathname check:
 
 ```typescript
-import { usePathname } from "next/navigation";
-
-const MOBILE_ALLOWED = ["/", "/simulations"];
-
-// if mobile && !MOBILE_ALLOWED.includes(pathname) → block
+const MOBILE_ALLOWED_PATHS = ["/", "/simulations"];
 ```
+
+---
+
+### `src/components/shared/Hero.tsx` [MODIFIED — shipped]
+
+**Play Minigame** link → `/simulations` on landing page hero CTA row.
 
 ---
 
@@ -906,15 +1054,17 @@ export const SimEvents = {
 
 Add section `/* Simulation mini-game */`:
 
-| Class                  | Purpose                                    |
-| ---------------------- | ------------------------------------------ |
-| `.sim-grid-cell`       | Base cell styling                          |
-| `.sim-grid-cell--wall` | Wall variant                               |
-| `.sim-grid-cell--beam` | Beam flash animation                       |
-| `.sim-bot--player`     | Orange bot                                 |
-| `.sim-bot--opponent`   | Red bot                                    |
-| `.sim-bot--shield`     | Pulsing ring `@keyframes sim-shield-pulse` |
-| `.sim-beam-flash`      | `@keyframes sim-beam-flash` 500ms          |
+| Class                           | Purpose                                              |
+| ------------------------------- | ---------------------------------------------------- |
+| `.sim-grid-cell`                | Base cell styling                                    |
+| `.sim-grid-cell--wall`          | Wall variant                                         |
+| `.sim-grid-cell--beam`          | **Deprecated** — use CombatVfxLayer                  |
+| `.sim-bot--player`              | Orange bot                                           |
+| `.sim-bot--opponent`            | Red bot                                              |
+| `.sim-bot--shield`              | Pulsing ring `@keyframes sim-shield-pulse`           |
+| `.sim-grid-cell--preview`       | Selection / attack path highlight (v2)               |
+| `.sim-grid-cell--invalid-flash` | Red flash `@keyframes sim-invalid-flash` ~250ms (v2) |
+| `.sim-action-btn--cooldown`     | Muted disabled action button (v2)                    |
 
 ---
 
@@ -933,7 +1083,7 @@ Until assets exist, use text "BATTLECODE" on canvas and gray box for commander.
 
 See [ARCHITECTURE.md §6, §14, §17](./ARCHITECTURE.md) and engine `types.tsx` above.
 
-**UI-only types** (define in `SimulationGame.tsx` or `useSimulationGame.tsx`):
+**UI-only types** (define in `useSimulationGame.tsx` / `combatVfxTypes.tsx`):
 
 ```typescript
 type GamePhase =
@@ -944,21 +1094,37 @@ type GamePhase =
   | "won"
   | "lost"
   | "exhausted";
+
+type AnimationPhase = "idle" | "move" | "charge" | "beam" | "hold" | "fade";
+
+interface CombatVfxPayload {
+  scenario: CombatScenario;
+  beamPaths: BeamPath[];
+  clashPoint?: Position;
+  shieldBot?: BotId;
+  hitBot?: BotId;
+}
 ```
 
 ---
 
 ## 14. Constants & Magic Numbers
 
-| Constant             | Value                 | Location                   |
-| -------------------- | --------------------- | -------------------------- |
-| `STARTING_LIVES`     | 2                     | engine/constants.tsx       |
-| `STARTING_ATTEMPTS`  | 2                     | engine/constants.tsx       |
-| `DEFAULT_MAX_CYCLES` | 50                    | engine/constants.tsx       |
-| `BEAM_ANIMATION_MS`  | 500                   | engine/constants.tsx or UI |
-| `STORAGE_KEY`        | `"battlecode_sim_v1"` | simulationStorage.tsx      |
-| Share canvas size    | 1080 × 1920           | shareCanvas.tsx            |
-| Monaco font size     | 14                    | TurnInput.tsx              |
+| Constant                | Value                 | Location                   |
+| ----------------------- | --------------------- | -------------------------- |
+| `STARTING_LIVES`        | 2                     | engine/constants.tsx       |
+| `STARTING_ATTEMPTS`     | 2                     | engine/constants.tsx       |
+| `DEFAULT_MAX_CYCLES`    | 50                    | engine/constants.tsx       |
+| `MOVE_ANIMATION_MS`     | 180                   | engine/constants.tsx       |
+| `ATTACK_CHARGE_MS`      | 80                    | engine/constants.tsx       |
+| `BEAM_TRAVEL_MS`        | 120                   | engine/constants.tsx       |
+| `COMBAT_HOLD_MS`        | 450                   | engine/constants.tsx       |
+| `BEAM_FADE_MS`          | 100                   | engine/constants.tsx       |
+| `STORAGE_KEY`           | `"battlecode_sim_v1"` | simulationStorage.tsx      |
+| Share canvas size       | 1080 × 1920           | shareCanvas.tsx            |
+| `ATTACK_COOLDOWN_TURNS` | 2                     | engine/constants.tsx (v2)  |
+| `SHIELD_COOLDOWN_TURNS` | 2                     | engine/constants.tsx (v2)  |
+| Invalid flash duration  | ~250ms                | GridCell / hook timer (v2) |
 
 ---
 
@@ -970,16 +1136,12 @@ type GamePhase =
 ┌─────────────────────────────────────────────────────────┐
 │  BATTLECODE SIMULATION                    Attempts: 2   │
 ├──────────────────────────────┬──────────────────────────┤
-│                              │  [Static Commander]       │
-│         GRID BOARD           │                          │
-│                              │  Cycle 3                  │
-│                              │  You ♥♥   Bot ♥♥          │
-│                              │                          │
-│                              │  Opponent: MOVE(LEFT)     │
-│                              │  ┌────────────────────┐  │
-│                              │  │ MOVE(UP█           │  │
-│                              │  └────────────────────┘  │
-│                              │  Tab · Enter to submit    │
+│                              │  [ Move ] [ Attack¹ ] [ Shield ] │
+│         GRID BOARD           │  [ Submit ]                     │
+│    (click cells)             │  ¹ cooldown badge if > 0        │
+│                              │  [Static Commander]             │
+│                              │  Cycle 3                          │
+│                              │  Opponent: MOVE(LEFT)             │
 └──────────────────────────────┴──────────────────────────┘
 ```
 
@@ -992,11 +1154,10 @@ type GamePhase =
 ├──────────────────────┤
 │      GRID BOARD      │
 ├──────────────────────┤
-│ Cycle 3  You ♥♥      │
+│ Cycle 3              │
 │ Opponent: MOVE(L)    │
-│ ┌──────────────────┐ │
-│ │ SHIELD(█         │ │
-│ └──────────────────┘ │
+│ [Move][Attack][Shield]│
+│ [ Submit ]           │
 │ [Commander placeholder]
 └──────────────────────┘
 ```
@@ -1018,61 +1179,132 @@ type GamePhase =
 
 ## 16. Implementation Phases & PR Plan
 
-### PR 1 — Engine + storage (no UI)
+### PR 1 — Engine + storage (no UI) ✅
 
 **Files:** all of `src/game/engine/*`, `simulations/*`, `storage/simulationStorage.tsx`
 
-**Done when:** can call `step()` in a Node script or temp test page; storage round-trips JSON.
+**Done:** `step()` resolves cycles; storage round-trips JSON.
 
 ---
 
-### PR 2 — Playable shell
+### PR 2 — Playable shell ✅
 
-**Files:** `page.tsx`, `SimulationGame`, `SimulationLayout`, `GridBoard`, `GridCell`, `BotMarker`, `LivesHud`, `TurnInput` (basic text input first), `useSimulationGame`, `MobileOnly` change
+**Files:** `page.tsx`, `SimulationGame`, `SimulationLayout`, `GridBoard`, `GridCell`, `BotMarker`, `LivesHud`, `TurnInput`, `useSimulationGame`, `MobileOnly` change
 
-**Done when:** can play full game with plain input on `/simulations`; persistence works on refresh.
-
----
-
-### PR 3 — Polish input, animation, opponent reveal
-
-**Files:** `TurnInput` Monaco, `instructionLanguage.tsx`, `BeamOverlay`, `OpponentMoveReveal`, `globals.css` sim styles
-
-**Done when:** autocomplete works; beams animate; opponent move shown.
+**Done:** full game playable on `/simulations`; persistence on refresh.
 
 ---
 
-### PR 4 — Tutorial, share, exhausted, analytics
+### PR 3 — Polish input, animation, opponent reveal ✅
+
+**Files:** `TurnInput` Monaco, `instructionLanguage.tsx`, `OpponentMoveReveal`, `globals.css` sim styles
+
+**Done:** autocomplete, opponent move reveal, sim styles.
+
+---
+
+### PR 4 — Tutorial, share, exhausted, analytics ✅
 
 **Files:** `TutorialOverlay`, `tutorialSteps.tsx`, `ShareCard`, `shareCanvas.tsx`, `ExhaustedView`, `StaticCommander`, `AttemptsBadge`, `analytics.tsx`, `layout.tsx` GA4
 
-**Done when:** full v1 flow shippable.
+**Done:** full v1 flow shippable.
 
 ---
 
-### PR 5 — Content & QA
+### PR 5 — Content & QA 🔄
 
 **Files:** `active.tsx` real map, logo asset, copy pass on tutorial + share
 
-**Done when:** Definition of Done checklist complete.
+**Partial:** engine + UI complete; map art and assets may still be placeholder.
+
+---
+
+### PR 6 — Combat VFX + clash rule (engine + UI) ✅
+
+**Files:** `resolver.tsx`, `beam.tsx`, `combatScenario.tsx`, `types.tsx`, `CombatVfxLayer.tsx`, `combatVfxTypes.tsx`, `useSimulationGame.tsx`, `GridBoard.tsx`, `BotMarker.tsx`
+
+**Done:** head-on clash (incl. adjacent) deals no damage; animation timeline; clash orb + shield edge stop; move-only faster than combat.
+
+---
+
+### PR 7 — Interactive tutorial sandbox ⏳
+
+**Files:** `TutorialOverlay.tsx`, `tutorialSteps.tsx`, tutorial fixtures, reuse `CombatVfxLayer`
+
+**Done when:** Try-it steps require typed commands; grid animates on input.
+
+**Note:** v2 should use **click-based** tutorial steps instead of typed commands when PR 7 is built.
+
+---
+
+### PR 8 — Click input + cooldowns (v2) ⏳
+
+**Engine files:** `types.tsx`, `constants.tsx`, `resolver.tsx`, `opponent.tsx`, `runner.tsx`, `actionSelection.tsx`, `simulationStorage.tsx`
+
+**UI files:** `ActionPanel.tsx`, `GridBoard.tsx`, `GridCell.tsx`, `useSimulationGame.tsx`, `SimulationGame.tsx`, `SimulationLayout.tsx`, `globals.css`
+
+**Remove from UI:** `TurnInput` mount in `SimulationGame`
+
+**Done when:**
+
+- Move / Attack / Shield buttons + grid click preview + Submit
+- Attack path highlights full row/column; move highlights one cell
+- Invalid click → red flash; Submit disabled until valid
+- ATTACK/SHIELD 2-cycle cooldown in engine, opponent AI, persistence, disabled buttons
+- Move always available
+- Existing combat VFX + clash behaviour unchanged
 
 ---
 
 ## 17. Definition of Done
 
-- [ ] `/simulations` playable unauthenticated
-- [ ] Live turn-by-turn input with Monaco autocomplete
-- [ ] Opponent uses logical AI from cycle 1
-- [ ] Beams animate; walls block correctly
-- [ ] 2 lives, 2 attempts (loss only)
-- [ ] localStorage cache per sim id; refresh resumes
-- [ ] New sim id → fresh save; tutorialDone preserved
-- [ ] Win/loss share cards — download + native share
-- [ ] Exhausted state shows next simulation date
-- [ ] Tutorial skippable once
-- [ ] Mobile works on `/simulations`
-- [ ] GA4 on site + sim events
-- [ ] `validateSimulationConfig` passes for active sim
+- [x] `/simulations` playable unauthenticated
+- [x] Live turn-by-turn input with Monaco autocomplete
+- [x] Opponent uses logical AI from cycle 1
+- [x] Beams animate; walls block correctly
+- [x] 2 lives, 2 attempts (loss only)
+- [x] localStorage cache per sim id; refresh resumes
+- [x] New sim id → fresh save; tutorialDone preserved
+- [x] Win/loss share cards — download + native share
+- [x] Exhausted state shows next simulation date
+- [x] Tutorial skippable once (text modal)
+- [x] Mobile works on `/simulations`
+- [x] GA4 on site + sim events
+- [x] Head-on beam clash: no damage + clash VFX (incl. adjacent)
+- [x] Move turns faster than attack turns (~180ms vs ~930ms)
+- [x] CombatVfxLayer replaces cell-flash beams
+- [x] Input: auto-uppercase, placeholder, legal-move completions
+- [x] Bot YOU/BOT labels + hearts on grid
+- [x] Shield block: beam stops at barrier
+- [ ] `validateSimulationConfig` passes for production map (depends on final `active.tsx` content)
+- [ ] Interactive tutorial sandbox (PR 7)
+- [ ] Share logo asset on canvas
+- [ ] **v2:** ActionPanel + clickable grid (PR 8)
+- [ ] **v2:** Attack/Shield cooldowns (PR 8)
+- [ ] **v2:** Invalid cell red flash (PR 8)
+
+---
+
+## 18. Implementation Status
+
+### v1 — in code
+
+Engine, VFX, Monaco input, persistence, share, GA4 — see ARCHITECTURE §24.
+
+### v2 — specified in docs, **not in code**
+
+| Work item                                         | PR   |
+| ------------------------------------------------- | ---- |
+| Click-based Move / Attack / Shield + grid preview | PR 8 |
+| Submit button flow                                | PR 8 |
+| Invalid cell red flash                            | PR 8 |
+| `attackCooldown` / `shieldCooldown` on `Bot`      | PR 8 |
+| Cleanup cooldown tick + 2-turn lockout            | PR 8 |
+| Opponent AI respects cooldowns                    | PR 8 |
+| Remove TurnInput from player UI                   | PR 8 |
+| Persist cooldowns in `SimulationSave`             | PR 8 |
+
+**Next step:** implement PR 8 when approved.
 
 ---
 

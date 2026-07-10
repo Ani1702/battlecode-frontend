@@ -8,6 +8,7 @@ export * from "./resolver";
 export * from "./runner";
 
 export { chooseOpponentInstruction } from "./opponent";
+export * from "./combatScenario";
 export {
   parseInstruction,
   getCompletions,

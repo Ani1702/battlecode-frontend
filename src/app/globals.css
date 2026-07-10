@@ -328,6 +328,11 @@ input[type="range"].question-count-slider::-moz-range-thumb:active {
     0 0 14px rgba(59, 130, 246, 0.45);
 }
 
+.sim-bot--hit-flash {
+  background: #ffffff !important;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.85);
+}
+
 @keyframes sim-shield-pulse {
   0%,
   100% {

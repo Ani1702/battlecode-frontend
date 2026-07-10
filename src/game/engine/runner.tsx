@@ -1,4 +1,5 @@
 import { STARTING_LIVES } from "./constants";
+import { deriveCombatScenario, getClashPoint } from "./combatScenario";
 import { cloneGrid } from "./grid";
 import { chooseOpponentInstruction } from "./opponent";
 import { resolveCycle } from "./resolver";
@@ -50,5 +51,7 @@ export function step(
     beamPaths: result.beamPaths,
     events: result.events,
     outcome: result.outcome,
+    combatScenario: deriveCombatScenario(result.events, result.beamPaths),
+    clashPoint: getClashPoint(result.events),
   };
 }

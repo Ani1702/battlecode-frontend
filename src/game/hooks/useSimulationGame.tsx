@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { BEAM_ANIMATION_MS } from "../engine/constants";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ATTACK_CHARGE_MS,
+  BEAM_FADE_MS,
+  BEAM_TRAVEL_MS,
+  COMBAT_HOLD_MS,
+  cycleHasAttack,
+  MOVE_ANIMATION_MS,
+} from "../engine/constants";
 import { instructionToString, parseInstruction } from "../engine/parser";
 import { step } from "../engine/runner";
 import { ACTIVE_SIMULATION } from "../simulations/active";
@@ -17,12 +24,18 @@ import {
   type SimulationStatus,
 } from "../storage/simulationStorage";
 import type {
-  BeamPath,
+  GameEvent,
   GameState,
   Instruction,
   StepResult,
 } from "../engine/types";
 import { SimEvents } from "@/lib/analytics";
+import {
+  buildCombatVfxPayload,
+  getMoveTweens,
+  type AnimationPhase,
+  type CombatVfxPayload,
+} from "@/components/simulation/combatVfxTypes";
 
 export type GamePhase =
   | "loading"
@@ -64,6 +77,7 @@ function trackOutcomePhase(phase: GamePhase, save: SimulationSave): void {
 interface PendingTransition {
   save: SimulationSave;
   phase: GamePhase;
+  preState: GameState;
 }
 
 function resolveOutcome(
@@ -105,16 +119,83 @@ function resolveOutcome(
   };
 }
 
+function cloneState(state: GameState): GameState {
+  return {
+    ...state,
+    player: { ...state.player },
+    opponent: { ...state.opponent },
+    grid: state.grid,
+  };
+}
+
+function applyMidCycleDisplay(pre: GameState, events: GameEvent[]): GameState {
+  const next = cloneState(pre);
+
+  for (const event of events) {
+    if (event.type === "SHIELD_UP") {
+      const bot = event.bot === "player" ? next.player : next.opponent;
+      bot.shieldActive = true;
+    }
+
+    if (event.type === "MOVE" && !event.blocked) {
+      const bot = event.bot === "player" ? next.player : next.opponent;
+      bot.row = event.to.row;
+      bot.col = event.to.col;
+    }
+  }
+
+  return next;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function animateProgress(
+  durationMs: number,
+  onFrame: (progress: number) => void,
+) {
+  return new Promise<void>((resolve) => {
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / durationMs);
+      onFrame(progress);
+
+      if (progress >= 1) {
+        resolve();
+        return;
+      }
+
+      window.requestAnimationFrame(tick);
+    };
+
+    window.requestAnimationFrame(tick);
+  });
+}
+
 export function useSimulationGame() {
   const config = ACTIVE_SIMULATION;
   const [phase, setPhase] = useState<GamePhase>("loading");
   const [save, setSave] = useState<SimulationSave | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [displayState, setDisplayState] = useState<GameState | null>(null);
   const [lastStep, setLastStep] = useState<StepResult | null>(null);
-  const [beamPaths, setBeamPaths] = useState<BeamPath[] | null>(null);
   const [pendingTransition, setPendingTransition] =
     useState<PendingTransition | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
+  const [animationPhase, setAnimationPhase] = useState<AnimationPhase>("idle");
+  const [moveProgress, setMoveProgress] = useState(1);
+  const [beamProgress, setBeamProgress] = useState(0);
+  const [fadeOpacity, setFadeOpacity] = useState(1);
+  const [vfxPulse, setVfxPulse] = useState(0);
+  const [combatVfx, setCombatVfx] = useState<CombatVfxPayload | null>(null);
+  const [hitFlashBot, setHitFlashBot] = useState<"player" | "opponent" | null>(
+    null,
+  );
+  const animationTokenRef = useRef(0);
 
   const persistSave = useCallback(
     (nextSave: SimulationSave) => {
@@ -126,7 +207,9 @@ export function useSimulationGame() {
 
   const syncPhaseFromSave = useCallback((loaded: SimulationSave) => {
     setSave(loaded);
-    setGameState(saveToGameState(loaded));
+    const state = saveToGameState(loaded);
+    setGameState(state);
+    setDisplayState(state);
     setPhase(resolvePhaseFromSave(loaded));
   }, []);
 
@@ -139,25 +222,130 @@ export function useSimulationGame() {
 
     const fresh = createFreshSave(config);
     persistSave(fresh);
-    setGameState(saveToGameState(fresh));
+    const state = saveToGameState(fresh);
+    setGameState(state);
+    setDisplayState(state);
     setPhase(resolvePlayingPhase());
   }, [config.id, persistSave, syncPhaseFromSave]);
 
+  const finishAnimation = useCallback(
+    (transition: PendingTransition, resolvedState: GameState) => {
+      persistSave(transition.save);
+      trackOutcomePhase(transition.phase, transition.save);
+      setGameState(resolvedState);
+      setDisplayState(resolvedState);
+      setPhase(transition.phase);
+      setPendingTransition(null);
+      setLastStep(null);
+      setCombatVfx(null);
+      setAnimationPhase("idle");
+      setMoveProgress(1);
+      setBeamProgress(0);
+      setFadeOpacity(1);
+      setVfxPulse(0);
+      setHitFlashBot(null);
+    },
+    [persistSave],
+  );
+
   useEffect(() => {
-    if (phase !== "animating" || !pendingTransition) {
+    if (phase !== "animating" || !pendingTransition || !lastStep) {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      persistSave(pendingTransition.save);
-      trackOutcomePhase(pendingTransition.phase, pendingTransition.save);
-      setPhase(pendingTransition.phase);
-      setPendingTransition(null);
-      setBeamPaths(null);
-    }, BEAM_ANIMATION_MS);
+    const token = animationTokenRef.current + 1;
+    animationTokenRef.current = token;
 
-    return () => window.clearTimeout(timeoutId);
-  }, [phase, pendingTransition, persistSave]);
+    const run = async () => {
+      const result = lastStep;
+      const transition = pendingTransition;
+      const hasAttack = cycleHasAttack(
+        result.playerInstruction,
+        result.opponentInstruction,
+      );
+
+      setCombatVfx(
+        buildCombatVfxPayload(
+          result.events,
+          result.beamPaths,
+          result.combatScenario,
+          result.clashPoint,
+        ),
+      );
+
+      setAnimationPhase("move");
+      setMoveProgress(0);
+      await animateProgress(MOVE_ANIMATION_MS, setMoveProgress);
+
+      if (animationTokenRef.current !== token) {
+        return;
+      }
+
+      setDisplayState(applyMidCycleDisplay(transition.preState, result.events));
+      setMoveProgress(1);
+
+      if (!hasAttack) {
+        finishAnimation(transition, result.nextState);
+        return;
+      }
+
+      setAnimationPhase("charge");
+      setVfxPulse(0.5);
+      await wait(ATTACK_CHARGE_MS);
+
+      if (animationTokenRef.current !== token) {
+        return;
+      }
+
+      setAnimationPhase("beam");
+      setBeamProgress(0);
+      await animateProgress(BEAM_TRAVEL_MS, setBeamProgress);
+
+      if (animationTokenRef.current !== token) {
+        return;
+      }
+
+      setAnimationPhase("hold");
+      setBeamProgress(1);
+      setGameState((current) => current ?? result.nextState);
+      setDisplayState(cloneState(result.nextState));
+
+      const hitEvent = result.events.find(
+        (event) => event.type === "DAMAGE" && !event.blockedByShield,
+      );
+      if (hitEvent?.type === "DAMAGE") {
+        setHitFlashBot(hitEvent.bot);
+      }
+
+      const holdStart = performance.now();
+      while (performance.now() - holdStart < COMBAT_HOLD_MS) {
+        if (animationTokenRef.current !== token) {
+          return;
+        }
+
+        setVfxPulse((Math.sin((performance.now() - holdStart) / 120) + 1) / 2);
+        await wait(32);
+      }
+
+      setAnimationPhase("fade");
+      setHitFlashBot(null);
+      await animateProgress(BEAM_FADE_MS, (progress) => {
+        setFadeOpacity(1 - progress);
+      });
+
+      if (animationTokenRef.current !== token) {
+        return;
+      }
+
+      finishAnimation(transition, result.nextState);
+    };
+
+    void run();
+
+    return () => {
+      animationTokenRef.current += 1;
+    };
+  }, [phase, pendingTransition, lastStep, finishAnimation]);
 
   const submitInstruction = useCallback(
     (rawInput: string) => {
@@ -174,30 +362,20 @@ export function useSimulationGame() {
       }
 
       setInputError(null);
-      const result = step(gameState, instruction, config);
+      const preState = cloneState(gameState);
+      const result = step(preState, instruction, config);
       const transition = resolveOutcome(result, save);
 
       SimEvents.cycleSubmit(result.nextState.cycle);
+      setDisplayState(preState);
       setLastStep(result);
-      setGameState(result.nextState);
-
-      const shouldAnimate = result.beamPaths.some(
-        (path) => path.cells.length > 0,
-      );
-
-      if (shouldAnimate) {
-        setBeamPaths(result.beamPaths);
-        setPendingTransition(transition);
-        setPhase("animating");
-        return;
-      }
-
-      setBeamPaths(null);
-      persistSave(transition.save);
-      trackOutcomePhase(transition.phase, transition.save);
-      setPhase(transition.phase);
+      setPendingTransition({ ...transition, preState });
+      setMoveProgress(0);
+      setBeamProgress(0);
+      setFadeOpacity(1);
+      setPhase("animating");
     },
-    [phase, gameState, save, config, persistSave],
+    [phase, gameState, save, config],
   );
 
   const retryAfterLoss = useCallback(() => {
@@ -205,14 +383,18 @@ export function useSimulationGame() {
       return;
     }
 
+    animationTokenRef.current += 1;
     const fresh = createFreshSave(config);
     fresh.attemptsRemaining = save.attemptsRemaining;
     persistSave(fresh);
-    setGameState(saveToGameState(fresh));
+    const state = saveToGameState(fresh);
+    setGameState(state);
+    setDisplayState(state);
     setLastStep(null);
-    setBeamPaths(null);
     setPendingTransition(null);
+    setCombatVfx(null);
     setInputError(null);
+    setAnimationPhase("idle");
     setPhase("playing");
   }, [save, config, persistSave]);
 
@@ -231,13 +413,25 @@ export function useSimulationGame() {
   const opponentInstruction: Instruction | null =
     lastStep?.opponentInstruction ?? null;
 
+  const boardState = displayState ?? gameState;
+  const moveTweens =
+    boardState && lastStep && animationPhase === "move"
+      ? getMoveTweens(lastStep.events, moveProgress)
+      : {};
+
   return {
     config,
     phase,
     save,
-    gameState,
+    gameState: boardState,
     lastStep,
-    beamPaths,
+    combatVfx,
+    animationPhase,
+    moveTweens,
+    hitFlashBot,
+    beamProgress,
+    fadeOpacity,
+    vfxPulse,
     isAnimating: phase === "animating",
     opponentInstruction,
     opponentInstructionLabel: opponentInstruction

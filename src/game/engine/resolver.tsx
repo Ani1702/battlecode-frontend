@@ -1,4 +1,4 @@
-import { getBeamPath } from "./beam";
+import { detectHeadOnClash, getBeamPath } from "./beam";
 import { cloneGameState } from "./opponent";
 import { offsetPosition, positionsEqual } from "./grid";
 import type {
@@ -142,6 +142,50 @@ function isValidMoveTarget(
   return !positionsEqual(target, otherFrom);
 }
 
+function resolveAttacks(
+  state: GameState,
+  playerInstruction: Instruction,
+  opponentInstruction: Instruction,
+  events: GameEvent[],
+  beamPaths: BeamPath[],
+): void {
+  const clash = detectHeadOnClash(
+    state,
+    playerInstruction,
+    opponentInstruction,
+  );
+
+  if (clash) {
+    beamPaths.push(clash.playerPath, clash.opponentPath);
+    events.push({
+      type: "CLASH",
+      clashPoint: clash.clashPoint,
+      playerPath: clash.playerPath,
+      opponentPath: clash.opponentPath,
+    });
+    events.push({ type: "ATTACK", bot: "player", path: clash.playerPath });
+    events.push({ type: "ATTACK", bot: "opponent", path: clash.opponentPath });
+    return;
+  }
+
+  applyAttack(
+    state,
+    state.player,
+    state.opponent,
+    playerInstruction,
+    events,
+    beamPaths,
+  );
+  applyAttack(
+    state,
+    state.opponent,
+    state.player,
+    opponentInstruction,
+    events,
+    beamPaths,
+  );
+}
+
 function applyAttack(
   state: GameState,
   attacker: Bot,
@@ -206,18 +250,9 @@ export function resolveCycle(
 
   applyShields(nextState, playerInstruction, opponentInstruction, events);
   applyMoves(nextState, playerInstruction, opponentInstruction, events);
-  applyAttack(
+  resolveAttacks(
     nextState,
-    nextState.player,
-    nextState.opponent,
     playerInstruction,
-    events,
-    beamPaths,
-  );
-  applyAttack(
-    nextState,
-    nextState.opponent,
-    nextState.player,
     opponentInstruction,
     events,
     beamPaths,
