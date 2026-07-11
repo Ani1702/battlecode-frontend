@@ -6,10 +6,19 @@ import {
   BEAM_FADE_MS,
   BEAM_TRAVEL_MS,
   COMBAT_HOLD_MS,
+  canUseAction,
   cycleHasAttack,
+  INVALID_CELL_FLASH_MS,
   MOVE_ANIMATION_MS,
 } from "../engine/constants";
-import { instructionToString, parseInstruction } from "../engine/parser";
+import {
+  type ActionMode,
+  getPreviewCellsForSelection,
+  instructionFromSelection,
+  isValidAttackCell,
+  isValidMoveCell,
+} from "../engine/actionSelection";
+import { instructionToString } from "../engine/parser";
 import { step } from "../engine/runner";
 import { ACTIVE_SIMULATION } from "../simulations/active";
 import {
@@ -27,6 +36,7 @@ import type {
   GameEvent,
   GameState,
   Instruction,
+  Position,
   StepResult,
 } from "../engine/types";
 import { SimEvents } from "@/lib/analytics";
@@ -185,7 +195,13 @@ export function useSimulationGame() {
   const [lastStep, setLastStep] = useState<StepResult | null>(null);
   const [pendingTransition, setPendingTransition] =
     useState<PendingTransition | null>(null);
-  const [inputError, setInputError] = useState<string | null>(null);
+  const [actionMode, setActionModeState] = useState<ActionMode | null>(null);
+  const [selectedCell, setSelectedCell] = useState<Position | null>(null);
+  const [previewCells, setPreviewCells] = useState<Position[]>([]);
+  const [invalidFlashCell, setInvalidFlashCell] = useState<Position | null>(
+    null,
+  );
+  const invalidFlashTimerRef = useRef<number | null>(null);
   const [animationPhase, setAnimationPhase] = useState<AnimationPhase>("idle");
   const [moveProgress, setMoveProgress] = useState(1);
   const [beamProgress, setBeamProgress] = useState(0);
@@ -196,6 +212,32 @@ export function useSimulationGame() {
     null,
   );
   const animationTokenRef = useRef(0);
+
+  const clearSelection = useCallback(() => {
+    setActionModeState(null);
+    setSelectedCell(null);
+    setPreviewCells([]);
+    setInvalidFlashCell(null);
+    if (invalidFlashTimerRef.current !== null) {
+      window.clearTimeout(invalidFlashTimerRef.current);
+      invalidFlashTimerRef.current = null;
+    }
+  }, []);
+
+  const triggerInvalidFlash = useCallback((cell: Position) => {
+    setInvalidFlashCell(cell);
+    setSelectedCell(null);
+    setPreviewCells([]);
+
+    if (invalidFlashTimerRef.current !== null) {
+      window.clearTimeout(invalidFlashTimerRef.current);
+    }
+
+    invalidFlashTimerRef.current = window.setTimeout(() => {
+      setInvalidFlashCell(null);
+      invalidFlashTimerRef.current = null;
+    }, INVALID_CELL_FLASH_MS);
+  }, []);
 
   const persistSave = useCallback(
     (nextSave: SimulationSave) => {
@@ -244,8 +286,9 @@ export function useSimulationGame() {
       setFadeOpacity(1);
       setVfxPulse(0);
       setHitFlashBot(null);
+      clearSelection();
     },
-    [persistSave],
+    [persistSave, clearSelection],
   );
 
   useEffect(() => {
@@ -347,36 +390,96 @@ export function useSimulationGame() {
     };
   }, [phase, pendingTransition, lastStep, finishAnimation]);
 
-  const submitInstruction = useCallback(
-    (rawInput: string) => {
-      if (phase !== "playing" || !gameState || !save) {
+  const setActionMode = useCallback(
+    (mode: ActionMode) => {
+      if (phase !== "playing" || !gameState) {
         return;
       }
 
-      const instruction = parseInstruction(rawInput);
-      if (!instruction) {
-        setInputError(
-          "Use a full command like MOVE(LEFT), ATTACK(UP), or SHIELD()",
-        );
+      if (mode === "attack" && !canUseAction(gameState.player, "ATTACK")) {
         return;
       }
 
-      setInputError(null);
-      const preState = cloneState(gameState);
-      const result = step(preState, instruction, config);
-      const transition = resolveOutcome(result, save);
+      if (mode === "shield" && !canUseAction(gameState.player, "SHIELD")) {
+        return;
+      }
 
-      SimEvents.cycleSubmit(result.nextState.cycle);
-      setDisplayState(preState);
-      setLastStep(result);
-      setPendingTransition({ ...transition, preState });
-      setMoveProgress(0);
-      setBeamProgress(0);
-      setFadeOpacity(1);
-      setPhase("animating");
+      setActionModeState(mode);
+      setSelectedCell(null);
+      setInvalidFlashCell(null);
+
+      if (mode === "shield") {
+        setPreviewCells(getPreviewCellsForSelection("shield", gameState, null));
+        return;
+      }
+
+      setPreviewCells([]);
     },
-    [phase, gameState, save, config],
+    [phase, gameState],
   );
+
+  const handleCellClick = useCallback(
+    (cell: Position) => {
+      if (phase !== "playing" || !gameState || !actionMode) {
+        return;
+      }
+
+      if (actionMode === "shield") {
+        return;
+      }
+
+      if (actionMode === "move") {
+        if (!isValidMoveCell(gameState, cell)) {
+          triggerInvalidFlash(cell);
+          return;
+        }
+
+        setSelectedCell(cell);
+        setPreviewCells(getPreviewCellsForSelection("move", gameState, cell));
+        return;
+      }
+
+      if (!isValidAttackCell(gameState, cell)) {
+        triggerInvalidFlash(cell);
+        return;
+      }
+
+      setSelectedCell(cell);
+      setPreviewCells(getPreviewCellsForSelection("attack", gameState, cell));
+    },
+    [phase, gameState, actionMode, triggerInvalidFlash],
+  );
+
+  const pendingInstruction: Instruction | null =
+    actionMode && gameState
+      ? instructionFromSelection(actionMode, gameState, selectedCell)
+      : null;
+
+  const canSubmit =
+    phase === "playing" &&
+    pendingInstruction !== null &&
+    ((actionMode !== "move" && actionMode !== "attack") ||
+      selectedCell !== null);
+
+  const submitSelection = useCallback(() => {
+    if (phase !== "playing" || !gameState || !save || !pendingInstruction) {
+      return;
+    }
+
+    const preState = cloneState(gameState);
+    const result = step(preState, pendingInstruction, config);
+    const transition = resolveOutcome(result, save);
+
+    SimEvents.cycleSubmit(result.nextState.cycle);
+    clearSelection();
+    setDisplayState(preState);
+    setLastStep(result);
+    setPendingTransition({ ...transition, preState });
+    setMoveProgress(0);
+    setBeamProgress(0);
+    setFadeOpacity(1);
+    setPhase("animating");
+  }, [phase, gameState, save, pendingInstruction, config, clearSelection]);
 
   const retryAfterLoss = useCallback(() => {
     if (!save || save.attemptsRemaining <= 0) {
@@ -393,10 +496,10 @@ export function useSimulationGame() {
     setLastStep(null);
     setPendingTransition(null);
     setCombatVfx(null);
-    setInputError(null);
+    clearSelection();
     setAnimationPhase("idle");
     setPhase("playing");
-  }, [save, config, persistSave]);
+  }, [save, config, persistSave, clearSelection]);
 
   const completeTutorial = useCallback(() => {
     setTutorialDone(true);
@@ -437,8 +540,13 @@ export function useSimulationGame() {
     opponentInstructionLabel: opponentInstruction
       ? instructionToString(opponentInstruction)
       : null,
-    inputError,
-    submitInstruction,
+    actionMode,
+    previewCells,
+    invalidFlashCell,
+    canSubmit,
+    setActionMode,
+    handleCellClick,
+    submitSelection,
     retryAfterLoss,
     completeTutorial,
     skipTutorial,

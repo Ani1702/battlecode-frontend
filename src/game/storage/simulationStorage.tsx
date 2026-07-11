@@ -96,6 +96,15 @@ function parseRoot(raw: string | null): RootStorage {
   }
 }
 
+function normalizeBot(bot: Bot): Bot {
+  return {
+    ...bot,
+    shieldActive: false,
+    attackCooldown: bot.attackCooldown ?? 0,
+    shieldCooldown: bot.shieldCooldown ?? 0,
+  };
+}
+
 export function resetStorageForTests(): void {
   getStorage().removeItem(STORAGE_KEY);
 }
@@ -166,8 +175,8 @@ export function gameStateToSave(
     attemptsRemaining: meta.attemptsRemaining,
     status: meta.status,
     cycle: state.cycle,
-    player: { ...state.player, shieldActive: false },
-    opponent: { ...state.opponent, shieldActive: false },
+    player: normalizeBot(state.player),
+    opponent: normalizeBot(state.opponent),
     grid: state.grid.map((row) => [...row]),
     cyclesToWin: meta.cyclesToWin,
     playerLivesRemaining: meta.playerLivesRemaining,
@@ -178,7 +187,7 @@ export function saveToGameState(save: SimulationSave): GameState {
   return {
     cycle: save.cycle,
     grid: save.grid.map((row) => [...row]),
-    player: { ...save.player, shieldActive: false },
-    opponent: { ...save.opponent, shieldActive: false },
+    player: normalizeBot(save.player),
+    opponent: normalizeBot(save.opponent),
   };
 }

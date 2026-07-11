@@ -1,4 +1,4 @@
-import { ALL_DIRECTIONS } from "./constants";
+import { ALL_DIRECTIONS, canUseAction } from "./constants";
 import { getAttackDirectionTowardPlayer } from "./beam";
 import {
   inBounds,
@@ -99,7 +99,7 @@ function getPreferredMoveDirections(state: GameState): Instruction[] {
 
 export function chooseOpponentInstruction(state: GameState): Instruction {
   const attackDirection = getAttackDirectionTowardPlayer(state);
-  if (attackDirection !== null) {
+  if (attackDirection !== null && canUseAction(state.opponent, "ATTACK")) {
     return { type: "ATTACK", direction: attackDirection };
   }
 
@@ -125,7 +125,18 @@ export function chooseOpponentInstruction(state: GameState): Instruction {
     }
   }
 
-  return { type: "SHIELD" };
+  if (canUseAction(state.opponent, "SHIELD")) {
+    return { type: "SHIELD" };
+  }
+
+  for (const direction of ALL_DIRECTIONS) {
+    const candidate: Instruction = { type: "MOVE", direction };
+    if (getMoveTarget(state, opponent, candidate) !== null) {
+      return candidate;
+    }
+  }
+
+  return { type: "MOVE", direction: ALL_DIRECTIONS[0] };
 }
 
 export function cloneGameState(state: GameState): GameState {

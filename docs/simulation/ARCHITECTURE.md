@@ -1,6 +1,6 @@
 # BattleCode Simulation Mini-Game — Architecture
 
-> **Status:** v1 shipped; **v2 mechanics specified** (click-based input + attack/shield cooldowns) — implementation pending  
+> **Status:** v2 shipped — click-based input, attack/shield cooldowns, interactive tutorial modal  
 > **Last updated:** 10 July 2026  
 > **Route:** `/simulations`  
 > **Implementation plan:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) (all new code uses `.tsx`)
@@ -755,42 +755,48 @@ Both bots charge (80ms), then fire **simultaneously**. Beams extend toward each 
 
 Players **skip** text-only tutorial modals without learning the input format (`MOVE(LEFT)` vs bare `left`).
 
-### Behaviour
+### Behaviour — **shipped**
 
 - Shown on **first visit** (unless previously completed or skipped).
-- **Skippable** at any time (consider hiding Skip until step 2–3 in a future tweak).
+- **Skippable** at any time via **Skip** in the modal footer.
+- **Next** is always available (watch steps do not gate progression).
 - Completion or skip sets `tutorialDone: true` in localStorage.
+- While `phase === "tutorial"`, only the modal overlay is shown — the main game board is hidden.
 
-### Format: interactive sandbox (target)
+### Format: interactive sandbox — **shipped**
 
-Replace the text-only slideshow with a **learn-by-doing** mini arena:
+A **learn-by-doing** mini arena inside a compact modal popup (`TutorialOverlay.tsx`, `max-w-md`):
 
-| Step type  | Behaviour                                                                                                                                   |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Watch**  | Auto-plays a short loop on a tiny grid (move, beam, shield, clash) — no input                                                               |
-| **Try it** | Player must submit the correct command; grid **animates** using the same `CombatVfxLayer` as real play; **Next** unlocks only after success |
+| Step type  | Behaviour                                                                                                            |
+| ---------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Watch**  | Auto-plays a short loop on a tiny grid (move, beam, shield, clash) — no input; loops until **Next**                  |
+| **Try it** | Player uses the same **ActionPanel + grid click** flow as live play; **Next** unlocks only after a successful submit |
 
-Each **Try it** step uses a fixed **tutorial scenario** (small grid, scripted opponent instruction) — not the live opponent AI.
+Each step uses a fixed **tutorial scenario** (`TUTORIAL_SCENARIOS` in `__fixtures__/tutorialScenarios.tsx`) — not the live opponent AI.
 
-### Content (structure)
+**Watch-step timing:** after each animation completes, the sandbox **holds for 3 seconds** (`TUTORIAL_RESET_DELAY_MS`) before resetting and looping.
+
+**Layout:** compact grid (~200px) via `GridBoard compact` + `ActionPanel compact`; combat VFX via shared `cycleAnimation.tsx` replay.
+
+### Content (9 steps)
 
 1. **Watch** — objective: eliminate the opponent.
-2. **Try it** — `MOVE` one cell (`MOVE(RIGHT)` or similar on 3×3 sandbox).
+2. **Try it** — `MOVE` one cell (click adjacent cell → Submit).
 3. **Watch** — `ATTACK` beam along row/column; stops at walls.
 4. **Try it** — fire an aligned `ATTACK`.
-5. **Watch** — head-on clash (no damage) or `SHIELD` blocks beam.
-6. **Try it** — `SHIELD()` when bot attacks.
-7. **Start** — enter live `ACTIVE_SIMULATION`.
+5. **Watch** — head-on clash (no damage).
+6. **Watch** — `SHIELD` blocks beam.
+7. **Try it** — `SHIELD()` when bot attacks.
+8. **Watch** — attack/shield cooldown badges (informational).
+9. **Start** — enter live `ACTIVE_SIMULATION`.
+
+Step copy and scenario bindings live in `tutorialSteps.tsx`.
 
 ### Implementation notes
 
-- Reuse `GridBoard`, `TurnInput`, `CombatVfxLayer`, and `step()` against `TUTORIAL_SCENARIOS[stepIndex]`.
-- Tutorial overlay: embedded grid + input, not full-screen text-only modal.
-- **Step copy and scenario fixtures:** define in `tutorialSteps.tsx` + `src/game/engine/__fixtures__/tutorial.tsx` (or `src/game/simulations/tutorial/`).
-
-### Current implementation (interim)
-
-v1 shipped a **text modal** with hints. Migrating to the interactive sandbox is the planned v1.1 tutorial upgrade (see IMPLEMENTATION.md).
+- `TutorialSandbox.tsx` — watch loops + practice submit against sandbox state.
+- Reuses `GridBoard`, `ActionPanel`, `CombatVfxLayer`, and `replayStepAnimation()` from `cycleAnimation.tsx`.
+- `TutorialOverlay.tsx` — fixed modal with header (title + progress), body (sandbox), footer (Skip + Next).
 
 ---
 
@@ -1111,12 +1117,15 @@ stateDiagram-v2
 | Component             | Role                                                      |
 | --------------------- | --------------------------------------------------------- |
 | `SimulationGame.tsx`  | Top-level state machine                                   |
-| `TutorialOverlay.tsx` | Tutorial (text modal today → sandbox planned)             |
+| `TutorialOverlay.tsx` | Tutorial modal shell (Skip + Next, progress)              |
+| `TutorialSandbox.tsx` | Interactive watch/practice grid inside modal              |
+| `tutorialSteps.tsx`   | Step copy, scenario bindings, reset delay constant        |
+| `cycleAnimation.tsx`  | Shared step animation replay (game + tutorial)            |
 | `GridBoard.tsx`       | Clickable grid + bot markers + preview highlights         |
 | `GridCell.tsx`        | Cell tile + selection / path / invalid-flash states       |
 | `ActionPanel.tsx`     | Move / Attack / Shield buttons + Submit + cooldown badges |
 | `CombatVfxLayer.tsx`  | Canvas beam, shield, clash orb overlay (**shipped**)      |
-| `TurnInput.tsx`       | ~~Monaco typed input~~ **deprecated v2** — remove or hide |
+| `TurnInput.tsx`       | ~~Monaco typed input~~ **deprecated** — not in player UI  |
 | `LivesHud.tsx`        | Cycle counter only                                        |
 | `StaticCommander.tsx` | Placeholder art                                           |
 | `ShareCard.tsx`       | Canvas card + Download / Share                            |
@@ -1134,6 +1143,7 @@ src/
 │       └── page.tsx                    # Client entry → SimulationGame
 ├── game/
 │   ├── engine/
+│   │   ├── actionSelection.tsx         # click → Instruction + validation
 │   │   ├── types.tsx
 │   │   ├── constants.tsx               # lives, VFX timing, instruction map
 │   │   ├── grid.tsx
@@ -1144,7 +1154,9 @@ src/
 │   │   ├── opponent.tsx
 │   │   ├── runner.tsx
 │   │   ├── index.tsx
-│   │   └── __fixtures__/tiny.tsx
+│   │   └── __fixtures__/
+│   │       ├── tiny.tsx
+│   │       └── tutorialScenarios.tsx
 │   ├── hooks/
 │   │   └── useSimulationGame.tsx       # displayState, animation timeline
 │   ├── simulations/
@@ -1160,17 +1172,18 @@ src/
 │   └── simulation/
 │       ├── SimulationGame.tsx
 │       ├── SimulationLayout.tsx
-│       ├── TutorialOverlay.tsx         # text modal (interim)
-│       ├── tutorialSteps.tsx
+│       ├── TutorialOverlay.tsx         # modal shell
+│       ├── TutorialSandbox.tsx         # watch/practice sandbox
+│       ├── tutorialSteps.tsx           # step definitions
+│       ├── cycleAnimation.tsx          # shared animation replay
 │       ├── GridBoard.tsx               # clickable + preview highlights
 │       ├── GridCell.tsx                # selection / invalid flash
-│       ├── ActionPanel.tsx             # v2 — Move / Attack / Shield + Submit
-│       ├── actionSelection.tsx         # v2 — click → Instruction helpers
+│       ├── ActionPanel.tsx             # Move / Attack / Shield + Submit
 │       ├── BotMarker.tsx
 │       ├── CombatVfxLayer.tsx
 │       ├── combatVfxTypes.tsx
-│       ├── TurnInput.tsx               # deprecated v2 (remove from UI)
-│       ├── instructionLanguage.tsx     # deprecated v2
+│       ├── TurnInput.tsx               # deprecated (parser tests only)
+│       ├── instructionLanguage.tsx     # deprecated (parser tests only)
 │       ├── LivesHud.tsx                # cycle only
 │       ├── AttemptsBadge.tsx
 │       ├── StaticCommander.tsx
@@ -1260,10 +1273,11 @@ Fixed `ACTIVE_SIMULATION` + fixed player input sequence → expected trace of po
 - [x] Head-on beam clash: no damage, clash VFX at midpoint (incl. adjacent)
 - [x] Move-only turns animate faster than attack turns (~180ms vs ~930ms)
 - [x] Shield block: beam stops at barrier, not through shield
-- [ ] **v2:** Click-based move/attack/shield + grid highlights
-- [ ] **v2:** Invalid cell red flash
-- [ ] **v2:** Attack/Shield 2-cycle cooldown (UI + engine + persist)
-- [ ] **v2:** Cooldown disables action buttons
+- [x] **v2:** Click-based move/attack/shield + grid highlights
+- [x] **v2:** Invalid cell red flash
+- [x] **v2:** Attack/Shield 2-cycle cooldown (UI + engine + persist)
+- [x] **v2:** Cooldown disables action buttons
+- [x] Interactive tutorial modal with watch/practice steps
 
 ### Manual QA (v2 — click input)
 
@@ -1362,32 +1376,30 @@ These do **not** block engine or shell implementation but need content before sh
 
 ## 24. Implementation Status
 
-### v1 — shipped (code)
+### Shipped (v1 + v2)
 
-| Area                                                    | Status                                |
-| ------------------------------------------------------- | ------------------------------------- |
-| Engine (grid, parser, resolver, opponent, runner)       | ✅                                    |
-| Head-on clash (far + adjacent), `CLASH` event           | ✅                                    |
-| `combatScenario` derivation                             | ✅                                    |
-| localStorage persistence (`battlecode_sim_v1`)          | ✅                                    |
-| `/simulations` route + full UI shell                    | ✅                                    |
-| Monaco typed input                                      | ✅ (to be **removed/replaced** in v2) |
-| YOU/BOT labels + hearts on grid                         | ✅                                    |
-| Combat VFX canvas (beams, shield, clash orb)            | ✅                                    |
-| Animation timeline (move → charge → beam → hold → fade) | ✅                                    |
-| Share cards, attempts, GA4, mobile gate, Play Minigame  | ✅                                    |
+| Area                                                    | Status |
+| ------------------------------------------------------- | ------ |
+| Engine (grid, parser, resolver, opponent, runner)       | ✅     |
+| Head-on clash (far + adjacent), `CLASH` event           | ✅     |
+| `combatScenario` derivation                             | ✅     |
+| localStorage persistence (`battlecode_sim_v1`)          | ✅     |
+| `/simulations` route + full UI shell                    | ✅     |
+| Click-based input (`ActionPanel` + grid clicks)         | ✅     |
+| Grid preview highlights + invalid red flash             | ✅     |
+| ATTACK / SHIELD 2-cycle cooldown (engine + UI + save)   | ✅     |
+| Opponent AI cooldown-aware                              | ✅     |
+| Interactive tutorial modal (watch + practice)           | ✅     |
+| YOU/BOT labels + hearts on grid                         | ✅     |
+| Combat VFX canvas (beams, shield, clash orb)            | ✅     |
+| Animation timeline (move → charge → beam → hold → fade) | ✅     |
+| Share cards, attempts, GA4, mobile gate, Play Minigame  | ✅     |
 
-### v2 — specified (docs updated 10 July 2026), **not yet in code**
+### Deprecated (retained for tests)
 
-| Area                                                  | Spec reference |
-| ----------------------------------------------------- | -------------- |
-| Click-based input (ActionPanel + grid clicks)         | §10            |
-| Grid preview highlights + invalid red flash           | §10, §11       |
-| ATTACK / SHIELD 2-cycle cooldown (engine + UI + save) | §6, §7         |
-| Opponent AI cooldown-aware                            | §8             |
-| Deprecate `TurnInput` / Monaco in player UI           | §10, §19       |
-
-**Next step:** implement v2 per [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) PR 8 plan.
+| Area                     | Status                                             |
+| ------------------------ | -------------------------------------------------- |
+| Monaco `TurnInput` in UI | Removed — parser kept in `instructionLanguage.tsx` |
 
 ---
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import ActionPanel from "./ActionPanel";
 import AttemptsBadge from "./AttemptsBadge";
 import ExhaustedView from "./ExhaustedView";
 import GridBoard from "./GridBoard";
@@ -9,9 +9,7 @@ import OpponentMoveReveal from "./OpponentMoveReveal";
 import ShareCard from "./ShareCard";
 import SimulationLayout from "./SimulationLayout";
 import StaticCommander from "./StaticCommander";
-import TurnInput from "./TurnInput";
 import TutorialOverlay from "./TutorialOverlay";
-import { getPlayableInstructionStrings } from "@/game/engine/parser";
 import { useSimulationGame } from "@/game/hooks/useSimulationGame";
 
 export default function SimulationGame() {
@@ -29,21 +27,21 @@ export default function SimulationGame() {
     vfxPulse,
     isAnimating,
     opponentInstructionLabel,
-    inputError,
-    submitInstruction,
+    actionMode,
+    previewCells,
+    invalidFlashCell,
+    canSubmit,
+    setActionMode,
+    handleCellClick,
+    submitSelection,
     retryAfterLoss,
     completeTutorial,
     skipTutorial,
   } = useSimulationGame();
 
-  const inputDisabled = phase !== "playing";
+  const controlsDisabled = phase !== "playing";
   const showPlayingBoard =
-    (phase === "playing" || phase === "animating" || phase === "tutorial") &&
-    gameState;
-  const playableInstructions = useMemo(
-    () => (gameState ? getPlayableInstructionStrings(gameState) : []),
-    [gameState],
-  );
+    (phase === "playing" || phase === "animating") && gameState;
 
   if (phase === "loading" || !save) {
     return (
@@ -55,6 +53,14 @@ export default function SimulationGame() {
     );
   }
 
+  if (phase === "tutorial") {
+    return (
+      <SimulationLayout>
+        <TutorialOverlay onComplete={completeTutorial} onSkip={skipTutorial} />
+      </SimulationLayout>
+    );
+  }
+
   return (
     <SimulationLayout>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -62,9 +68,11 @@ export default function SimulationGame() {
           <h1 className="orbitron text-2xl">BattleCode Simulation</h1>
           <p className="mt-1 text-sm text-white/60">{config.id}</p>
         </div>
-        {showPlayingBoard ? (
-          <AttemptsBadge attemptsRemaining={save.attemptsRemaining} />
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {showPlayingBoard ? (
+            <AttemptsBadge attemptsRemaining={save.attemptsRemaining} />
+          ) : null}
+        </div>
       </div>
 
       {showPlayingBoard ? (
@@ -78,17 +86,27 @@ export default function SimulationGame() {
             beamProgress={beamProgress}
             fadeOpacity={fadeOpacity}
             vfxPulse={vfxPulse}
+            previewCells={previewCells}
+            invalidFlashCell={invalidFlashCell}
+            shieldPreview={actionMode === "shield"}
+            interactionEnabled={phase === "playing" && actionMode !== null}
+            onCellClick={handleCellClick}
           />
 
           <div className="flex flex-col gap-4">
             <StaticCommander />
             <LivesHud cycle={gameState.cycle} />
             <OpponentMoveReveal instructionLabel={opponentInstructionLabel} />
-            <TurnInput
-              disabled={inputDisabled}
-              onSubmit={submitInstruction}
-              error={inputError}
-              playableInstructions={playableInstructions}
+            <ActionPanel
+              actionMode={actionMode}
+              attackCooldown={gameState.player.attackCooldown}
+              shieldCooldown={gameState.player.shieldCooldown}
+              canSubmit={canSubmit}
+              disabled={controlsDisabled}
+              onSelectMove={() => setActionMode("move")}
+              onSelectAttack={() => setActionMode("attack")}
+              onSelectShield={() => setActionMode("shield")}
+              onSubmit={submitSelection}
             />
             {isAnimating ? (
               <p className="text-xs uppercase tracking-wider text-orange-300/80">
@@ -127,10 +145,6 @@ export default function SimulationGame() {
           nextSimulationDate={config.nextSimulationDate}
           shareEventDate={config.shareEventDate}
         />
-      ) : null}
-
-      {phase === "tutorial" ? (
-        <TutorialOverlay onComplete={completeTutorial} onSkip={skipTutorial} />
       ) : null}
     </SimulationLayout>
   );

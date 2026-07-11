@@ -2,7 +2,7 @@
 
 > **Companion to:** [`ARCHITECTURE.md`](./ARCHITECTURE.md) (rules & product spec)  
 > **Phased build plan:** [`PHASES.md`](./PHASES.md) (testable phases — start here)  
-> **Status:** v1 shipped; **v2 specified** (click input + cooldowns) — implementation pending (PR 8)  
+> **Status:** v2 shipped — click input, cooldowns, interactive tutorial modal  
 > **Last updated:** 10 July 2026  
 > **Route:** `/simulations`
 
@@ -53,8 +53,8 @@ page.tsx
 ### Runtime data flow (one cycle)
 
 ```
-TurnInput submit                    ← v1 (deprecated)
-ActionPanel + GridBoard click       ← v2
+TurnInput submit                    ← v1 (deprecated, not in UI)
+ActionPanel + GridBoard click       ← v2 (shipped)
   → instructionFromSelection(mode, state, cell)  // or SHIELD without cell
   → validate canUseAction(bot, ATTACK|SHIELD)
   → chooseOpponentInstruction(state)  // cooldown-aware
@@ -73,9 +73,9 @@ ActionPanel + GridBoard click       ← v2
 - Simulation archive UI
 - Backend / auth integration
 - Automated test runner in CI
-- Full interactive tutorial sandbox (text modal shipped as interim)
-- **v2 in scope:** click-based ActionPanel, grid selection, cooldowns (see PR 8)
-- **v2 out of UI:** Monaco `TurnInput` for player (keep parser for dev/tests)
+- Interactive tutorial sandbox in modal popup (shipped)
+- Click-based ActionPanel, grid selection, cooldowns (shipped)
+- Monaco `TurnInput` removed from player UI (parser retained for dev/tests)
 
 ---
 
@@ -167,7 +167,10 @@ src/
 │   │   ├── resolver.tsx                     [SHIPPED]
 │   │   ├── runner.tsx                       [SHIPPED]
 │   │   ├── index.tsx                        [SHIPPED]
-│   │   └── __fixtures__/tiny.tsx            [SHIPPED] dev fixture
+│   │   ├── actionSelection.tsx            [SHIPPED] click → Instruction + validation
+│   │   └── __fixtures__/
+│   │       ├── tiny.tsx                   [SHIPPED] dev fixture
+│   │       └── tutorialScenarios.tsx     [SHIPPED] sandbox grids + demo scripts
 │   ├── simulations/
 │   │   ├── active.tsx                       [NEW]
 │   │   ├── validate.tsx                     [NEW]
@@ -181,17 +184,18 @@ src/
 │   └── simulation/
 │       ├── SimulationGame.tsx              [NEW]
 │       ├── SimulationLayout.tsx            [NEW]
-│       ├── TutorialOverlay.tsx             [NEW]
-│       ├── tutorialSteps.tsx                [NEW]
-│       ├── GridBoard.tsx                   [NEW]
-│       ├── GridCell.tsx                    [NEW]
-│       ├── BotMarker.tsx                     [NEW]
+│       ├── TutorialOverlay.tsx             [SHIPPED] modal shell
+│       ├── TutorialSandbox.tsx             [SHIPPED] watch/practice sandbox
+│       ├── tutorialSteps.tsx               [SHIPPED] step definitions
+│       ├── cycleAnimation.tsx              [SHIPPED] shared animation replay
+│       ├── GridBoard.tsx                   [SHIPPED] clickable + preview
+│       ├── GridCell.tsx                    [SHIPPED]
+│       ├── BotMarker.tsx                   [SHIPPED]
 │       ├── CombatVfxLayer.tsx              [SHIPPED] canvas combat VFX
-│       ├── combatVfxTypes.tsx                [SHIPPED] VFX payload + animation types
-│       ├── ActionPanel.tsx             [v2 NEW] Move / Attack / Shield + Submit
-│       ├── actionSelection.tsx         [v2 NEW] click → Instruction + validation
-│       ├── TurnInput.tsx               [v1 shipped → v2 deprecated in UI]
-│       ├── instructionLanguage.tsx     [v1 shipped → v2 deprecated in UI]
+│       ├── combatVfxTypes.tsx              [SHIPPED] VFX payload + animation types
+│       ├── ActionPanel.tsx                 [SHIPPED] Move / Attack / Shield + Submit
+│       ├── TurnInput.tsx                   [deprecated] not in player UI
+│       ├── instructionLanguage.tsx         [deprecated] parser for tests
 │       ├── LivesHud.tsx                    [NEW]
 │       ├── AttemptsBadge.tsx               [NEW]
 │       ├── StaticCommander.tsx             [NEW]
@@ -682,7 +686,7 @@ export { validateSimulationConfig } from "./validate";
 
 ### `TutorialOverlay.tsx`
 
-**Purpose:** Tutorial UI. **Shipped:** text modal. **Planned:** interactive sandbox (ARCHITECTURE §12).
+**Purpose:** Tutorial modal shell — compact popup over the page (ARCHITECTURE §12).
 
 **Props:**
 
@@ -695,30 +699,57 @@ export { validateSimulationConfig } from "./validate";
 
 **State:** `stepIndex: number`
 
-**Renders (planned):** embedded `GridBoard` + `TurnInput` + `CombatVfxLayer`; **Try it** steps require correct command.
-
-**Renders (shipped):** step from `tutorialSteps.tsx`, Next / Skip buttons, progress dots.
+**Renders:** fixed modal (`max-w-md`) with header (title + progress), `TutorialSandbox` in body, **Skip** + **Next** in footer. **Next** always enabled; watch steps loop until Next.
 
 **Analytics:** `sim_tutorial_complete` / `sim_tutorial_skip`.
 
 ---
 
+### `TutorialSandbox.tsx`
+
+**Purpose:** Embedded watch/practice arena inside the tutorial modal.
+
+**Props:**
+
+```typescript
+{
+  step: TutorialStep;
+  onPracticeSuccess?: () => void;
+}
+```
+
+**Watch steps:** auto-plays demo script via `replayStepAnimation()`; holds **3s** after animation (`TUTORIAL_RESET_DELAY_MS`) then resets and loops.
+
+**Practice steps:** compact `GridBoard` + `ActionPanel`; validates submit against step scenario; calls `onPracticeSuccess` when correct.
+
+---
+
+### `cycleAnimation.tsx`
+
+**Purpose:** Shared step animation replay extracted from `useSimulationGame` — used by main game hook and tutorial sandbox.
+
+**Exports:** `replayStepAnimation(...)` and related animation helpers.
+
+---
+
 ### `tutorialSteps.tsx`
 
-**Purpose:** Tutorial content + scenario definitions (sandbox planned).
+**Purpose:** Tutorial content + scenario bindings.
 
 **Exports:**
 
 ```typescript
+export const TUTORIAL_RESET_DELAY_MS = 3000;
+
 export type TutorialStep =
-  | { type: "watch"; title: string; body: string; demoScript: unknown }
+  | { type: "watch"; title: string; body: string; scenarioId: string; demoScript: ... }
   | {
       type: "practice";
       title: string;
       body: string;
       hint: string;
-      scenario: unknown;
-      expected: string;
+      scenarioId: string;
+      validateSelection: (instruction: Instruction) => boolean;
     };
 
 export const TUTORIAL_STEPS: TutorialStep[];
@@ -772,7 +803,7 @@ export const TUTORIAL_STEPS: TutorialStep[];
 
 ---
 
-### `ActionPanel.tsx` — **v2 NEW**
+### `ActionPanel.tsx` — **shipped**
 
 **Purpose:** Side action buttons + Submit + cooldown display.
 
@@ -1227,39 +1258,35 @@ interface CombatVfxPayload {
 
 ---
 
-### PR 7 — Interactive tutorial sandbox ⏳
+### PR 7 — Interactive tutorial sandbox ✅
 
-**Files:** `TutorialOverlay.tsx`, `tutorialSteps.tsx`, tutorial fixtures, reuse `CombatVfxLayer`
+**Files:** `TutorialOverlay.tsx`, `TutorialSandbox.tsx`, `tutorialSteps.tsx`, `cycleAnimation.tsx`, `__fixtures__/tutorialScenarios.tsx`, reuse `CombatVfxLayer`, `ActionPanel`, `GridBoard`
 
-**Done when:** Try-it steps require typed commands; grid animates on input.
-
-**Note:** v2 should use **click-based** tutorial steps instead of typed commands when PR 7 is built.
+**Done:** watch steps auto-loop with 3s hold; practice steps use click-based ActionPanel; compact modal layout; Skip + Next always available.
 
 ---
 
-### PR 8 — Click input + cooldowns (v2) ⏳
+### PR 8 — Click input + cooldowns (v2) ✅
 
 **Engine files:** `types.tsx`, `constants.tsx`, `resolver.tsx`, `opponent.tsx`, `runner.tsx`, `actionSelection.tsx`, `simulationStorage.tsx`
 
-**UI files:** `ActionPanel.tsx`, `GridBoard.tsx`, `GridCell.tsx`, `useSimulationGame.tsx`, `SimulationGame.tsx`, `SimulationLayout.tsx`, `globals.css`
+**UI files:** `ActionPanel.tsx`, `GridBoard.tsx`, `GridCell.tsx`, `useSimulationGame.tsx`, `SimulationGame.tsx`, `globals.css`
 
-**Remove from UI:** `TurnInput` mount in `SimulationGame`
-
-**Done when:**
+**Done:**
 
 - Move / Attack / Shield buttons + grid click preview + Submit
 - Attack path highlights full row/column; move highlights one cell
 - Invalid click → red flash; Submit disabled until valid
 - ATTACK/SHIELD 2-cycle cooldown in engine, opponent AI, persistence, disabled buttons
 - Move always available
-- Existing combat VFX + clash behaviour unchanged
+- `TurnInput` removed from player UI; combat VFX + clash behaviour unchanged
 
 ---
 
 ## 17. Definition of Done
 
 - [x] `/simulations` playable unauthenticated
-- [x] Live turn-by-turn input with Monaco autocomplete
+- [x] Live turn-by-turn click-based input (ActionPanel + grid)
 - [x] Opponent uses logical AI from cycle 1
 - [x] Beams animate; walls block correctly
 - [x] 2 lives, 2 attempts (loss only)
@@ -1267,44 +1294,45 @@ interface CombatVfxPayload {
 - [x] New sim id → fresh save; tutorialDone preserved
 - [x] Win/loss share cards — download + native share
 - [x] Exhausted state shows next simulation date
-- [x] Tutorial skippable once (text modal)
+- [x] Interactive tutorial modal (watch + practice, skippable once)
 - [x] Mobile works on `/simulations`
 - [x] GA4 on site + sim events
 - [x] Head-on beam clash: no damage + clash VFX (incl. adjacent)
 - [x] Move turns faster than attack turns (~180ms vs ~930ms)
 - [x] CombatVfxLayer replaces cell-flash beams
-- [x] Input: auto-uppercase, placeholder, legal-move completions
 - [x] Bot YOU/BOT labels + hearts on grid
 - [x] Shield block: beam stops at barrier
+- [x] ActionPanel + clickable grid with preview highlights
+- [x] Attack/Shield 2-cycle cooldown (engine + UI + persist)
+- [x] Invalid cell red flash on bad click
 - [ ] `validateSimulationConfig` passes for production map (depends on final `active.tsx` content)
-- [ ] Interactive tutorial sandbox (PR 7)
 - [ ] Share logo asset on canvas
-- [ ] **v2:** ActionPanel + clickable grid (PR 8)
-- [ ] **v2:** Attack/Shield cooldowns (PR 8)
-- [ ] **v2:** Invalid cell red flash (PR 8)
 
 ---
 
 ## 18. Implementation Status
 
-### v1 — in code
+### Shipped (v1 + v2)
 
-Engine, VFX, Monaco input, persistence, share, GA4 — see ARCHITECTURE §24.
+Engine, VFX, click input, cooldowns, interactive tutorial modal, persistence, share, GA4 — see ARCHITECTURE §24.
 
-### v2 — specified in docs, **not in code**
+| Work item                                         | Status |
+| ------------------------------------------------- | ------ |
+| Click-based Move / Attack / Shield + grid preview | ✅     |
+| Submit button flow                                | ✅     |
+| Invalid cell red flash                            | ✅     |
+| `attackCooldown` / `shieldCooldown` on `Bot`      | ✅     |
+| Cleanup cooldown tick + 2-turn lockout            | ✅     |
+| Opponent AI respects cooldowns                    | ✅     |
+| `TurnInput` removed from player UI                | ✅     |
+| Persist cooldowns in `SimulationSave`             | ✅     |
+| Interactive tutorial modal (watch + practice)     | ✅     |
 
-| Work item                                         | PR   |
-| ------------------------------------------------- | ---- |
-| Click-based Move / Attack / Shield + grid preview | PR 8 |
-| Submit button flow                                | PR 8 |
-| Invalid cell red flash                            | PR 8 |
-| `attackCooldown` / `shieldCooldown` on `Bot`      | PR 8 |
-| Cleanup cooldown tick + 2-turn lockout            | PR 8 |
-| Opponent AI respects cooldowns                    | PR 8 |
-| Remove TurnInput from player UI                   | PR 8 |
-| Persist cooldowns in `SimulationSave`             | PR 8 |
+### Deprecated (retained for tests)
 
-**Next step:** implement PR 8 when approved.
+| Work item                | Status                                        |
+| ------------------------ | --------------------------------------------- |
+| Monaco `TurnInput` in UI | Removed — parser in `instructionLanguage.tsx` |
 
 ---
 

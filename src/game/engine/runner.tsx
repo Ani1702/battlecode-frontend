@@ -20,6 +20,8 @@ export function createInitialState(config: SimulationConfig): GameState {
       col: config.playerStart.col,
       lives: STARTING_LIVES,
       shieldActive: false,
+      attackCooldown: 0,
+      shieldCooldown: 0,
     },
     opponent: {
       id: "opponent",
@@ -27,6 +29,8 @@ export function createInitialState(config: SimulationConfig): GameState {
       col: config.opponentStart.col,
       lives: STARTING_LIVES,
       shieldActive: false,
+      attackCooldown: 0,
+      shieldCooldown: 0,
     },
   };
 }

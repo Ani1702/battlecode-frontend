@@ -1,4 +1,9 @@
 import { detectHeadOnClash, getBeamPath } from "./beam";
+import {
+  ATTACK_COOLDOWN_TURNS,
+  isInstructionAllowed,
+  SHIELD_COOLDOWN_TURNS,
+} from "./constants";
 import { cloneGameState } from "./opponent";
 import { offsetPosition, positionsEqual } from "./grid";
 import type {
@@ -215,9 +220,38 @@ function applyAttack(
   events.push({ type: "DAMAGE", bot: target.id, blockedByShield: false });
 }
 
-function applyCleanup(state: GameState, events: GameEvent[]): void {
+function applyCleanup(
+  state: GameState,
+  playerInstruction: Instruction,
+  opponentInstruction: Instruction,
+  events: GameEvent[],
+): void {
   state.player.shieldActive = false;
   state.opponent.shieldActive = false;
+
+  state.player.attackCooldown = Math.max(0, state.player.attackCooldown - 1);
+  state.player.shieldCooldown = Math.max(0, state.player.shieldCooldown - 1);
+  state.opponent.attackCooldown = Math.max(
+    0,
+    state.opponent.attackCooldown - 1,
+  );
+  state.opponent.shieldCooldown = Math.max(
+    0,
+    state.opponent.shieldCooldown - 1,
+  );
+
+  if (playerInstruction.type === "ATTACK") {
+    state.player.attackCooldown = ATTACK_COOLDOWN_TURNS;
+  } else if (playerInstruction.type === "SHIELD") {
+    state.player.shieldCooldown = SHIELD_COOLDOWN_TURNS;
+  }
+
+  if (opponentInstruction.type === "ATTACK") {
+    state.opponent.attackCooldown = ATTACK_COOLDOWN_TURNS;
+  } else if (opponentInstruction.type === "SHIELD") {
+    state.opponent.shieldCooldown = SHIELD_COOLDOWN_TURNS;
+  }
+
   state.cycle += 1;
   events.push({ type: "CYCLE_END", cycle: state.cycle });
 }
@@ -244,6 +278,14 @@ export function resolveCycle(
   opponentInstruction: Instruction,
   maxCycles: number,
 ): ResolveCycleResult {
+  if (!isInstructionAllowed(state.player, playerInstruction)) {
+    throw new Error("Player instruction not allowed (cooldown)");
+  }
+
+  if (!isInstructionAllowed(state.opponent, opponentInstruction)) {
+    throw new Error("Opponent instruction not allowed (cooldown)");
+  }
+
   const nextState = cloneGameState(state);
   const events: GameEvent[] = [];
   const beamPaths: BeamPath[] = [];
@@ -257,7 +299,7 @@ export function resolveCycle(
     events,
     beamPaths,
   );
-  applyCleanup(nextState, events);
+  applyCleanup(nextState, playerInstruction, opponentInstruction, events);
 
   return {
     nextState,

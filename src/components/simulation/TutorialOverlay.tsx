@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import TutorialSandbox from "./TutorialSandbox";
 import { TUTORIAL_STEPS } from "./tutorialSteps";
 
 export default function TutorialOverlay({
@@ -11,10 +12,17 @@ export default function TutorialOverlay({
   onSkip: () => void;
 }) {
   const [stepIndex, setStepIndex] = useState(0);
+  const [runToken, setRunToken] = useState(0);
   const step = TUTORIAL_STEPS[stepIndex];
   const isLastStep = stepIndex === TUTORIAL_STEPS.length - 1;
 
+  const cancelRunningDemo = useCallback(() => {
+    setRunToken((current) => current + 1);
+  }, []);
+
   const handleNext = () => {
+    cancelRunningDemo();
+
     if (isLastStep) {
       onComplete();
       return;
@@ -23,47 +31,64 @@ export default function TutorialOverlay({
     setStepIndex((current) => current + 1);
   };
 
+  const handleSkip = () => {
+    cancelRunningDemo();
+    onSkip();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      <div className="glass-box w-full max-w-lg rounded-lg p-6">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <p className="text-xs uppercase tracking-wider text-white/50">
-            Tutorial {stepIndex + 1}/{TUTORIAL_STEPS.length}
+      <div className="glass-box flex max-h-[min(640px,92vh)] w-full max-w-md flex-col overflow-hidden rounded-xl shadow-2xl">
+        <div className="shrink-0 border-b border-white/10 px-4 py-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-[0.65rem] uppercase tracking-wider text-white/50">
+              Tutorial {stepIndex + 1}/{TUTORIAL_STEPS.length}
+            </p>
+            <button
+              type="button"
+              onClick={handleSkip}
+              className="text-[0.65rem] uppercase tracking-wider text-white/55 transition hover:text-white"
+            >
+              Skip
+            </button>
+          </div>
+
+          <h2 className="orbitron text-lg leading-tight">{step.title}</h2>
+          <p className="mt-2 text-xs leading-relaxed text-white/75">
+            {step.body}
           </p>
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-sm uppercase tracking-wider text-white/60 hover:text-white"
-          >
-            Skip
-          </button>
         </div>
 
-        <h2 className="orbitron text-2xl">{step.title}</h2>
-        <p className="mt-4 text-white/80">{step.body}</p>
-        {step.hint ? (
-          <p className="mt-4 font-mono text-sm text-orange-300">{step.hint}</p>
-        ) : null}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={handleNext}
-            className="gradient-border-button px-6 py-2 text-sm uppercase tracking-wider"
-          >
-            {isLastStep ? "Start" : "Next"}
-          </button>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <TutorialSandbox
+            key={`${stepIndex}-${runToken}`}
+            step={step}
+            runToken={runToken}
+            compact
+          />
         </div>
 
-        <div className="mt-6 flex justify-center gap-2">
-          {TUTORIAL_STEPS.map((_, index) => (
-            <span
-              key={index}
-              className={`h-2 w-2 rounded-full ${
-                index === stepIndex ? "bg-orange-400" : "bg-white/20"
-              }`}
-            />
-          ))}
+        <div className="shrink-0 border-t border-white/10 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex gap-1.5">
+              {TUTORIAL_STEPS.map((_, index) => (
+                <span
+                  key={index}
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    index === stepIndex ? "bg-orange-400" : "bg-white/20"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleNext}
+              className="gradient-border-button px-5 py-1.5 text-xs uppercase tracking-wider"
+            >
+              {isLastStep ? "Start game" : "Next"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

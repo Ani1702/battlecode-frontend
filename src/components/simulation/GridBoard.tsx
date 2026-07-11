@@ -1,5 +1,5 @@
 import { getCols } from "@/game/engine/grid";
-import type { BotId, GameState, Grid } from "@/game/engine/types";
+import type { BotId, GameState, Grid, Position } from "@/game/engine/types";
 import BotMarker, { getBotCellPosition, getBotMoveTween } from "./BotMarker";
 import CombatVfxLayer from "./CombatVfxLayer";
 import GridCell from "./GridCell";
@@ -18,6 +18,22 @@ function botAtCell(
   return botRow === row && botCol === col;
 }
 
+function isPreviewCell(
+  previewCells: Position[],
+  row: number,
+  col: number,
+): boolean {
+  return previewCells.some((cell) => cell.row === row && cell.col === col);
+}
+
+function isInvalidFlashCell(
+  cell: Position | null,
+  row: number,
+  col: number,
+): boolean {
+  return cell !== null && cell.row === row && cell.col === col;
+}
+
 export default function GridBoard({
   state,
   combatVfx = null,
@@ -27,6 +43,13 @@ export default function GridBoard({
   beamProgress = 0,
   fadeOpacity = 1,
   vfxPulse = 0,
+  previewCells = [],
+  invalidFlashCell = null,
+  shieldPreview = false,
+  interactionEnabled = false,
+  compact = false,
+  showLegend = true,
+  onCellClick,
 }: {
   state: GameState;
   combatVfx?: CombatVfxPayload | null;
@@ -36,6 +59,13 @@ export default function GridBoard({
   beamProgress?: number;
   fadeOpacity?: number;
   vfxPulse?: number;
+  previewCells?: Position[];
+  invalidFlashCell?: Position | null;
+  shieldPreview?: boolean;
+  interactionEnabled?: boolean;
+  compact?: boolean;
+  showLegend?: boolean;
+  onCellClick?: (cell: Position) => void;
 }) {
   const { grid, player, opponent } = state;
   const cols = getCols(grid);
@@ -46,10 +76,25 @@ export default function GridBoard({
   const opponentCell = getBotCellPosition(opponent, opponentTween);
 
   return (
-    <div className="glass-box w-full rounded-lg p-3 md:p-4">
-      <div className="relative mx-auto w-full max-w-md">
+    <div
+      className={[
+        compact
+          ? "w-full rounded-md bg-white/[0.04] p-1.5"
+          : "glass-box w-full rounded-lg p-3 md:p-4",
+      ].join(" ")}
+    >
+      <div
+        className={
+          compact
+            ? "relative mx-auto w-full max-w-[200px]"
+            : "relative mx-auto w-full max-w-md"
+        }
+      >
         <div
-          className="sim-grid w-full"
+          className={[
+            "sim-grid w-full",
+            compact ? "sim-grid--compact" : "",
+          ].join(" ")}
           style={{
             gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
           }}
@@ -68,18 +113,40 @@ export default function GridBoard({
                 rowIndex,
                 colIndex,
               );
+              const isPreview = isPreviewCell(previewCells, rowIndex, colIndex);
+              const isShieldPreview = shieldPreview && hasPlayer;
+              const isInvalidFlash = isInvalidFlashCell(
+                invalidFlashCell,
+                rowIndex,
+                colIndex,
+              );
 
               return (
-                <div
+                <button
                   key={`${rowIndex}-${colIndex}`}
-                  className="relative overflow-visible"
+                  type="button"
+                  disabled={!interactionEnabled}
+                  onClick={() =>
+                    onCellClick?.({ row: rowIndex, col: colIndex })
+                  }
+                  className={[
+                    "relative overflow-visible border-0 bg-transparent p-0",
+                    interactionEnabled ? "cursor-pointer" : "cursor-default",
+                  ].join(" ")}
+                  aria-label={`Cell ${rowIndex}, ${colIndex}`}
                 >
-                  <GridCell tile={tile} />
+                  <GridCell
+                    tile={tile}
+                    isPreview={isPreview}
+                    isShieldPreview={isShieldPreview}
+                    isInvalidFlash={isInvalidFlash}
+                  />
                   {hasPlayer ? (
                     <BotMarker
                       bot={player}
                       moveTween={playerTween}
                       hitFlash={hitFlashBot === "player"}
+                      compact={compact}
                     />
                   ) : null}
                   {hasOpponent ? (
@@ -87,9 +154,10 @@ export default function GridBoard({
                       bot={opponent}
                       moveTween={opponentTween}
                       hitFlash={hitFlashBot === "opponent"}
+                      compact={compact}
                     />
                   ) : null}
-                </div>
+                </button>
               );
             }),
           )}
@@ -105,11 +173,18 @@ export default function GridBoard({
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-4 text-xs text-white/50">
-        <span className="flex items-center gap-2">
-          <span className="sim-legend sim-legend--wall" /> Wall
-        </span>
-      </div>
+      {showLegend ? (
+        <div
+          className={[
+            "flex flex-wrap gap-4 text-xs text-white/50",
+            compact ? "mt-1.5 justify-center" : "mt-3",
+          ].join(" ")}
+        >
+          <span className="flex items-center gap-2">
+            <span className="sim-legend sim-legend--wall" /> Wall
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

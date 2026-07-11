@@ -17,6 +17,8 @@ export interface Bot {
   col: number;
   lives: 0 | 1 | 2;
   shieldActive: boolean;
+  attackCooldown: number;
+  shieldCooldown: number;
 }
 
 export type Instruction =

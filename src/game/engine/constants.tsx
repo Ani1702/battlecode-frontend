@@ -1,4 +1,27 @@
-import type { Direction, Instruction } from "./types";
+import type { Bot, Direction, Instruction } from "./types";
+
+export function canUseAction(bot: Bot, action: "ATTACK" | "SHIELD"): boolean {
+  if (action === "ATTACK") {
+    return bot.attackCooldown <= 0;
+  }
+
+  return bot.shieldCooldown <= 0;
+}
+
+export function isInstructionAllowed(
+  bot: Bot,
+  instruction: Instruction,
+): boolean {
+  if (instruction.type === "ATTACK") {
+    return canUseAction(bot, "ATTACK");
+  }
+
+  if (instruction.type === "SHIELD") {
+    return canUseAction(bot, "SHIELD");
+  }
+
+  return true;
+}
 
 export const STARTING_LIVES = 2 as const;
 
@@ -11,6 +34,11 @@ export const ATTACK_CHARGE_MS = 80;
 export const BEAM_TRAVEL_MS = 120;
 export const COMBAT_HOLD_MS = 450;
 export const BEAM_FADE_MS = 100;
+
+export const ATTACK_COOLDOWN_TURNS = 2;
+export const SHIELD_COOLDOWN_TURNS = 2;
+
+export const INVALID_CELL_FLASH_MS = 250;
 
 /** @deprecated Use getCycleAnimationDurationMs */
 export const BEAM_ANIMATION_MS =

@@ -195,25 +195,23 @@ const Hero = () => {
 
           <div className="relative "></div>
 
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <button
-              onClick={handleAuthClick}
-              disabled={isLoading}
-              className="hidden lg:block relative gradient-border-button text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md"
-            >
-              {isLoading
-                ? "LOADING..."
-                : user
-                  ? "DASHBOARD"
-                  : "SIGN IN WITH GOOGLE"}
-            </button>
-            <Link
-              href="/simulations"
-              className="relative gradient-border-button px-8 py-3 text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md"
-            >
-              Play Minigame
-            </Link>
-          </div>
+          {/*<button
+            onClick={handleAuthClick}
+            disabled={isLoading}
+            className="hidden lg:block relative gradient-border-button text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md mt-8"
+          >
+            {isLoading
+              ? "LOADING..."
+              : user
+                ? "DASHBOARD"
+                : "SIGN IN WITH GOOGLE"}
+          </button>*/}
+          <button
+            onClick={() => router.push("/simulations")}
+            className="relative gradient-border-button text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md mt-8"
+          >
+            Play Minigame
+          </button>
         </div>
 
         <div className="w-[27rem] quote   flex relative bottom-50 lg:bottom-8 z-10 left-1/2 transform -translate-x-1/2 justify-center">

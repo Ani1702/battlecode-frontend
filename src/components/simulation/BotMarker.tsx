@@ -16,10 +16,12 @@ export default function BotMarker({
   bot,
   moveTween,
   hitFlash = false,
+  compact = false,
 }: {
   bot: Bot;
   moveTween?: MoveTween;
   hitFlash?: boolean;
+  compact?: boolean;
 }) {
   if (bot.lives <= 0) {
     return null;
@@ -47,11 +49,24 @@ export default function BotMarker({
           .join(" ")}
         aria-label={bot.id === "player" ? "Player bot" : "Opponent bot"}
       >
-        <span className="text-[0.5rem] font-bold leading-none tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] sm:text-[0.6rem]">
+        <span
+          className={
+            compact
+              ? "text-[0.4rem] font-bold leading-none tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+              : "text-[0.5rem] font-bold leading-none tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] sm:text-[0.6rem]"
+          }
+        >
           {label}
         </span>
       </div>
-      <div className="mt-0.5 flex gap-px text-[0.45rem] leading-none sm:text-[0.55rem]">
+      <div
+        className={[
+          "flex gap-px leading-none",
+          compact
+            ? "mt-px text-[0.35rem]"
+            : "mt-0.5 text-[0.45rem] sm:text-[0.55rem]",
+        ].join(" ")}
+      >
         {renderHearts(bot.lives)}
       </div>
     </div>
