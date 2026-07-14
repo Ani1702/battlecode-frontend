@@ -16,6 +16,10 @@ export function instructionToString(instruction: Instruction): string {
     return "SHIELD()";
   }
 
+  if (instruction.type === "WAIT") {
+    return "WAIT()";
+  }
+
   return `${instruction.type}(${instruction.direction})`;
 }
 
