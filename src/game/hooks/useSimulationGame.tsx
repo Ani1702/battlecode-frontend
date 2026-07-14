@@ -15,9 +15,11 @@ import {
   type ActionMode,
   getPreviewCellsForSelection,
   instructionFromSelection,
+  isPlayerBotCell,
   isValidAttackCell,
   isValidMoveCell,
 } from "../engine/actionSelection";
+import { positionsEqual } from "../engine/grid";
 import { instructionToString } from "../engine/parser";
 import { step } from "../engine/runner";
 import { ACTIVE_SIMULATION } from "../simulations/active";
@@ -418,48 +420,13 @@ export function useSimulationGame() {
     [phase, gameState],
   );
 
-  const handleCellClick = useCallback(
-    (cell: Position) => {
-      if (phase !== "playing" || !gameState || !actionMode) {
-        return;
-      }
-
-      if (actionMode === "shield") {
-        return;
-      }
-
-      if (actionMode === "move") {
-        if (!isValidMoveCell(gameState, cell)) {
-          triggerInvalidFlash(cell);
-          return;
-        }
-
-        setSelectedCell(cell);
-        setPreviewCells(getPreviewCellsForSelection("move", gameState, cell));
-        return;
-      }
-
-      if (!isValidAttackCell(gameState, cell)) {
-        triggerInvalidFlash(cell);
-        return;
-      }
-
-      setSelectedCell(cell);
-      setPreviewCells(getPreviewCellsForSelection("attack", gameState, cell));
-    },
-    [phase, gameState, actionMode, triggerInvalidFlash],
-  );
-
   const pendingInstruction: Instruction | null =
     actionMode && gameState
       ? instructionFromSelection(actionMode, gameState, selectedCell)
       : null;
 
-  const canSubmit =
-    phase === "playing" &&
-    pendingInstruction !== null &&
-    ((actionMode !== "move" && actionMode !== "attack") ||
-      selectedCell !== null);
+  const confirmReady =
+    (actionMode === "move" || actionMode === "attack") && selectedCell !== null;
 
   const submitSelection = useCallback(() => {
     if (phase !== "playing" || !gameState || !save || !pendingInstruction) {
@@ -480,6 +447,80 @@ export function useSimulationGame() {
     setFadeOpacity(1);
     setPhase("animating");
   }, [phase, gameState, save, pendingInstruction, config, clearSelection]);
+
+  const handleCellClick = useCallback(
+    (cell: Position) => {
+      if (phase !== "playing" || !gameState || !actionMode) {
+        return;
+      }
+
+      if (actionMode === "shield") {
+        if (isPlayerBotCell(gameState, cell)) {
+          submitSelection();
+          return;
+        }
+
+        triggerInvalidFlash(cell);
+        return;
+      }
+
+      if (actionMode === "move") {
+        if (!isValidMoveCell(gameState, cell)) {
+          triggerInvalidFlash(cell);
+          return;
+        }
+
+        if (selectedCell && positionsEqual(selectedCell, cell)) {
+          submitSelection();
+          return;
+        }
+
+        setSelectedCell(cell);
+        setPreviewCells(getPreviewCellsForSelection("move", gameState, cell));
+        return;
+      }
+
+      if (!isValidAttackCell(gameState, cell)) {
+        triggerInvalidFlash(cell);
+        return;
+      }
+
+      if (selectedCell && positionsEqual(selectedCell, cell)) {
+        submitSelection();
+        return;
+      }
+
+      setSelectedCell(cell);
+      setPreviewCells(getPreviewCellsForSelection("attack", gameState, cell));
+    },
+    [
+      phase,
+      gameState,
+      actionMode,
+      selectedCell,
+      triggerInvalidFlash,
+      submitSelection,
+    ],
+  );
+
+  const handleSelectShield = useCallback(() => {
+    if (phase !== "playing" || !gameState) {
+      return;
+    }
+
+    if (!canUseAction(gameState.player, "SHIELD")) {
+      return;
+    }
+
+    if (actionMode === "shield") {
+      return;
+    }
+
+    setActionModeState("shield");
+    setSelectedCell(null);
+    setInvalidFlashCell(null);
+    setPreviewCells(getPreviewCellsForSelection("shield", gameState, null));
+  }, [phase, gameState, actionMode]);
 
   const retryAfterLoss = useCallback(() => {
     if (!save || save.attemptsRemaining <= 0) {
@@ -543,10 +584,10 @@ export function useSimulationGame() {
     actionMode,
     previewCells,
     invalidFlashCell,
-    canSubmit,
+    confirmReady,
     setActionMode,
     handleCellClick,
-    submitSelection,
+    handleSelectShield,
     retryAfterLoss,
     completeTutorial,
     skipTutorial,

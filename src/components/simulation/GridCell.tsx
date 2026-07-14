@@ -5,11 +5,15 @@ export default function GridCell({
   isPreview = false,
   isShieldPreview = false,
   isInvalidFlash = false,
+  isHint = false,
+  isHintConfirm = false,
 }: {
   tile: Tile;
   isPreview?: boolean;
   isShieldPreview?: boolean;
   isInvalidFlash?: boolean;
+  isHint?: boolean;
+  isHintConfirm?: boolean;
 }) {
   return (
     <div
@@ -19,6 +23,8 @@ export default function GridCell({
         isPreview ? "sim-grid-cell--preview" : "",
         isShieldPreview ? "sim-grid-cell--shield-preview" : "",
         isInvalidFlash ? "sim-grid-cell--invalid-flash" : "",
+        isHint && !isPreview ? "sim-grid-cell--hint" : "",
+        isHint && isHintConfirm ? "sim-grid-cell--hint-confirm" : "",
       ].join(" ")}
     />
   );

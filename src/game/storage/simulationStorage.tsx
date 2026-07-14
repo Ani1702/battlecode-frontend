@@ -109,6 +109,11 @@ export function resetStorageForTests(): void {
   getStorage().removeItem(STORAGE_KEY);
 }
 
+/** Clears all simulation localStorage (save + tutorial flag). Dev / tests only. */
+export function clearSimulationStorage(): void {
+  resetStorageForTests();
+}
+
 /** Dev-only helper for corrupt storage tests */
 export function setRawStorageForTests(raw: string | null): void {
   if (raw === null) {

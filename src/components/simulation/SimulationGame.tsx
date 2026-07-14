@@ -4,11 +4,9 @@ import ActionPanel from "./ActionPanel";
 import AttemptsBadge from "./AttemptsBadge";
 import ExhaustedView from "./ExhaustedView";
 import GridBoard from "./GridBoard";
-import LivesHud from "./LivesHud";
 import OpponentMoveReveal from "./OpponentMoveReveal";
 import ShareCard from "./ShareCard";
 import SimulationLayout from "./SimulationLayout";
-import StaticCommander from "./StaticCommander";
 import TutorialOverlay from "./TutorialOverlay";
 import { useSimulationGame } from "@/game/hooks/useSimulationGame";
 
@@ -30,10 +28,10 @@ export default function SimulationGame() {
     actionMode,
     previewCells,
     invalidFlashCell,
-    canSubmit,
+    confirmReady,
     setActionMode,
     handleCellClick,
-    submitSelection,
+    handleSelectShield,
     retryAfterLoss,
     completeTutorial,
     skipTutorial,
@@ -42,6 +40,8 @@ export default function SimulationGame() {
   const controlsDisabled = phase !== "playing";
   const showPlayingBoard =
     (phase === "playing" || phase === "animating") && gameState;
+  const isEndScreen =
+    phase === "won" || phase === "lost" || phase === "exhausted";
 
   if (phase === "loading" || !save) {
     return (
@@ -62,18 +62,23 @@ export default function SimulationGame() {
   }
 
   return (
-    <SimulationLayout>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="orbitron text-2xl">BattleCode Simulation</h1>
-          <p className="mt-1 text-sm text-white/60">{config.id}</p>
+    <SimulationLayout compact={isEndScreen}>
+      {!isEndScreen ? (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="orbitron text-2xl">BattleCode Simulation</h1>
+            <p className="mt-1 text-sm text-white/60">{config.id}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {showPlayingBoard ? (
+              <AttemptsBadge
+                attemptsRemaining={save.attemptsRemaining}
+                cycle={gameState.cycle}
+              />
+            ) : null}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {showPlayingBoard ? (
-            <AttemptsBadge attemptsRemaining={save.attemptsRemaining} />
-          ) : null}
-        </div>
-      </div>
+      ) : null}
 
       {showPlayingBoard ? (
         <div className="flex flex-1 flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-6">
@@ -94,19 +99,16 @@ export default function SimulationGame() {
           />
 
           <div className="flex flex-col gap-4">
-            <StaticCommander />
-            <LivesHud cycle={gameState.cycle} />
             <OpponentMoveReveal instructionLabel={opponentInstructionLabel} />
             <ActionPanel
               actionMode={actionMode}
               attackCooldown={gameState.player.attackCooldown}
               shieldCooldown={gameState.player.shieldCooldown}
-              canSubmit={canSubmit}
+              confirmReady={confirmReady}
               disabled={controlsDisabled}
               onSelectMove={() => setActionMode("move")}
               onSelectAttack={() => setActionMode("attack")}
-              onSelectShield={() => setActionMode("shield")}
-              onSubmit={submitSelection}
+              onSelectShield={handleSelectShield}
             />
             {isAnimating ? (
               <p className="text-xs uppercase tracking-wider text-orange-300/80">

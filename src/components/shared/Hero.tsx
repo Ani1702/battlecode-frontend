@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState, useCallback } from "react";
@@ -81,7 +80,7 @@ const Hero = () => {
         )}
 
         <div className="hud">
-          <div className="absolute topHUD left-0 top-50 lg:top-2 h-[6rem] w-full flex items-center justify-center">
+          <div className="absolute topHUD left-0 top-2 h-[4rem] w-full flex items-center justify-center sm:h-[5rem] lg:h-[6rem]">
             <div className="text-white h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 tracking-wider">
               IEEE COMPUTER SOCIETY
             </div>
@@ -107,125 +106,110 @@ const Hero = () => {
           </div>
         </div>
 
-        <div className="containerContent flex flex-col items-center justify-center h-full ">
-          <div className="flex items-center justify-center h-[20%]">
-            <div className="z-1 absolute jusify-items items-center flex drop-shadow-[0_px_4px_#000]">
-              <h1 className="text-4xl lg:text-8xl z-1 tracking-wide px-8 font-medium stickyMask text-shadow-heading">
-                BATTLECODE
-              </h1>
-              <h1 className="text-5xl lg:text-8xl text-blur tracking-wide font-medium blur-sm absolute">
-                BATTLECODE
-              </h1>
+        <div className="containerContent flex h-full flex-col items-center justify-between px-6 pb-10 pt-24 sm:px-8 lg:justify-center lg:pb-0 lg:pt-0">
+          <div className="flex w-full max-w-lg flex-col items-center gap-5 lg:gap-6">
+            <div className="relative flex w-full items-center justify-center">
+              <div className="z-1 relative flex items-center drop-shadow-[0_4px_4px_#000]">
+                <h1 className="stickyMask text-shadow-heading z-1 px-2 text-[2.75rem] font-medium tracking-wide sm:text-5xl lg:text-8xl">
+                  BATTLECODE
+                </h1>
+                <h1 className="text-blur absolute text-[2.75rem] font-medium tracking-wide blur-sm sm:text-5xl lg:text-8xl">
+                  BATTLECODE
+                </h1>
+              </div>
+              <div className="absolute flex blur-3xl mix-blend-color-dodge">
+                <h1 className="stickyMask text-shadow-heading z-1 text-[2.75rem] font-medium tracking-wider sm:text-5xl lg:text-8xl">
+                  BATTLECODE
+                </h1>
+                <h1 className="text-blur absolute text-[2.75rem] font-medium tracking-wider blur-md sm:text-5xl lg:text-8xl">
+                  BATTLECODE
+                </h1>
+              </div>
             </div>
-            <div className="flex absolute blur-3xl mix-blend-color-dodge">
-              <h1 className="text-5xl lg:text-8xl z-1 tracking-wider font-medium stickyMask text-shadow-heading">
-                BATTLECODE
-              </h1>
-              <h1 className="text-5xl lg:text-8xl text-blur tracking-wider font-medium blur-md absolute">
-                BATTLECODE
-              </h1>
+
+            <div className="relative flex items-center justify-center">
+              <span className="stickyMask text-shadow-heading flex items-center gap-[0.05em] text-xl font-medium uppercase sm:text-2xl lg:text-[2.75rem]">
+                .Powered&nbsp;by&nbsp;Judge
+              </span>
+
+              <svg
+                opacity={0.7}
+                viewBox="0 0 60 90"
+                xmlns="http://www.w3.org/2000/svg"
+                className="judge-zero inline-block h-[1.25rem] w-auto sm:h-[1.5rem] lg:h-[2.75rem]"
+                aria-hidden
+              >
+                <defs>
+                  <linearGradient
+                    id="judgeZeroGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor="#FDBA74" />
+                    <stop offset="55%" stopColor="#F97316" />
+                    <stop offset="100%" stopColor="#C2410C" />
+                  </linearGradient>
+
+                  <mask id="judgeZeroNoise">
+                    <rect width="100%" height="100%" fill="white" />
+                    <image
+                      href="/mask.svg"
+                      width="140"
+                      height="140"
+                      preserveAspectRatio="xMidYMid slice"
+                      opacity="0.55"
+                    />
+                  </mask>
+                </defs>
+
+                {/* outer zero – slimmer */}
+                <rect
+                  x="14"
+                  y="4"
+                  width="32"
+                  height="82"
+                  rx="10"
+                  fill="url(#judgeZeroGradient)"
+                  mask="url(#judgeZeroNoise)"
+                />
+
+                {/* inner cutout */}
+                <rect
+                  x="19"
+                  y="12"
+                  width="22"
+                  height="66"
+                  rx="7"
+                  fill="black"
+                />
+
+                {/* center dot */}
+                <circle
+                  cx="30"
+                  cy="45"
+                  r="4"
+                  fill="url(#judgeZeroGradient)"
+                  mask="url(#judgeZeroNoise)"
+                />
+              </svg>
             </div>
-          </div>
-          <div className="relative mt-4 flex items-center justify-center">
-            <span
-              className="uppercase font-medium
-      text-[2.2rem] lg:text-[2.75rem]
-      stickyMask text-shadow-heading
-      flex items-center gap-[0.05em]"
+
+            <button
+              onClick={() => router.push("/simulations")}
+              className="gradient-border-button relative mt-1 px-8 py-3 text-sm font-medium uppercase tracking-wider text-white duration-[350ms] ease-out hover:tracking-widest lg:text-md"
             >
-              .Powered&nbsp;by&nbsp;Judge
-            </span>
-
-            <svg
-              opacity={0.7}
-              viewBox="0 0 60 90"
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-[2.2rem] lg:h-[2.75rem] w-auto inline-block judge-zero"
-              aria-hidden
-            >
-              <defs>
-                <linearGradient
-                  id="judgeZeroGradient"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="0%" stopColor="#FDBA74" />
-                  <stop offset="55%" stopColor="#F97316" />
-                  <stop offset="100%" stopColor="#C2410C" />
-                </linearGradient>
-
-                <mask id="judgeZeroNoise">
-                  <rect width="100%" height="100%" fill="white" />
-                  <image
-                    href="/mask.svg"
-                    width="140"
-                    height="140"
-                    preserveAspectRatio="xMidYMid slice"
-                    opacity="0.55"
-                  />
-                </mask>
-              </defs>
-
-              {/* outer zero – slimmer */}
-              <rect
-                x="14"
-                y="4"
-                width="32"
-                height="82"
-                rx="10"
-                fill="url(#judgeZeroGradient)"
-                mask="url(#judgeZeroNoise)"
-              />
-
-              {/* inner cutout */}
-              <rect x="19" y="12" width="22" height="66" rx="7" fill="black" />
-
-              {/* center dot */}
-              <circle
-                cx="30"
-                cy="45"
-                r="4"
-                fill="url(#judgeZeroGradient)"
-                mask="url(#judgeZeroNoise)"
-              />
-            </svg>
+              Play Minigame
+            </button>
           </div>
 
-          <div className="relative "></div>
-
-          {/*<button
-            onClick={handleAuthClick}
-            disabled={isLoading}
-            className="hidden lg:block relative gradient-border-button text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md mt-8"
-          >
-            {isLoading
-              ? "LOADING..."
-              : user
-                ? "DASHBOARD"
-                : "SIGN IN WITH GOOGLE"}
-          </button>*/}
-          <button
-            onClick={() => router.push("/simulations")}
-            className="relative gradient-border-button text-white uppercase tracking-wider hover:tracking-widest duration-[350ms] ease-out font-medium text-md mt-8"
-          >
-            Play Minigame
-          </button>
-        </div>
-
-        <div className="w-[27rem] quote   flex relative bottom-50 lg:bottom-8 z-10 left-1/2 transform -translate-x-1/2 justify-center">
-          <p className="z-1 text-center uppercase text-white tracking-[4px] absolute bottom-[5rem] text-[0.80rem] lg:text-[0.80rem] px-8 lg:px-0">
-            This is more than just programming—it&apos;s precision under
-            pressure. Enter the match with intent. Exit with impact.
-          </p>
-          <p className="text-center uppercase text-white tracking-[4px] absolute bottom-[5rem] blur-md text-[0.85rem]">
-            This is more than just programming—it&apos;s precision under
-            pressure. Enter the match with intent. Exit with impact.
-          </p>
-        </div>
-        <div className="sm:hidden justify-center text-white flex relative bottom-42 lg:bottom-8 z-10 left-1/2 transform -translate-x-1/2 text-center text-white text-sm lg:text-md font-medium ">
-          Please Open on Laptop
+          <div className="relative w-full max-w-md px-2 lg:absolute lg:bottom-8 lg:left-1/2 lg:max-w-lg lg:-translate-x-1/2 lg:px-0">
+            <p className="text-shadow-heading text-center text-[0.65rem] uppercase leading-relaxed tracking-[2px] text-white sm:text-[0.7rem] sm:tracking-[3px] lg:text-[0.8rem] lg:tracking-[4px]">
+              This is more than just programming—it&apos;s precision under
+              pressure. Enter the match with intent. Exit with impact.
+            </p>
+          </div>
         </div>
       </div>
     </div>

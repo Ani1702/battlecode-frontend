@@ -24,7 +24,8 @@ export interface Bot {
 export type Instruction =
   | { type: "MOVE"; direction: Direction }
   | { type: "ATTACK"; direction: Direction }
-  | { type: "SHIELD" };
+  | { type: "SHIELD" }
+  | { type: "WAIT" };
 
 export interface SimulationConfig {
   id: string;

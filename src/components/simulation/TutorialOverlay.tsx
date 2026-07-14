@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import TutorialSandbox from "./TutorialSandbox";
 import { TUTORIAL_STEPS } from "./tutorialSteps";
 
@@ -13,8 +13,17 @@ export default function TutorialOverlay({
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [runToken, setRunToken] = useState(0);
+  const [practiceHelperText, setPracticeHelperText] = useState<string | null>(
+    null,
+  );
   const step = TUTORIAL_STEPS[stepIndex];
   const isLastStep = stepIndex === TUTORIAL_STEPS.length - 1;
+
+  useEffect(() => {
+    setPracticeHelperText(
+      step.type === "practice" ? (step.helperText ?? null) : null,
+    );
+  }, [stepIndex, step.type, step.helperText]);
 
   const cancelRunningDemo = useCallback(() => {
     setRunToken((current) => current + 1);
@@ -57,6 +66,11 @@ export default function TutorialOverlay({
           <p className="mt-2 text-xs leading-relaxed text-white/75">
             {step.body}
           </p>
+          {step.type === "practice" && practiceHelperText ? (
+            <p className="mt-1 text-xs leading-relaxed text-white/55">
+              {practiceHelperText}
+            </p>
+          ) : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -65,6 +79,10 @@ export default function TutorialOverlay({
             step={step}
             runToken={runToken}
             compact
+            onPracticeComplete={
+              step.type === "practice" ? handleNext : undefined
+            }
+            onHelperTextChange={setPracticeHelperText}
           />
         </div>
 

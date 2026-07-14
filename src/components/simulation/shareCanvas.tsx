@@ -8,6 +8,8 @@ export interface ShareCanvasOptions {
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const LOGO_PATH = "/simulation/battlecode-logo.png";
+const QR_PATH = "/battlecode_qr_nobg.png";
+const QR_FALLBACK_PATH = "/battlecode_qr.png";
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
@@ -100,7 +102,21 @@ export async function renderShareCanvas(
 
   ctx.fillStyle = "#FDBA74";
   ctx.font = "40px Oxanium, sans-serif";
-  ctx.fillText(`BattleCode on ${options.shareEventDate}`, WIDTH / 2, 1660);
+  ctx.fillText(`BattleCode on ${options.shareEventDate}`, WIDTH / 2, 1580);
+
+  const qr = (await loadImage(QR_PATH)) ?? (await loadImage(QR_FALLBACK_PATH));
+  if (qr) {
+    const qrSize = 220;
+    const qrX = (WIDTH - qrSize) / 2;
+    const qrY = 1180;
+
+    ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
+
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.font = "32px Oxanium, sans-serif";
+    ctx.fillText("Scan to play", WIDTH / 2, qrY + qrSize + 56);
+    ctx.fillText("@ieeecs_vit", WIDTH / 2, qrY + qrSize + 104);
+  }
 
   return canvas;
 }

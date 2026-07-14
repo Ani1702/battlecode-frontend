@@ -5,6 +5,7 @@ import {
   type ActionMode,
   getPreviewCellsForSelection,
   instructionFromSelection,
+  isPlayerBotCell,
   isValidAttackCell,
   isValidMoveCell,
 } from "@/game/engine/actionSelection";
@@ -13,6 +14,7 @@ import {
   getClashPoint,
 } from "@/game/engine/combatScenario";
 import { canUseAction, INVALID_CELL_FLASH_MS } from "@/game/engine/constants";
+import { positionsEqual } from "@/game/engine/grid";
 import { resolveCycle } from "@/game/engine/resolver";
 import type {
   GameState,
@@ -20,7 +22,7 @@ import type {
   Position,
   StepResult,
 } from "@/game/engine/types";
-import ActionPanel from "./ActionPanel";
+import ActionPanel, { getActionHelperText } from "./ActionPanel";
 import GridBoard from "./GridBoard";
 import {
   cloneDisplayState,
@@ -29,6 +31,7 @@ import {
 } from "./cycleAnimation";
 import type { TutorialStep } from "./tutorialSteps";
 import { TUTORIAL_RESET_DELAY_MS } from "./tutorialSteps";
+import { getTutorialVisualHints } from "./tutorialVisualHints";
 
 const IDLE_FRAME: Omit<CycleAnimationFrame, "displayState"> = {
   animationPhase: "idle",
@@ -71,16 +74,20 @@ function buildStepResult(
   };
 }
 
-const PRACTICE_OPPONENT_MOVE: Instruction = { type: "MOVE", direction: "UP" };
+const DEFAULT_OPPONENT_MOVE: Instruction = { type: "MOVE", direction: "UP" };
 
 export default function TutorialSandbox({
   step,
   runToken,
   compact = false,
+  onPracticeComplete,
+  onHelperTextChange,
 }: {
   step: TutorialStep;
   runToken: number;
   compact?: boolean;
+  onPracticeComplete?: () => void;
+  onHelperTextChange?: (text: string | null) => void;
 }) {
   const [frame, setFrame] = useState<CycleAnimationFrame>(() => ({
     displayState: cloneDisplayState(step.scenario),
@@ -245,6 +252,83 @@ export default function TutorialSandbox({
     [step.type, isAnimating, frame.displayState],
   );
 
+  const runPracticeSubmit = useCallback(
+    async (instruction: Instruction) => {
+      if (step.type !== "practice" || isAnimating) {
+        return;
+      }
+
+      const opponentInstruction =
+        step.opponentInstruction ?? DEFAULT_OPPONENT_MOVE;
+      const preState = cloneDisplayState(step.scenario);
+      const result = buildStepResult(
+        preState,
+        instruction,
+        opponentInstruction,
+      );
+      const isValid = step.validateInstruction?.(instruction) ?? false;
+
+      if (isValid) {
+        setPracticeSuccess(true);
+      }
+
+      setIsAnimating(true);
+      resetPracticeSelection();
+
+      const animationToken = loopTokenRef.current;
+      await playCycleAnimation(preState, result, loopTokenRef, animationToken, {
+        onFrame: setFrame,
+      });
+
+      if (loopTokenRef.current !== animationToken) {
+        return;
+      }
+
+      if (isValid) {
+        await wait(900);
+        if (loopTokenRef.current !== animationToken) {
+          return;
+        }
+        onPracticeComplete?.();
+        return;
+      }
+
+      await wait(TUTORIAL_RESET_DELAY_MS);
+
+      if (loopTokenRef.current !== animationToken) {
+        return;
+      }
+
+      setIsAnimating(false);
+      setFrame({
+        displayState: cloneDisplayState(step.scenario),
+        ...IDLE_FRAME,
+      });
+    },
+    [step, isAnimating, resetPracticeSelection, onPracticeComplete],
+  );
+
+  const handleSelectShield = useCallback(() => {
+    if (step.type !== "practice" || isAnimating) {
+      return;
+    }
+
+    const state = frame.displayState;
+
+    if (!canUseAction(state.player, "SHIELD")) {
+      return;
+    }
+
+    if (actionMode === "shield") {
+      return;
+    }
+
+    setActionModeState("shield");
+    setSelectedCell(null);
+    setInvalidFlashCell(null);
+    setPreviewCells(getPreviewCellsForSelection("shield", state, null));
+  }, [step.type, isAnimating, frame.displayState, actionMode]);
+
   const handleCellClick = useCallback(
     (cell: Position) => {
       if (step.type !== "practice" || isAnimating || !actionMode) {
@@ -253,9 +337,30 @@ export default function TutorialSandbox({
 
       const state = frame.displayState;
 
+      if (actionMode === "shield") {
+        if (isPlayerBotCell(state, cell)) {
+          const instruction = instructionFromSelection("shield", state, null);
+          if (instruction) {
+            void runPracticeSubmit(instruction);
+          }
+          return;
+        }
+
+        triggerInvalidFlash(cell);
+        return;
+      }
+
       if (actionMode === "move") {
         if (!isValidMoveCell(state, cell)) {
           triggerInvalidFlash(cell);
+          return;
+        }
+
+        if (selectedCell && positionsEqual(selectedCell, cell)) {
+          const instruction = instructionFromSelection("move", state, cell);
+          if (instruction) {
+            void runPracticeSubmit(instruction);
+          }
           return;
         }
 
@@ -269,6 +374,14 @@ export default function TutorialSandbox({
         return;
       }
 
+      if (selectedCell && positionsEqual(selectedCell, cell)) {
+        const instruction = instructionFromSelection("attack", state, cell);
+        if (instruction) {
+          void runPracticeSubmit(instruction);
+        }
+        return;
+      }
+
       setSelectedCell(cell);
       setPreviewCells(getPreviewCellsForSelection("attack", state, cell));
     },
@@ -277,68 +390,47 @@ export default function TutorialSandbox({
       isAnimating,
       actionMode,
       frame.displayState,
+      selectedCell,
       triggerInvalidFlash,
+      runPracticeSubmit,
     ],
   );
 
-  const pendingInstruction =
-    step.type === "practice" && actionMode
-      ? instructionFromSelection(actionMode, frame.displayState, selectedCell)
-      : null;
+  const confirmReady =
+    (actionMode === "move" || actionMode === "attack") && selectedCell !== null;
 
-  const canSubmit =
-    step.type === "practice" &&
-    !isAnimating &&
-    pendingInstruction !== null &&
-    ((actionMode !== "move" && actionMode !== "attack") ||
-      selectedCell !== null);
-
-  const runPracticeSubmit = useCallback(async () => {
-    if (!pendingInstruction || step.type !== "practice" || isAnimating) {
+  useEffect(() => {
+    if (!onHelperTextChange) {
       return;
     }
 
-    const preState = cloneDisplayState(step.scenario);
-    const result = buildStepResult(
-      preState,
-      pendingInstruction,
-      PRACTICE_OPPONENT_MOVE,
+    if (step.type !== "practice") {
+      onHelperTextChange(null);
+      return;
+    }
+
+    onHelperTextChange(
+      getActionHelperText(actionMode, confirmReady, step.helperText),
     );
-
-    if (step.validateInstruction?.(pendingInstruction)) {
-      setPracticeSuccess(true);
-    }
-
-    setIsAnimating(true);
-    resetPracticeSelection();
-
-    const animationToken = loopTokenRef.current;
-    await playCycleAnimation(preState, result, loopTokenRef, animationToken, {
-      onFrame: setFrame,
-    });
-
-    if (loopTokenRef.current !== animationToken) {
-      return;
-    }
-
-    await wait(TUTORIAL_RESET_DELAY_MS);
-
-    if (loopTokenRef.current !== animationToken) {
-      return;
-    }
-
-    setIsAnimating(false);
-    setFrame({
-      displayState: cloneDisplayState(step.scenario),
-      ...IDLE_FRAME,
-    });
-  }, [pendingInstruction, step, isAnimating, resetPracticeSelection]);
+  }, [
+    step.type,
+    step.helperText,
+    actionMode,
+    confirmReady,
+    onHelperTextChange,
+  ]);
 
   const controlsDisabled =
     step.type !== "practice" || isAnimating || step.id === "start";
 
-  const showActionPanel =
-    step.type === "practice" || step.id === "watch-cooldown";
+  const showActionPanel = step.type === "practice";
+  const visualHints = getTutorialVisualHints(
+    step,
+    actionMode,
+    confirmReady,
+    isAnimating,
+    practiceSuccess,
+  );
 
   return (
     <div
@@ -358,6 +450,8 @@ export default function TutorialSandbox({
         fadeOpacity={frame.fadeOpacity}
         vfxPulse={frame.vfxPulse}
         previewCells={step.type === "practice" ? previewCells : []}
+        hintCell={visualHints.hintCell}
+        hintConfirm={visualHints.hintConfirm}
         invalidFlashCell={invalidFlashCell}
         shieldPreview={step.type === "practice" && actionMode === "shield"}
         interactionEnabled={
@@ -374,14 +468,14 @@ export default function TutorialSandbox({
             actionMode={step.type === "practice" ? actionMode : null}
             attackCooldown={frame.displayState.player.attackCooldown}
             shieldCooldown={frame.displayState.player.shieldCooldown}
-            canSubmit={canSubmit}
+            confirmReady={confirmReady}
             disabled={controlsDisabled}
-            helperText={step.helperText}
+            hideHelperText={compact}
+            hintAction={visualHints.hintAction}
             compact={compact}
             onSelectMove={() => setActionMode("move")}
             onSelectAttack={() => setActionMode("attack")}
-            onSelectShield={() => setActionMode("shield")}
-            onSubmit={() => void runPracticeSubmit()}
+            onSelectShield={handleSelectShield}
           />
         ) : (
           <div

@@ -34,6 +34,10 @@ function isInvalidFlashCell(
   return cell !== null && cell.row === row && cell.col === col;
 }
 
+function isHintCell(cell: Position | null, row: number, col: number): boolean {
+  return cell !== null && cell.row === row && cell.col === col;
+}
+
 export default function GridBoard({
   state,
   combatVfx = null,
@@ -44,6 +48,8 @@ export default function GridBoard({
   fadeOpacity = 1,
   vfxPulse = 0,
   previewCells = [],
+  hintCell = null,
+  hintConfirm = false,
   invalidFlashCell = null,
   shieldPreview = false,
   interactionEnabled = false,
@@ -60,6 +66,8 @@ export default function GridBoard({
   fadeOpacity?: number;
   vfxPulse?: number;
   previewCells?: Position[];
+  hintCell?: Position | null;
+  hintConfirm?: boolean;
   invalidFlashCell?: Position | null;
   shieldPreview?: boolean;
   interactionEnabled?: boolean;
@@ -114,6 +122,7 @@ export default function GridBoard({
                 colIndex,
               );
               const isPreview = isPreviewCell(previewCells, rowIndex, colIndex);
+              const isHint = isHintCell(hintCell, rowIndex, colIndex);
               const isShieldPreview = shieldPreview && hasPlayer;
               const isInvalidFlash = isInvalidFlashCell(
                 invalidFlashCell,
@@ -140,7 +149,19 @@ export default function GridBoard({
                     isPreview={isPreview}
                     isShieldPreview={isShieldPreview}
                     isInvalidFlash={isInvalidFlash}
+                    isHint={isHint}
+                    isHintConfirm={isHint && hintConfirm}
                   />
+                  {isHint ? (
+                    <span className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                      <span
+                        className={[
+                          "sim-tap-hint-dot",
+                          hintConfirm ? "sim-tap-hint-dot--confirm" : "",
+                        ].join(" ")}
+                      />
+                    </span>
+                  ) : null}
                   {hasPlayer ? (
                     <BotMarker
                       bot={player}

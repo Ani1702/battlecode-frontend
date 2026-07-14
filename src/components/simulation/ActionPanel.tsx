@@ -17,6 +17,8 @@ function CooldownBadge({ turns }: { turns: number }) {
 function ActionButton({
   label,
   active,
+  confirmReady,
+  hinted = false,
   disabled,
   cooldown,
   compact,
@@ -24,6 +26,8 @@ function ActionButton({
 }: {
   label: string;
   active: boolean;
+  confirmReady?: boolean;
+  hinted?: boolean;
   disabled: boolean;
   cooldown: number;
   compact?: boolean;
@@ -40,8 +44,11 @@ function ActionButton({
           ? "px-2 py-2 text-[0.65rem]"
           : "w-full px-4 py-3 text-left text-sm",
         active
-          ? "sim-action-btn--active border-orange-400/80 bg-orange-500/20 text-orange-100"
+          ? confirmReady
+            ? "sim-action-btn--confirm border-cyan-400/80 bg-cyan-500/20 text-cyan-100"
+            : "sim-action-btn--active border-orange-400/80 bg-orange-500/20 text-orange-100"
           : "border-white/10 bg-white/5 text-white/90 hover:bg-white/10",
+        hinted && !active ? "sim-action-btn--hint" : "",
         disabled
           ? "sim-action-btn--cooldown cursor-not-allowed opacity-45"
           : "",
@@ -53,30 +60,67 @@ function ActionButton({
   );
 }
 
+export function getActionHelperText(
+  actionMode: ActionMode | null,
+  confirmReady: boolean,
+  fallback?: string,
+): string {
+  if (actionMode) {
+    return defaultHelperText(actionMode, confirmReady);
+  }
+
+  return fallback ?? defaultHelperText(null, false);
+}
+
+function defaultHelperText(
+  actionMode: ActionMode | null,
+  confirmReady: boolean,
+): string {
+  if (actionMode === "move") {
+    return confirmReady
+      ? "Tap the same cell again to move."
+      : "Tap an adjacent cell to preview your move.";
+  }
+
+  if (actionMode === "attack") {
+    return confirmReady
+      ? "Tap the same cell again to fire."
+      : "Tap a cell on your row or column to aim.";
+  }
+
+  if (actionMode === "shield") {
+    return "Tap your bot to raise shield.";
+  }
+
+  return "Select Move, Attack, or Shield to begin.";
+}
+
 export default function ActionPanel({
   actionMode,
   attackCooldown,
   shieldCooldown,
-  canSubmit,
+  confirmReady,
   disabled,
   helperText,
+  hideHelperText = false,
+  hintAction = null,
   compact = false,
   onSelectMove,
   onSelectAttack,
   onSelectShield,
-  onSubmit,
 }: {
   actionMode: ActionMode | null;
   attackCooldown: number;
   shieldCooldown: number;
-  canSubmit: boolean;
+  confirmReady: boolean;
   disabled: boolean;
   helperText?: string;
+  hideHelperText?: boolean;
+  hintAction?: ActionMode | null;
   compact?: boolean;
   onSelectMove: () => void;
   onSelectAttack: () => void;
   onSelectShield: () => void;
-  onSubmit: () => void;
 }) {
   return (
     <div
@@ -98,6 +142,8 @@ export default function ActionPanel({
         <ActionButton
           label="Move"
           active={actionMode === "move"}
+          confirmReady={confirmReady && actionMode === "move"}
+          hinted={hintAction === "move"}
           disabled={disabled}
           cooldown={0}
           compact={compact}
@@ -106,6 +152,8 @@ export default function ActionPanel({
         <ActionButton
           label="Attack"
           active={actionMode === "attack"}
+          confirmReady={confirmReady && actionMode === "attack"}
+          hinted={hintAction === "attack"}
           disabled={disabled || attackCooldown > 0}
           cooldown={attackCooldown}
           compact={compact}
@@ -114,6 +162,8 @@ export default function ActionPanel({
         <ActionButton
           label="Shield"
           active={actionMode === "shield"}
+          confirmReady={confirmReady && actionMode === "shield"}
+          hinted={hintAction === "shield"}
           disabled={disabled || shieldCooldown > 0}
           cooldown={shieldCooldown}
           compact={compact}
@@ -121,33 +171,16 @@ export default function ActionPanel({
         />
       </div>
 
-      <button
-        type="button"
-        disabled={disabled || !canSubmit}
-        onClick={onSubmit}
-        className={[
-          "gradient-border-button w-full font-semibold uppercase tracking-wider text-white disabled:cursor-not-allowed disabled:opacity-40",
-          compact ? "py-2 text-xs" : "mt-1 py-3 text-sm",
-        ].join(" ")}
-      >
-        Submit
-      </button>
-
-      <p
-        className={[
-          "leading-relaxed text-white/45",
-          compact ? "text-[0.65rem]" : "text-xs",
-        ].join(" ")}
-      >
-        {helperText ??
-          (actionMode === "move"
-            ? "Click an adjacent cell to move, then Submit."
-            : actionMode === "attack"
-              ? "Click a cell on your row or column to aim, then Submit."
-              : actionMode === "shield"
-                ? "Shield is ready — press Submit."
-                : "Select Move, Attack, or Shield to begin.")}
-      </p>
+      {!hideHelperText ? (
+        <p
+          className={[
+            "leading-relaxed text-white/45",
+            compact ? "text-[0.65rem]" : "text-xs",
+          ].join(" ")}
+        >
+          {helperText ?? defaultHelperText(actionMode, confirmReady)}
+        </p>
+      ) : null}
     </div>
   );
 }

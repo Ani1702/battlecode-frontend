@@ -9,6 +9,10 @@ function playerPosition(state: GameState): Position {
   return { row: state.player.row, col: state.player.col };
 }
 
+export function isPlayerBotCell(state: GameState, cell: Position): boolean {
+  return positionsEqual(playerPosition(state), cell);
+}
+
 function directionBetween(from: Position, to: Position): Direction | null {
   const dRow = to.row - from.row;
   const dCol = to.col - from.col;
