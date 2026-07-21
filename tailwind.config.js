@@ -12,7 +12,7 @@ module.exports = {
         oxanium: ["Oxanium", "sans-serif"],
       },
       backgroundImage: {
-        "hero-pattern": "url('/Landingpage.svg')",
+        "hero-pattern": "url('/Landingpage.webp')",
         "top-bar": "url('/TopBar.svg')",
         "left-line": "url('/LeftLine.svg')",
         "right-line": "url('/RightLine.svg')",

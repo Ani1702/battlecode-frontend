@@ -54,7 +54,7 @@ const Hero = () => {
 
   return (
     <div
-      className={`bg-[url(/Landingpage.svg)] bg-cover h-screen transform transition-transform duration-1000 overflow-x-hidden overflow-y-hidden ease-out ${
+      className={`bg-[url(/Landingpage.webp)] bg-cover h-screen transform transition-transform duration-1000 overflow-x-hidden overflow-y-hidden ease-out ${
         isExiting ? "-translate-y-full" : "translate-y-0"
       }`}
     >

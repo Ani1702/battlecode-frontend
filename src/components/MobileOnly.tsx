@@ -33,7 +33,7 @@ const MobileOnly = ({ children }: { children: React.ReactNode }) => {
 
   if (isMobile && !MOBILE_ALLOWED_PATHS.includes(pathname)) {
     return (
-      <div className="bg-[url(/Landingpage.svg)] bg-cover h-screen overflow-hidden">
+      <div className="bg-[url(/Landingpage.webp)] bg-cover h-screen overflow-hidden">
         <div className="h-full orbitron text-white bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)] flex flex-col justify-between items-center">
           <div className="w-full text-center mt-8 tracking-wider text-sm">
             IEEE COMPUTER SOCIETY
