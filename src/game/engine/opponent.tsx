@@ -99,7 +99,11 @@ function getPreferredMoveDirections(state: GameState): Instruction[] {
 
 export function chooseOpponentInstruction(state: GameState): Instruction {
   const attackDirection = getAttackDirectionTowardPlayer(state);
-  if (attackDirection !== null && canUseAction(state.opponent, "ATTACK")) {
+  if (
+    attackDirection !== null &&
+    canUseAction(state.opponent, "ATTACK") &&
+    Math.random() < 0.6
+  ) {
     return { type: "ATTACK", direction: attackDirection };
   }
 
