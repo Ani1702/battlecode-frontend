@@ -8,8 +8,10 @@ import {
   renderShareCanvas,
 } from "./shareCanvas";
 import { Download, Instagram, Share2, type LucideIcon } from "lucide-react";
-import { INSTAGRAM_URL } from "./EndPromoBanner";
 import { SimEvents } from "@/lib/analytics";
+
+const INSTAGRAM_URL =
+  "https://www.instagram.com/ieeecs_vit?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==";
 
 export default function ShareCard({
   variant,

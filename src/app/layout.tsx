@@ -1,11 +1,6 @@
 import "./globals.css";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { SocketProvider } from "@/contexts/SocketContext";
-import { Toaster } from "react-hot-toast";
 import type { Metadata } from "next";
 import Script from "next/script";
-// import { Orbitron, Oxanium } from "next/font/google";
-import "./globals.css";
 import MobileOnly from "@/components/MobileOnly";
 
 export const metadata: Metadata = {
@@ -15,16 +10,6 @@ export const metadata: Metadata = {
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
-// const oxanium = Oxanium({
-//   variable: "--font-oxanium",
-//   subsets: ["latin"],
-// });
-
-// const orbitron = Orbitron({
-//   variable: "--font-orbitron",
-//   subsets: ["latin"],
-// });
-
 export default function RootLayout({
   children,
 }: {
@@ -32,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`oxanium antialiased`}>
+      <body className="oxanium antialiased">
         {gaMeasurementId ? (
           <>
             <Script
@@ -49,14 +34,7 @@ export default function RootLayout({
             </Script>
           </>
         ) : null}
-        <AuthProvider>
-          <SocketProvider>
-            <MobileOnly>
-              {children}
-              <Toaster />
-            </MobileOnly>
-          </SocketProvider>
-        </AuthProvider>
+        <MobileOnly>{children}</MobileOnly>
       </body>
     </html>
   );

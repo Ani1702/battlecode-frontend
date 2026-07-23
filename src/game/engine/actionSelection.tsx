@@ -121,7 +121,7 @@ export function getPreviewCellsForSelection(
   cell: Position | null,
 ): Position[] {
   if (mode === "shield") {
-    return [playerPosition(state)];
+    return [];
   }
 
   if (!cell) {

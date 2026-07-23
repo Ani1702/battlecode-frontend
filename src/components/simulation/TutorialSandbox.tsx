@@ -80,12 +80,14 @@ export default function TutorialSandbox({
   step,
   runToken,
   compact = false,
+  onStepCompleted,
   onPracticeComplete,
   onHelperTextChange,
 }: {
   step: TutorialStep;
   runToken: number;
   compact?: boolean;
+  onStepCompleted?: () => void;
   onPracticeComplete?: () => void;
   onHelperTextChange?: (text: string | null) => void;
 }) {
@@ -103,6 +105,21 @@ export default function TutorialSandbox({
   const [practiceSuccess, setPracticeSuccess] = useState(false);
   const invalidFlashTimerRef = useRef<number | null>(null);
   const loopTokenRef = useRef(0);
+  const stepCompletedRef = useRef(false);
+  const onStepCompletedRef = useRef(onStepCompleted);
+
+  useEffect(() => {
+    onStepCompletedRef.current = onStepCompleted;
+  }, [onStepCompleted]);
+
+  const markStepCompleted = useCallback(() => {
+    if (stepCompletedRef.current) {
+      return;
+    }
+
+    stepCompletedRef.current = true;
+    onStepCompletedRef.current?.();
+  }, []);
 
   const resetPracticeSelection = useCallback(() => {
     setActionModeState(null);
@@ -124,7 +141,18 @@ export default function TutorialSandbox({
   useEffect(() => {
     resetToScenario();
     loopTokenRef.current += 1;
+    stepCompletedRef.current = false;
     const loopToken = loopTokenRef.current;
+
+    let pulseCompleteTimer: number | null = null;
+
+    if (step.type === "watch" && step.pulseLoop) {
+      pulseCompleteTimer = window.setTimeout(() => {
+        if (loopTokenRef.current === loopToken) {
+          markStepCompleted();
+        }
+      }, 2500);
+    }
 
     const applyFrame = (next: CycleAnimationFrame) => {
       if (loopTokenRef.current !== loopToken) {
@@ -192,6 +220,7 @@ export default function TutorialSandbox({
         setIsAnimating(false);
 
         if (completed) {
+          markStepCompleted();
           await wait(TUTORIAL_RESET_DELAY_MS);
           if (loopTokenRef.current !== loopToken) {
             return;
@@ -204,6 +233,9 @@ export default function TutorialSandbox({
 
     return () => {
       loopTokenRef.current += 1;
+      if (pulseCompleteTimer !== null) {
+        window.clearTimeout(pulseCompleteTimer);
+      }
     };
   }, [step, runToken, resetToScenario]);
 
@@ -270,6 +302,7 @@ export default function TutorialSandbox({
 
       if (isValid) {
         setPracticeSuccess(true);
+        markStepCompleted();
       }
 
       setIsAnimating(true);
@@ -305,7 +338,13 @@ export default function TutorialSandbox({
         ...IDLE_FRAME,
       });
     },
-    [step, isAnimating, resetPracticeSelection, onPracticeComplete],
+    [
+      step,
+      isAnimating,
+      resetPracticeSelection,
+      onPracticeComplete,
+      markStepCompleted,
+    ],
   );
 
   const handleSelectShield = useCallback(() => {
@@ -486,8 +525,7 @@ export default function TutorialSandbox({
                 : "glass-box p-4 text-xs leading-relaxed",
             ].join(" ")}
           >
-            Demo playing on loop — press{" "}
-            <span className="text-orange-300">Next</span> when ready.
+            Demo playing on loop — complete the step to continue.
           </div>
         )}
 

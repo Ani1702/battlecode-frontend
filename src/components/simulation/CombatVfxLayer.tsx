@@ -150,7 +150,7 @@ function getBeamEndpoint(
   if (targetsShield) {
     const defenderCenter =
       payload.shieldBot === "player" ? playerCenter : opponentCenter;
-    return stopPointBeforeTarget(origin, defenderCenter, cellSize * 0.44);
+    return stopPointBeforeTarget(origin, defenderCenter, cellSize * 0.31);
   }
 
   const lastCell = path.cells[path.cells.length - 1];
@@ -178,7 +178,7 @@ function drawShieldBarrier(
   spawnProgress: number,
   opacity: number,
 ) {
-  const radius = cellSize * 0.42 * spawnProgress;
+  const radius = cellSize * 0.29 * spawnProgress;
 
   ctx.save();
   ctx.globalAlpha = opacity;
@@ -199,6 +199,7 @@ export default function CombatVfxLayer({
   beamProgress,
   fadeOpacity,
   pulse,
+  gridGap = 4,
 }: {
   state: GameState;
   payload: CombatVfxPayload | null;
@@ -206,6 +207,7 @@ export default function CombatVfxLayer({
   beamProgress: number;
   fadeOpacity: number;
   pulse: number;
+  gridGap?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -240,7 +242,7 @@ export default function CombatVfxLayer({
         return;
       }
 
-      const gap = 4;
+      const gap = gridGap;
       const cols = state.grid[0]?.length ?? 1;
       const cellSize = (rect.width - gap * (cols - 1)) / cols;
       const opacity =
@@ -330,7 +332,7 @@ export default function CombatVfxLayer({
     draw();
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [state, payload, phase, beamProgress, fadeOpacity, pulse]);
+  }, [state, payload, phase, beamProgress, fadeOpacity, pulse, gridGap]);
 
   return (
     <div

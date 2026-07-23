@@ -16,11 +16,13 @@ export default function BotMarker({
   bot,
   moveTween,
   hitFlash = false,
+  shieldPreview = false,
   compact = false,
 }: {
   bot: Bot;
   moveTween?: MoveTween;
   hitFlash?: boolean;
+  shieldPreview?: boolean;
   compact?: boolean;
 }) {
   if (bot.lives <= 0) {
@@ -28,21 +30,24 @@ export default function BotMarker({
   }
 
   const label = bot.id === "player" ? "YOU" : "BOT";
-  const transform =
+  const moveTransform =
     moveTween && moveTween.progress < 1
       ? `translate(${(moveTween.to.col - moveTween.from.col) * moveTween.progress * 100}%, ${(moveTween.to.row - moveTween.from.row) * moveTween.progress * 100}%)`
       : undefined;
 
+  const showShield = bot.shieldActive || shieldPreview;
+
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center transition-transform duration-75"
-      style={transform ? { transform } : undefined}
+      className="pointer-events-none absolute inset-0 z-10 transition-transform duration-75"
+      style={moveTransform ? { transform: moveTransform } : undefined}
     >
       <div
         className={[
-          "flex h-[58%] w-[58%] items-center justify-center rounded-md border-2 border-white/80",
+          "absolute left-[21%] top-[21%] flex h-[58%] w-[58%] items-center justify-center rounded-md border-2 border-white/80",
           bot.id === "player" ? "sim-bot--player" : "sim-bot--opponent",
-          bot.shieldActive ? "sim-bot--shield" : "",
+          showShield ? "sim-bot--shield" : "",
+          shieldPreview && !bot.shieldActive ? "sim-bot--shield-preview" : "",
           hitFlash ? "sim-bot--hit-flash" : "",
         ]
           .filter(Boolean)
@@ -61,10 +66,8 @@ export default function BotMarker({
       </div>
       <div
         className={[
-          "flex gap-px leading-none",
-          compact
-            ? "mt-px text-[0.35rem]"
-            : "mt-0.5 text-[0.45rem] sm:text-[0.55rem]",
+          "absolute left-0 right-0 top-[82%] flex justify-center gap-px leading-none",
+          compact ? "text-[0.35rem]" : "text-[0.45rem] sm:text-[0.55rem]",
         ].join(" ")}
       >
         {renderHearts(bot.lives)}

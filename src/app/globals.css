@@ -32,7 +32,6 @@ body {
 .oxanium {
   font-family: "Oxanium", sans-serif;
   font-optical-sizing: auto;
-  /* font-weight: 400; */
   font-style: normal;
 }
 
@@ -54,190 +53,19 @@ body {
   filter: brightness(1.2) contrast(1.1) saturate(1.1);
 }
 
-.judge-zero {
-  filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.35))
-    drop-shadow(0 0 16px rgba(249, 115, 22, 0.18));
-}
-
 .glass-box {
   background: rgba(255, 255, 255, 0.05);
-  /* transparent green */
   backdrop-filter: blur(5px);
-  /* glass blur */
   -webkit-backdrop-filter: blur(5px);
-  /* Safari support */
   border: 1px solid rgba(255, 255, 255, 0.1);
-  /* thin border */
   color: white;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-}
-
-/* Custom slider thumb with gradient */
-.slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(90deg, #fbbf24, #f59e0b, #dc2626);
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.slider-thumb:active {
-  transform: scale(0.95);
-}
-
-/* Question count slider thumb with blue gradient */
-.question-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(90deg, #10b981, #06b6d4, #3b82f6);
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.question-slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.question-slider-thumb:active {
-  transform: scale(0.95);
-}
-
-.background {
-  z-index: -10;
-  background-image: url("/bg.svg");
-  background-size: cover;
-  position: sticky;
-  top: 0;
-  background-attachment: scroll;
-}
-
-/* For Webkit browsers (Chrome, Safari) - Time slider */
-input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(90deg, #fbbf24, #f59e0b, #dc2626);
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-input[type="range"]::-webkit-slider-thumb:active {
-  transform: scale(0.95);
-}
-
-/* For Webkit browsers (Chrome, Safari) - Question count slider */
-input[type="range"].question-count-slider::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(90deg, #10b981, #06b6d4, #3b82f6);
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-input[type="range"].question-count-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-input[type="range"].question-count-slider::-webkit-slider-thumb:active {
-  transform: scale(0.95);
-}
-
-/* For Firefox - Time slider */
-input[type="range"]::-moz-range-thumb {
-  appearance: none;
-  -moz-appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(90deg, #fbbf24, #f59e0b, #dc2626);
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-input[type="range"]::-moz-range-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-input[type="range"]::-moz-range-thumb:active {
-  transform: scale(0.95);
-}
-
-/* For Firefox - Question count slider */
-input[type="range"].question-count-slider::-moz-range-thumb {
-  appearance: none;
-  -moz-appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(90deg, #10b981, #06b6d4, #3b82f6);
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-input[type="range"].question-count-slider::-moz-range-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-input[type="range"].question-count-slider::-moz-range-thumb:active {
-  transform: scale(0.95);
-}
-
-.stickyMask {
-  background: url("/mask.svg") no-repeat;
-  background-position: 6px center;
-  background-size: cover;
-  color: transparent;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: brightness(1.2) contrast(1.1) saturate(1.1);
 }
 
 .gradient-border-button {
   position: relative;
   padding: 1.45rem 4rem;
   border-radius: 0.375rem;
-  /* Rounded-md */
   background: rgba(0, 0, 0, 0.5);
   z-index: 0;
   overflow: hidden;
@@ -446,6 +274,12 @@ input[type="range"].question-count-slider::-moz-range-thumb:active {
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
 }
 
+.sim-bot--shield-preview {
+  box-shadow:
+    inset 0 0 0 2px rgba(34, 211, 238, 0.9),
+    0 0 16px rgba(56, 189, 248, 0.45);
+}
+
 .sim-bot--shield {
   animation: sim-shield-pulse 1s ease-in-out infinite;
   box-shadow:
@@ -503,9 +337,4 @@ input[type="range"].question-count-slider::-moz-range-thumb:active {
 
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-in-out forwards;
-}
-
-/* White glow effect for elite dashboard */
-.white-glow {
-  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8));
 }

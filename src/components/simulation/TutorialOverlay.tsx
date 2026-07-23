@@ -13,6 +13,7 @@ export default function TutorialOverlay({
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [runToken, setRunToken] = useState(0);
+  const [stepCompleted, setStepCompleted] = useState(false);
   const [practiceHelperText, setPracticeHelperText] = useState<string | null>(
     null,
   );
@@ -20,6 +21,7 @@ export default function TutorialOverlay({
   const isLastStep = stepIndex === TUTORIAL_STEPS.length - 1;
 
   useEffect(() => {
+    setStepCompleted(false);
     setPracticeHelperText(
       step.type === "practice" ? (step.helperText ?? null) : null,
     );
@@ -29,7 +31,7 @@ export default function TutorialOverlay({
     setRunToken((current) => current + 1);
   }, []);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     cancelRunningDemo();
 
     if (isLastStep) {
@@ -38,12 +40,16 @@ export default function TutorialOverlay({
     }
 
     setStepIndex((current) => current + 1);
-  };
+  }, [cancelRunningDemo, isLastStep, onComplete]);
 
-  const handleSkip = () => {
+  const handleSkip = useCallback(() => {
     cancelRunningDemo();
     onSkip();
-  };
+  }, [cancelRunningDemo, onSkip]);
+
+  const handleStepCompleted = useCallback(() => {
+    setStepCompleted(true);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
@@ -79,6 +85,7 @@ export default function TutorialOverlay({
             step={step}
             runToken={runToken}
             compact
+            onStepCompleted={handleStepCompleted}
             onPracticeComplete={
               step.type === "practice" ? handleNext : undefined
             }
@@ -102,7 +109,13 @@ export default function TutorialOverlay({
             <button
               type="button"
               onClick={handleNext}
-              className="gradient-border-button px-5 py-1.5 text-xs uppercase tracking-wider"
+              disabled={!stepCompleted}
+              className={[
+                "gradient-border-button px-5 py-1.5 text-xs uppercase tracking-wider",
+                stepCompleted
+                  ? ""
+                  : "cursor-not-allowed opacity-40 hover:tracking-wider",
+              ].join(" ")}
             >
               {isLastStep ? "Start game" : "Next"}
             </button>

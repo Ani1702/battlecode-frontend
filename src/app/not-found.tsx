@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <div className="flex h-screen items-center justify-center flex-col bg-black text-center">
       <Image
-        src="/battlecode_logo.png"
+        src="/simulation/battlecode-logo.png"
         alt="Battlecode Logo"
         className="h-100"
         width={400}
@@ -14,10 +14,10 @@ export default function NotFound() {
       <h1 className="text-6xl font-bold text-orange-600">404</h1>
       <p className="mt-4 text-xl text-white">This page could not be found.</p>
       <Link
-        href="/dashboard"
+        href="/"
         className="mt-6 px-6 py-2 bg-black border-orange-500 border-2 text-white rounded-lg hover:bg-orange-600 hover:scale-110 transition-transform"
       >
-        Return to Dashboard
+        Return Home
       </Link>
     </div>
   );

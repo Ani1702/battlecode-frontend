@@ -82,6 +82,7 @@ export default function GridBoard({
   const opponentTween = getBotMoveTween("opponent", moveTweens);
   const playerCell = getBotCellPosition(player, playerTween);
   const opponentCell = getBotCellPosition(opponent, opponentTween);
+  const gridGap = compact ? 2 : 4;
 
   return (
     <div
@@ -123,7 +124,6 @@ export default function GridBoard({
               );
               const isPreview = isPreviewCell(previewCells, rowIndex, colIndex);
               const isHint = isHintCell(hintCell, rowIndex, colIndex);
-              const isShieldPreview = shieldPreview && hasPlayer;
               const isInvalidFlash = isInvalidFlashCell(
                 invalidFlashCell,
                 rowIndex,
@@ -147,7 +147,6 @@ export default function GridBoard({
                   <GridCell
                     tile={tile}
                     isPreview={isPreview}
-                    isShieldPreview={isShieldPreview}
                     isInvalidFlash={isInvalidFlash}
                     isHint={isHint}
                     isHintConfirm={isHint && hintConfirm}
@@ -167,6 +166,7 @@ export default function GridBoard({
                       bot={player}
                       moveTween={playerTween}
                       hitFlash={hitFlashBot === "player"}
+                      shieldPreview={shieldPreview}
                       compact={compact}
                     />
                   ) : null}
@@ -191,6 +191,7 @@ export default function GridBoard({
           beamProgress={beamProgress}
           fadeOpacity={fadeOpacity}
           pulse={vfxPulse}
+          gridGap={gridGap}
         />
       </div>
 
