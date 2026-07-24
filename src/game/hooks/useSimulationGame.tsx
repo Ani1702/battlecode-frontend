@@ -96,20 +96,21 @@ function resolveOutcome(
   result: StepResult,
   currentSave: SimulationSave,
 ): { save: SimulationSave; phase: GamePhase } {
-  if (result.outcome === "win") {
-    return {
-      save: gameStateToSave(result.nextState, {
-        attemptsRemaining: currentSave.attemptsRemaining,
-        status: "won",
-        cyclesToWin: result.nextState.cycle,
-        playerLivesRemaining: result.nextState.player.lives,
-      }),
-      phase: "won",
-    };
-  }
-
-  if (result.outcome === "loss") {
+  if (result.outcome === "win" || result.outcome === "loss") {
     const attemptsRemaining = Math.max(0, currentSave.attemptsRemaining - 1);
+
+    if (result.outcome === "win") {
+      return {
+        save: gameStateToSave(result.nextState, {
+          attemptsRemaining,
+          status: "won",
+          cyclesToWin: result.nextState.cycle,
+          playerLivesRemaining: result.nextState.player.lives,
+        }),
+        phase: "won",
+      };
+    }
+
     const status: SimulationStatus =
       attemptsRemaining === 0 ? "exhausted" : "lost";
 
@@ -522,7 +523,7 @@ export function useSimulationGame() {
     setPreviewCells(getPreviewCellsForSelection("shield", gameState, null));
   }, [phase, gameState, actionMode]);
 
-  const retryAfterLoss = useCallback(() => {
+  const retryAttempt = useCallback(() => {
     if (!save || save.attemptsRemaining <= 0) {
       return;
     }
@@ -588,7 +589,7 @@ export function useSimulationGame() {
     setActionMode,
     handleCellClick,
     handleSelectShield,
-    retryAfterLoss,
+    retryAttempt,
     completeTutorial,
     skipTutorial,
   };

@@ -8,8 +8,8 @@ export interface ShareCanvasOptions {
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const LOGO_PATH = "/simulation/battlecode-logo.webp";
-const QR_PATH = "/battlecode_qr_black.webp";
-const QR_FALLBACK_PATH = "/battlecode_qr.webp";
+export const GAME_URL = "https://battlecode.ieeecsvit.com";
+export const SHARE_DARE_TEXT = "I dare you to beat me";
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
@@ -54,69 +54,76 @@ export async function renderShareCanvas(
   }
 
   const gradient = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
-  gradient.addColorStop(0, "#111111");
+  gradient.addColorStop(0, "#1a0a00");
+  gradient.addColorStop(0.45, "#0a0a0a");
   gradient.addColorStop(1, "#000000");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  ctx.strokeStyle = "rgba(249, 115, 22, 0.35)";
-  ctx.lineWidth = 8;
-  drawRoundedRect(ctx, 60, 60, WIDTH - 120, HEIGHT - 120, 32);
+  ctx.strokeStyle = "rgba(249, 115, 22, 0.45)";
+  ctx.lineWidth = 10;
+  drawRoundedRect(ctx, 48, 48, WIDTH - 96, HEIGHT - 96, 36);
   ctx.stroke();
 
   const logo = await loadImage(LOGO_PATH);
+  const logoY = 160;
+
   if (logo) {
-    const logoWidth = 420;
+    const logoWidth = 720;
     const logoHeight = (logo.height / logo.width) * logoWidth;
-    ctx.drawImage(logo, (WIDTH - logoWidth) / 2, 120, logoWidth, logoHeight);
+    ctx.drawImage(logo, (WIDTH - logoWidth) / 2, logoY, logoWidth, logoHeight);
   } else {
     ctx.fillStyle = "#F97316";
-    ctx.font = "bold 72px Orbitron, sans-serif";
+    ctx.font = "bold 96px Orbitron, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("BATTLECODE", WIDTH / 2, 220);
+    ctx.fillText("BATTLECODE", WIDTH / 2, 420);
   }
 
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = "bold 56px Orbitron, sans-serif";
+  // Anchor all copy near the bottom so it never overlaps the large logo
   ctx.textAlign = "center";
+  let cursorY = 1380;
 
   if (options.variant === "win") {
-    ctx.fillText(
-      `I beat the robot in ${options.cyclesToWin ?? 0} moves`,
-      WIDTH / 2,
-      760,
-    );
-    ctx.font = "48px Oxanium, sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    const headline = `I beat the robot in ${options.cyclesToWin ?? 0} moves`;
+    let fontSize = 40;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = `bold ${fontSize}px Orbitron, sans-serif`;
+    while (fontSize > 28 && ctx.measureText(headline).width > WIDTH - 160) {
+      fontSize -= 2;
+      ctx.font = `bold ${fontSize}px Orbitron, sans-serif`;
+    }
+    ctx.fillText(headline, WIDTH / 2, cursorY);
+    cursorY += 70;
+    ctx.font = "34px Oxanium, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.fillText(
       `${options.playerLivesRemaining ?? 0} lives remaining`,
       WIDTH / 2,
-      860,
+      cursorY,
     );
   } else {
-    ctx.fillText("I battled the BattleCode bot", WIDTH / 2, 760);
-    ctx.font = "48px Oxanium, sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.fillText("Think you can do better?", WIDTH / 2, 860);
+    const headline = "I battled the BattleCode bot";
+    let fontSize = 40;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = `bold ${fontSize}px Orbitron, sans-serif`;
+    while (fontSize > 28 && ctx.measureText(headline).width > WIDTH - 160) {
+      fontSize -= 2;
+      ctx.font = `bold ${fontSize}px Orbitron, sans-serif`;
+    }
+    ctx.fillText(headline, WIDTH / 2, cursorY);
+    cursorY += 70;
+    ctx.font = "34px Oxanium, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.fillText("Think you can do better?", WIDTH / 2, cursorY);
   }
 
   ctx.fillStyle = "#FDBA74";
-  ctx.font = "40px Oxanium, sans-serif";
-  ctx.fillText(`BattleCode on ${options.shareEventDate}`, WIDTH / 2, 1580);
+  ctx.font = "bold 40px Oxanium, sans-serif";
+  ctx.fillText(GAME_URL.replace(/^https?:\/\//, ""), WIDTH / 2, 1680);
 
-  const qr = (await loadImage(QR_PATH)) ?? (await loadImage(QR_FALLBACK_PATH));
-  if (qr) {
-    const qrSize = 220;
-    const qrX = (WIDTH - qrSize) / 2;
-    const qrY = 1180;
-
-    ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
-
-    ctx.fillStyle = "rgba(255,255,255,0.75)";
-    ctx.font = "32px Oxanium, sans-serif";
-    ctx.fillText("Scan to play", WIDTH / 2, qrY + qrSize + 56);
-    ctx.fillText("@ieeecs_vit", WIDTH / 2, qrY + qrSize + 104);
-  }
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = "32px Oxanium, sans-serif";
+  ctx.fillText(SHARE_DARE_TEXT, WIDTH / 2, 1760);
 
   return canvas;
 }
@@ -143,6 +150,10 @@ export function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+export function buildShareText(): string {
+  return `${SHARE_DARE_TEXT}\n${GAME_URL}`;
+}
+
 export async function nativeShare(blob: Blob, title: string): Promise<boolean> {
   if (typeof navigator === "undefined" || !navigator.share) {
     return false;
@@ -151,14 +162,48 @@ export async function nativeShare(blob: Blob, title: string): Promise<boolean> {
   const file = new File([blob], "battlecode-simulation.png", {
     type: "image/png",
   });
-  const payload = { files: [file], title };
 
-  if (navigator.canShare && !navigator.canShare(payload)) {
-    return false;
-  }
+  // Prefer image + single copy of the dare/link (no separate `url` — that duplicates the link).
+  const withImage: ShareData = {
+    files: [file],
+    title,
+    text: buildShareText(),
+  };
 
   try {
-    await navigator.share(payload);
+    if (!navigator.canShare || navigator.canShare(withImage)) {
+      await navigator.share(withImage);
+      return true;
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return false;
+    }
+  }
+
+  // Some browsers accept the file but reject combined text — still share the PNG.
+  const imageOnly: ShareData = {
+    files: [file],
+    title,
+  };
+
+  try {
+    if (!navigator.canShare || navigator.canShare(imageOnly)) {
+      await navigator.share(imageOnly);
+      return true;
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return false;
+    }
+  }
+
+  // Last resort: text + link, no duplicate url field.
+  try {
+    await navigator.share({
+      title,
+      text: buildShareText(),
+    });
     return true;
   } catch {
     return false;

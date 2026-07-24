@@ -25,7 +25,7 @@ export function isInstructionAllowed(
 
 export const STARTING_LIVES = 2 as const;
 
-export const STARTING_ATTEMPTS = 2 as const;
+export const STARTING_ATTEMPTS = 5 as const;
 
 export const DEFAULT_MAX_CYCLES = 50;
 

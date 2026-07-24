@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
+  buildShareText,
   canvasToBlob,
   downloadBlob,
+  GAME_URL,
   nativeShare,
   renderShareCanvas,
 } from "./shareCanvas";
@@ -18,16 +20,19 @@ export default function ShareCard({
   cyclesToWin,
   playerLivesRemaining,
   shareEventDate,
+  attemptsRemaining,
   onRetry,
 }: {
   variant: "win" | "loss";
   cyclesToWin?: number;
   playerLivesRemaining?: number;
   shareEventDate: string;
+  attemptsRemaining?: number;
   onRetry?: () => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [shareHint, setShareHint] = useState<string | null>(null);
+  const canRetry = Boolean(onRetry && (attemptsRemaining ?? 0) > 0);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +86,7 @@ export default function ShareCard({
       shareEventDate,
     });
     const blob = await canvasToBlob(canvas);
-    const shared = await nativeShare(blob, "BattleCode Simulation");
+    const shared = await nativeShare(blob, "BattleCode");
 
     if (shared) {
       SimEvents.shareNative(variant);
@@ -89,7 +94,7 @@ export default function ShareCard({
     }
 
     setShareHint(
-      "Sharing is not supported here. Download the image and upload it to your story.",
+      `Sharing isn't supported here. Download the image, then send: ${buildShareText()}`,
     );
   };
 
@@ -99,22 +104,44 @@ export default function ShareCard({
         {variant === "win" ? "Victory" : "Mission Report"}
       </h2>
 
+      {typeof attemptsRemaining === "number" ? (
+        <p className="mt-1 text-center text-xs uppercase tracking-wider text-white/55">
+          {attemptsRemaining > 0
+            ? `${attemptsRemaining} attempt${attemptsRemaining === 1 ? "" : "s"} left`
+            : "No attempts left"}
+        </p>
+      ) : null}
+
       <div className="mx-auto mt-3 max-w-[min(22rem,88vw)] overflow-hidden rounded-lg border border-white/10 bg-black/40 sm:mt-4 sm:max-w-[24rem]">
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={previewUrl}
             alt="BattleCode share card preview"
-            className="h-auto max-h-[58dvh] w-full object-contain sm:max-h-[65dvh]"
+            className="h-auto max-h-[50dvh] w-full object-contain sm:max-h-[58dvh]"
           />
         ) : (
-          <div className="flex aspect-[9/16] max-h-[58dvh] items-center justify-center text-xs text-white/50 sm:max-h-[65dvh]">
+          <div className="flex aspect-[9/16] max-h-[50dvh] items-center justify-center text-xs text-white/50 sm:max-h-[58dvh]">
             Generating share card...
           </div>
         )}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-3 sm:mt-3 sm:gap-4">
+      <p className="mt-3 text-center text-xs text-orange-300/90 sm:text-sm">
+        {GAME_URL.replace(/^https?:\/\//, "")}
+      </p>
+
+      {canRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="gradient-border-button mx-auto mt-4 block w-auto min-w-[12rem] max-w-[16rem] px-8 py-3 text-sm font-semibold uppercase tracking-widest text-white sm:mt-5 sm:py-3.5 sm:text-base"
+        >
+          Retry — {attemptsRemaining} left
+        </button>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-3 sm:mt-4 sm:gap-4">
         <ShareActionButton
           icon={Download}
           label="Download share card"
@@ -126,19 +153,10 @@ export default function ShareCard({
           label="Follow IEEE CS VIT on Instagram"
           href={INSTAGRAM_URL}
         />
-        {onRetry ? (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="rounded-md border border-white/20 px-2.5 py-1 text-[0.6rem] uppercase tracking-wider text-white/80 sm:px-3 sm:py-1.5 sm:text-[0.65rem]"
-          >
-            Retry
-          </button>
-        ) : null}
       </div>
 
       {shareHint ? (
-        <p className="mt-2 text-center text-[0.65rem] leading-snug text-white/60 sm:mt-3 sm:text-sm">
+        <p className="mt-2 whitespace-pre-line text-center text-[0.65rem] leading-snug text-white/60 sm:mt-3 sm:text-sm">
           {shareHint}
         </p>
       ) : null}

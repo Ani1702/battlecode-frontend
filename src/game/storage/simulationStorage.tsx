@@ -2,7 +2,7 @@ import { STARTING_ATTEMPTS } from "../engine/constants";
 import { createInitialState } from "../engine/runner";
 import type { Bot, GameState, Grid, SimulationConfig } from "../engine/types";
 
-export const STORAGE_KEY = "battlecode_sim_v1";
+export const STORAGE_KEY = "battlecode_sim_v2";
 
 export type SimulationStatus = "playing" | "won" | "lost" | "exhausted";
 

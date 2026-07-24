@@ -32,7 +32,7 @@ export default function SimulationGame() {
     setActionMode,
     handleCellClick,
     handleSelectShield,
-    retryAfterLoss,
+    retryAttempt,
     completeTutorial,
     skipTutorial,
   } = useSimulationGame();
@@ -67,7 +67,9 @@ export default function SimulationGame() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="orbitron text-2xl">BattleCode Simulation</h1>
-            <p className="mt-1 text-sm text-white/60">{config.id}</p>
+            <p className="mt-1 text-sm font-medium uppercase tracking-wider text-orange-300/90">
+              Beat the bot in minimum moves
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {showPlayingBoard ? (
@@ -131,6 +133,8 @@ export default function SimulationGame() {
             save.playerLivesRemaining ?? gameState?.player.lives ?? 0
           }
           shareEventDate={config.shareEventDate}
+          attemptsRemaining={save.attemptsRemaining}
+          onRetry={save.attemptsRemaining > 0 ? retryAttempt : undefined}
         />
       ) : null}
 
@@ -138,7 +142,8 @@ export default function SimulationGame() {
         <ShareCard
           variant="loss"
           shareEventDate={config.shareEventDate}
-          onRetry={retryAfterLoss}
+          attemptsRemaining={save.attemptsRemaining}
+          onRetry={retryAttempt}
         />
       ) : null}
 
