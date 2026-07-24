@@ -5,47 +5,28 @@ const Hero = () => {
   const router = useRouter();
 
   return (
-    <div className="fixed inset-0 overflow-hidden overscroll-none bg-[url(/Landingpage.webp)] bg-cover">
+    <div className="fixed inset-0 overflow-hidden overscroll-none bg-[url(/Landingpage.webp)] bg-cover bg-center">
       <div className="relative h-full z-1 orbitron text-white bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
-        <div className="hud pointer-events-none">
-          <div className="absolute topHUD left-0 top-2 h-[4rem] w-full flex items-center justify-center sm:h-[5rem] lg:h-[6rem]">
-            <div className="text-white h-full w-full bg-[url(/TopBar.webp)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 tracking-wider">
-              IEEE COMPUTER SOCIETY
-            </div>
-            <div className="text-white h-full w-full bg-[url(/TopBar.webp)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
-              IEEE COMPUTER SOCIETY
-            </div>
-            <div className="text-white h-full w-full bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
-              IEEE COMPUTER SOCIETY
-            </div>
-          </div>
+        <p className="absolute left-0 right-0 top-6 z-20 text-center text-sm tracking-wider sm:top-8 sm:text-base lg:top-10">
+          IEEE COMPUTER SOCIETY
+        </p>
 
-          <div className="absolute leftHUD left-4 top-0 hidden h-full w-[6rem] items-center justify-center sm:left-10 lg:flex">
-            <div className="h-full w-full bg-[url(/LeftLine.webp)] bg-no-repeat bg-center"></div>
-            <div className="absolute h-full w-full bg-[url(/LeftLine.webp)] bg-no-repeat bg-center blur-md"></div>
-          </div>
-          <div className="absolute rightHUD right-4 top-0 hidden h-full w-[6rem] items-center justify-center sm:right-10 lg:flex">
-            <div className="h-full w-full bg-[url(/RightLine.webp)] bg-no-repeat bg-center"></div>
-            <div className="absolute h-full w-full bg-[url(/RightLine.webp)] bg-no-repeat bg-center blur-md"></div>
-          </div>
-        </div>
-
-        <div className="containerContent flex h-full min-h-0 flex-col items-center justify-between px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-24 sm:px-8 lg:justify-center lg:pb-0 lg:pt-0">
+        <div className="relative z-20 flex h-full min-h-0 flex-col items-center justify-center px-6 sm:px-8">
           <div className="flex w-full max-w-lg flex-col items-center gap-8 sm:gap-12 lg:gap-16">
             <div className="relative flex w-full items-center justify-center">
               <div className="z-1 relative flex items-center drop-shadow-[0_4px_4px_#000]">
-                <h1 className="stickyMask text-shadow-heading z-1 px-2 text-[2.75rem] font-medium tracking-wide sm:text-5xl lg:text-8xl">
+                <h1 className="stickyMask text-shadow-heading z-1 px-2 text-[2.35rem] font-medium tracking-wide sm:text-[2.75rem] lg:text-7xl">
                   BATTLECODE
                 </h1>
-                <h1 className="text-blur absolute text-[2.75rem] font-medium tracking-wide blur-sm sm:text-5xl lg:text-8xl">
+                <h1 className="text-blur absolute text-[2.35rem] font-medium tracking-wide blur-sm sm:text-[2.75rem] lg:text-7xl">
                   BATTLECODE
                 </h1>
               </div>
               <div className="absolute flex blur-3xl mix-blend-color-dodge">
-                <h1 className="stickyMask text-shadow-heading z-1 text-[2.75rem] font-medium tracking-wider sm:text-5xl lg:text-8xl">
+                <h1 className="stickyMask text-shadow-heading z-1 text-[2.35rem] font-medium tracking-wider sm:text-[2.75rem] lg:text-7xl">
                   BATTLECODE
                 </h1>
-                <h1 className="text-blur absolute text-[2.75rem] font-medium tracking-wider blur-md sm:text-5xl lg:text-8xl">
+                <h1 className="text-blur absolute text-[2.35rem] font-medium tracking-wider blur-md sm:text-[2.75rem] lg:text-7xl">
                   BATTLECODE
                 </h1>
               </div>
@@ -59,7 +40,7 @@ const Hero = () => {
             </button>
           </div>
 
-          <div className="relative w-full max-w-md px-2 lg:absolute lg:bottom-8 lg:left-1/2 lg:max-w-lg lg:-translate-x-1/2 lg:px-0">
+          <div className="absolute bottom-[max(2.75rem,calc(env(safe-area-inset-bottom)+1.75rem))] left-1/2 w-full max-w-md -translate-x-1/2 px-6 sm:px-8 lg:bottom-12 lg:max-w-lg lg:px-0">
             <p className="text-shadow-heading text-center text-[0.65rem] uppercase leading-relaxed tracking-[2px] text-white sm:text-[0.7rem] sm:tracking-[3px] lg:text-[0.8rem] lg:tracking-[4px]">
               This is more than just programming—it&apos;s precision under
               pressure. Enter the match with intent. Exit with impact.
