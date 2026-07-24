@@ -43,7 +43,7 @@ body {
 }
 
 .stickyMask {
-  background: url("/mask.svg") no-repeat;
+  background: url("/mask.webp") no-repeat;
   background-position: 6px center;
   background-size: cover;
   color: transparent;

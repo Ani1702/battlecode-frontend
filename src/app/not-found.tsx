@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <div className="flex h-screen items-center justify-center flex-col bg-black text-center">
       <Image
-        src="/simulation/battlecode-logo.png"
+        src="/simulation/battlecode-logo.webp"
         alt="Battlecode Logo"
         className="h-100"
         width={400}

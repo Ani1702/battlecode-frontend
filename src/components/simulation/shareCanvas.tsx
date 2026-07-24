@@ -7,9 +7,9 @@ export interface ShareCanvasOptions {
 
 const WIDTH = 1080;
 const HEIGHT = 1920;
-const LOGO_PATH = "/simulation/battlecode-logo.png";
-const QR_PATH = "/battlecode_qr_nobg.png";
-const QR_FALLBACK_PATH = "/battlecode_qr.png";
+const LOGO_PATH = "/simulation/battlecode-logo.webp";
+const QR_PATH = "/battlecode_qr_black.webp";
+const QR_FALLBACK_PATH = "/battlecode_qr.webp";
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {

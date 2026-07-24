@@ -9,10 +9,10 @@ const Hero = () => {
       <div className="h-full z-1 orbitron text-white bg-[radial-gradient(50%_50%_at_50%_50%,rgba(0,0,0,0.17)_0%,rgba(0,0,0,0.57)_100%)]">
         <div className="hud">
           <div className="absolute topHUD left-0 top-2 h-[4rem] w-full flex items-center justify-center sm:h-[5rem] lg:h-[6rem]">
-            <div className="text-white h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 tracking-wider">
+            <div className="text-white h-full w-full bg-[url(/TopBar.webp)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 tracking-wider">
               IEEE COMPUTER SOCIETY
             </div>
-            <div className="text-white h-full w-full bg-[url(/TopBar.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
+            <div className="text-white h-full w-full bg-[url(/TopBar.webp)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
               IEEE COMPUTER SOCIETY
             </div>
             <div className="text-white h-full w-full bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md tracking-wider">
@@ -21,12 +21,12 @@ const Hero = () => {
           </div>
 
           <div className="absolute leftHUD left-10 top-0 h-full w-[6rem] flex items-center justify-center">
-            <div className="h-full w-full  lg:bg-[url(/LeftLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
-            <div className="h-full w-full  sm:hidden lg:bg-[url(/LeftLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
+            <div className="h-full w-full  lg:bg-[url(/LeftLine.webp)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
+            <div className="h-full w-full  sm:hidden lg:bg-[url(/LeftLine.webp)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
           </div>
           <div className="absolute rightHUD right-10 top-0 h-full w-[6rem] flex items-center justify-center">
-            <div className="h-full w-full  lg:bg-[url(/RightLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
-            <div className="h-full w-full  lg:bg-[url(/RightLine.svg)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
+            <div className="h-full w-full  lg:bg-[url(/RightLine.webp)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
+            <div className="h-full w-full  lg:bg-[url(/RightLine.webp)] bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6 absolute blur-md"></div>
           </div>
           <div className="absolute bottomRight right-10 top-0 h-full w-[6rem] flex items-flex-end justify-center">
             <div className="h-full w-full    bg-no-repeat bg-center flex flex-col items-center justify-center space-y-6"></div>
