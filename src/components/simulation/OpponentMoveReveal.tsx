@@ -8,7 +8,7 @@ export default function OpponentMoveReveal({
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/70">
+    <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-[0.7rem] text-white/70 sm:px-4 sm:py-3 sm:text-sm">
       Opponent:{" "}
       <span className="font-mono text-orange-300">{instructionLabel}</span>
     </div>

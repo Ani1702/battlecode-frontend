@@ -42,7 +42,7 @@ function ActionButton({
         "sim-action-btn relative rounded-md border font-semibold uppercase tracking-wider transition",
         compact
           ? "px-2 py-2 text-[0.65rem]"
-          : "w-full px-4 py-3 text-left text-sm",
+          : "w-full px-2 py-2 text-center text-[0.7rem] sm:px-4 sm:py-3 sm:text-left sm:text-sm",
         active
           ? confirmReady
             ? "sim-action-btn--confirm border-cyan-400/80 bg-cyan-500/20 text-cyan-100"
@@ -127,17 +127,21 @@ export default function ActionPanel({
       className={[
         compact
           ? "flex flex-col gap-2"
-          : "glass-box flex flex-col gap-3 rounded-lg p-4",
+          : "glass-box flex flex-col gap-2 rounded-lg p-2.5 sm:gap-3 sm:p-4",
       ].join(" ")}
     >
       {!compact ? (
-        <p className="text-xs uppercase tracking-wider text-white/50">
+        <p className="text-[0.65rem] uppercase tracking-wider text-white/50 sm:text-xs">
           Choose action
         </p>
       ) : null}
 
       <div
-        className={compact ? "grid grid-cols-3 gap-1.5" : "flex flex-col gap-2"}
+        className={
+          compact
+            ? "grid grid-cols-3 gap-1.5"
+            : "grid grid-cols-3 gap-1.5 sm:flex sm:flex-col sm:gap-2"
+        }
       >
         <ActionButton
           label="Move"

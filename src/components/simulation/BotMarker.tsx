@@ -1,14 +1,22 @@
 import type { Bot, BotId, GameState } from "@/game/engine/types";
 import type { MoveTween } from "./combatVfxTypes";
 
+function HeartIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className="h-[0.85em] w-[0.85em]"
+      fill={filled ? "#ef4444" : "rgba(255,255,255,0.28)"}
+    >
+      <path d="M8 14s-5.5-3.4-5.5-7A3.2 3.2 0 0 1 8 3.7 3.2 3.2 0 0 1 13.5 7C13.5 10.6 8 14 8 14z" />
+    </svg>
+  );
+}
+
 function renderHearts(lives: number, maxLives = 2) {
   return Array.from({ length: maxLives }, (_, index) => (
-    <span
-      key={index}
-      className={index < lives ? "text-red-500" : "text-white/25"}
-    >
-      ♥
-    </span>
+    <HeartIcon key={index} filled={index < lives} />
   ));
 }
 

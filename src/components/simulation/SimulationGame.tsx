@@ -64,10 +64,12 @@ export default function SimulationGame() {
   return (
     <SimulationLayout compact={isEndScreen}>
       {!isEndScreen ? (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 sm:mb-6 sm:gap-4">
           <div>
-            <h1 className="orbitron text-2xl">BattleCode Simulation</h1>
-            <p className="mt-1 text-sm font-medium uppercase tracking-wider text-orange-300/90">
+            <h1 className="orbitron text-lg sm:text-2xl">
+              BattleCode Simulation
+            </h1>
+            <p className="mt-0.5 text-[0.65rem] font-medium uppercase tracking-wider text-orange-300/90 sm:mt-1 sm:text-sm">
               Beat the bot in minimum moves
             </p>
           </div>
@@ -83,7 +85,7 @@ export default function SimulationGame() {
       ) : null}
 
       {showPlayingBoard ? (
-        <div className="flex flex-1 flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-6">
+        <div className="flex flex-1 flex-col gap-2.5 sm:gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-6">
           <GridBoard
             state={gameState}
             combatVfx={combatVfx}
@@ -100,7 +102,7 @@ export default function SimulationGame() {
             onCellClick={handleCellClick}
           />
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 sm:gap-4">
             <OpponentMoveReveal instructionLabel={opponentInstructionLabel} />
             <ActionPanel
               actionMode={actionMode}
@@ -113,7 +115,7 @@ export default function SimulationGame() {
               onSelectShield={handleSelectShield}
             />
             {isAnimating ? (
-              <p className="text-xs uppercase tracking-wider text-orange-300/80">
+              <p className="text-[0.65rem] uppercase tracking-wider text-orange-300/80 sm:text-xs">
                 {animationPhase === "move"
                   ? "Moving..."
                   : animationPhase === "charge"

@@ -89,14 +89,14 @@ export default function GridBoard({
       className={[
         compact
           ? "w-full rounded-md bg-white/[0.04] p-1.5"
-          : "glass-box w-full rounded-lg p-3 md:p-4",
+          : "glass-box w-full rounded-lg p-2 sm:p-3 md:p-4",
       ].join(" ")}
     >
       <div
         className={
           compact
             ? "relative mx-auto w-full max-w-[200px]"
-            : "relative mx-auto w-full max-w-md"
+            : "relative mx-auto w-full max-w-[280px] sm:max-w-md"
         }
       >
         <div
