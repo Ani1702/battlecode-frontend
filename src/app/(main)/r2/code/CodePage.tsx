@@ -179,11 +179,13 @@ export default function CodePage({
     //comment here to enable copy-paste
     // Disable paste via context menu
     editor.addAction({
-      id: "disable-paste",
+      id: "editor.action.clipboardPasteAction",
       label: "Paste",
-      keybindings: [],
+      keybindings: [monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV],
       precondition: "false",
-      run: () => {},
+      run: () => {
+        showErrorToast("Paste is disabled");
+      },
     });
     // Block DOM paste events
     const domNode = editor.getDomNode();
