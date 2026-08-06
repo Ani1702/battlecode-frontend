@@ -32,7 +32,6 @@ import {
   saveToGameState,
   setTutorialDone,
   type SimulationSave,
-  type SimulationStatus,
 } from "../storage/simulationStorage";
 import type {
   GameEvent,
@@ -63,11 +62,16 @@ function resolvePlayingPhase(): GamePhase {
 }
 
 function resolvePhaseFromSave(save: SimulationSave): GamePhase {
+  // Tutorial takes priority so home → game always re-shows it when flagged.
+  if (!getTutorialDone()) {
+    return "tutorial";
+  }
+
   if (save.status !== "playing") {
     return save.status;
   }
 
-  return resolvePlayingPhase();
+  return "playing";
 }
 
 function trackOutcomePhase(phase: GamePhase, save: SimulationSave): void {
@@ -97,7 +101,8 @@ function resolveOutcome(
   currentSave: SimulationSave,
 ): { save: SimulationSave; phase: GamePhase } {
   if (result.outcome === "win" || result.outcome === "loss") {
-    const attemptsRemaining = Math.max(0, currentSave.attemptsRemaining - 1);
+    // Attempts are unlimited — never decrement or move to exhausted.
+    const attemptsRemaining = currentSave.attemptsRemaining;
 
     if (result.outcome === "win") {
       return {
@@ -111,15 +116,12 @@ function resolveOutcome(
       };
     }
 
-    const status: SimulationStatus =
-      attemptsRemaining === 0 ? "exhausted" : "lost";
-
     return {
       save: gameStateToSave(result.nextState, {
         attemptsRemaining,
-        status,
+        status: "lost",
       }),
-      phase: status,
+      phase: "lost",
     };
   }
 
@@ -261,6 +263,17 @@ export function useSimulationGame() {
   useEffect(() => {
     const existing = loadSimulation(config.id);
     if (existing) {
+      // Older saves could be stuck in exhausted; attempts are unlimited now.
+      if (existing.status === "exhausted") {
+        const migrated: SimulationSave = {
+          ...existing,
+          status: "lost",
+        };
+        persistSave(migrated);
+        syncPhaseFromSave(migrated);
+        return;
+      }
+
       syncPhaseFromSave(existing);
       return;
     }
@@ -524,7 +537,7 @@ export function useSimulationGame() {
   }, [phase, gameState, actionMode]);
 
   const retryAttempt = useCallback(() => {
-    if (!save || save.attemptsRemaining <= 0) {
+    if (!save) {
       return;
     }
 
@@ -543,17 +556,39 @@ export function useSimulationGame() {
     setPhase("playing");
   }, [save, config, persistSave, clearSelection]);
 
-  const completeTutorial = useCallback(() => {
+  const beginPlayingAfterTutorial = useCallback(() => {
     setTutorialDone(true);
-    SimEvents.tutorialComplete();
+
+    if (!save || save.status === "playing") {
+      setPhase("playing");
+      return;
+    }
+
+    // End-state save from a previous visit — start a fresh run after the tutorial.
+    animationTokenRef.current += 1;
+    const fresh = createFreshSave(config);
+    fresh.attemptsRemaining = save.attemptsRemaining;
+    persistSave(fresh);
+    const state = saveToGameState(fresh);
+    setGameState(state);
+    setDisplayState(state);
+    setLastStep(null);
+    setPendingTransition(null);
+    setCombatVfx(null);
+    clearSelection();
+    setAnimationPhase("idle");
     setPhase("playing");
-  }, []);
+  }, [save, config, persistSave, clearSelection]);
+
+  const completeTutorial = useCallback(() => {
+    SimEvents.tutorialComplete();
+    beginPlayingAfterTutorial();
+  }, [beginPlayingAfterTutorial]);
 
   const skipTutorial = useCallback(() => {
-    setTutorialDone(true);
     SimEvents.tutorialSkip();
-    setPhase("playing");
-  }, []);
+    beginPlayingAfterTutorial();
+  }, [beginPlayingAfterTutorial]);
 
   const opponentInstruction: Instruction | null =
     lastStep?.opponentInstruction ?? null;

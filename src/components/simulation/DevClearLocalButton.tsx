@@ -29,7 +29,7 @@ export default function DevClearLocalButton() {
     <button
       type="button"
       onClick={handleClear}
-      className="fixed bottom-4 right-4 z-[60] rounded border border-red-500/50 bg-red-950/80 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-red-200 shadow-lg backdrop-blur-sm transition hover:bg-red-900/90"
+      className="fixed bottom-16 right-4 z-[60] rounded border border-red-500/50 bg-red-950/80 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-red-200 shadow-lg backdrop-blur-sm transition hover:bg-red-900/90"
       title="Dev only — clears simulation save and tutorial flag"
     >
       Clear localhost

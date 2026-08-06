@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import BackToHomeButton from "./BackToHomeButton";
 import DevClearLocalButton from "./DevClearLocalButton";
 
 export default function SimulationLayout({
@@ -18,6 +19,7 @@ export default function SimulationLayout({
       >
         {children}
       </div>
+      <BackToHomeButton />
       <DevClearLocalButton />
     </div>
   );

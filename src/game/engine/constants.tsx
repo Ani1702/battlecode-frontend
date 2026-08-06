@@ -25,6 +25,7 @@ export function isInstructionAllowed(
 
 export const STARTING_LIVES = 2 as const;
 
+/** Kept for save shape compatibility; attempts are unlimited in gameplay. */
 export const STARTING_ATTEMPTS = 5 as const;
 
 export const DEFAULT_MAX_CYCLES = 50;

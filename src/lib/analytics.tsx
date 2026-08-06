@@ -31,4 +31,8 @@ export const SimEvents = {
     trackEvent("sim_share_download", { variant }),
   shareNative: (variant: "win" | "loss") =>
     trackEvent("sim_share_native", { variant }),
+  registerComingSoon: (variant: "win" | "loss" | "exhausted") =>
+    trackEvent("sim_register_coming_soon", { variant }),
+  howItWorksOpen: (variant: "win" | "loss" | "exhausted") =>
+    trackEvent("sim_how_it_works_open", { variant }),
 } as const;

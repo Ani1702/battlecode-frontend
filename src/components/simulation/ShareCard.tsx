@@ -20,19 +20,17 @@ export default function ShareCard({
   cyclesToWin,
   playerLivesRemaining,
   shareEventDate,
-  attemptsRemaining,
   onRetry,
 }: {
   variant: "win" | "loss";
   cyclesToWin?: number;
   playerLivesRemaining?: number;
   shareEventDate: string;
-  attemptsRemaining?: number;
   onRetry?: () => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [shareHint, setShareHint] = useState<string | null>(null);
-  const canRetry = Boolean(onRetry && (attemptsRemaining ?? 0) > 0);
+  const canRetry = Boolean(onRetry);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,14 +102,6 @@ export default function ShareCard({
         {variant === "win" ? "Victory" : "Mission Report"}
       </h2>
 
-      {typeof attemptsRemaining === "number" ? (
-        <p className="mt-1 text-center text-xs uppercase tracking-wider text-white/55">
-          {attemptsRemaining > 0
-            ? `${attemptsRemaining} attempt${attemptsRemaining === 1 ? "" : "s"} left`
-            : "No attempts left"}
-        </p>
-      ) : null}
-
       <div className="mx-auto mt-3 max-w-[min(22rem,88vw)] overflow-hidden rounded-lg border border-white/10 bg-black/40 sm:mt-4 sm:max-w-[24rem]">
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -137,7 +127,7 @@ export default function ShareCard({
           onClick={onRetry}
           className="gradient-border-button mx-auto mt-4 block w-auto min-w-[12rem] max-w-[16rem] px-8 py-3 text-sm font-semibold uppercase tracking-widest text-white sm:mt-5 sm:py-3.5 sm:text-base"
         >
-          Retry — {attemptsRemaining} left
+          Retry
         </button>
       ) : null}
 

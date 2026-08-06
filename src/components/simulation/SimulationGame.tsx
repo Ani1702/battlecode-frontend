@@ -2,10 +2,9 @@
 
 import ActionPanel from "./ActionPanel";
 import AttemptsBadge from "./AttemptsBadge";
-import ExhaustedView from "./ExhaustedView";
+import EndScreen from "./EndScreen";
 import GridBoard from "./GridBoard";
 import OpponentMoveReveal from "./OpponentMoveReveal";
-import ShareCard from "./ShareCard";
 import SimulationLayout from "./SimulationLayout";
 import TutorialOverlay from "./TutorialOverlay";
 import { useSimulationGame } from "@/game/hooks/useSimulationGame";
@@ -75,10 +74,7 @@ export default function SimulationGame() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {showPlayingBoard ? (
-              <AttemptsBadge
-                attemptsRemaining={save.attemptsRemaining}
-                cycle={gameState.cycle}
-              />
+              <AttemptsBadge cycle={gameState.cycle} />
             ) : null}
           </div>
         </div>
@@ -128,31 +124,22 @@ export default function SimulationGame() {
       ) : null}
 
       {phase === "won" ? (
-        <ShareCard
+        <EndScreen
           variant="win"
           cyclesToWin={save.cyclesToWin ?? gameState?.cycle ?? 0}
           playerLivesRemaining={
             save.playerLivesRemaining ?? gameState?.player.lives ?? 0
           }
           shareEventDate={config.shareEventDate}
-          attemptsRemaining={save.attemptsRemaining}
-          onRetry={save.attemptsRemaining > 0 ? retryAttempt : undefined}
-        />
-      ) : null}
-
-      {phase === "lost" ? (
-        <ShareCard
-          variant="loss"
-          shareEventDate={config.shareEventDate}
-          attemptsRemaining={save.attemptsRemaining}
           onRetry={retryAttempt}
         />
       ) : null}
 
-      {phase === "exhausted" ? (
-        <ExhaustedView
-          nextSimulationDate={config.nextSimulationDate}
+      {phase === "lost" || phase === "exhausted" ? (
+        <EndScreen
+          variant="loss"
           shareEventDate={config.shareEventDate}
+          onRetry={retryAttempt}
         />
       ) : null}
     </SimulationLayout>

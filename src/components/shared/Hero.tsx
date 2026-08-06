@@ -1,8 +1,15 @@
 "use client";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { setTutorialDone } from "@/game/storage/simulationStorage";
 
 const Hero = () => {
   const router = useRouter();
+
+  useEffect(() => {
+    // Visiting home means the next minigame session should show the tutorial again.
+    setTutorialDone(false);
+  }, []);
 
   return (
     <div className="fixed inset-0 overflow-hidden overscroll-none bg-[url(/Landingpage.webp)] bg-cover bg-center">
