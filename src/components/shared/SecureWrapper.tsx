@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { showErrorToast } from "@/components/shared/CustomToast";
 
 export default function SecureWrapper({
   children,
@@ -34,6 +35,8 @@ export default function SecureWrapper({
     [],
   );
 
+  const lastToastRef = useRef(0);
+
   // Keep ref in sync with state
   useEffect(() => {
     violationsRef.current = fullscreenViolations;
@@ -53,6 +56,14 @@ export default function SecureWrapper({
     const prevent = (e: Event) => {
       e.preventDefault();
       e.stopPropagation();
+
+      const now=Date.now();
+      if (now - lastToastRef.current > 10000) {
+        // only show once per second, avoids toast spam
+        showErrorToast("Copy/Paste is disabled");
+        lastToastRef.current = now;
+      }
+
       return false;
     };
 
@@ -71,6 +82,11 @@ export default function SecureWrapper({
       ) {
         e.preventDefault();
         e.stopPropagation();
+        const now=Date.now();
+        if (now - lastToastRef.current > 10000) {
+          showErrorToast("Copy/Paste is disabled");
+          lastToastRef.current = now;
+        }
         return false;
       }
 
