@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import {} from /*useRouter*/ "next/navigation";
+import {useRouter} from "next/navigation";
 import Image from "next/image";
-// import { useSocket } from "@/contexts/SocketContext";
-// import { useAuth } from "@/contexts/AuthContext";
+import { useSocket } from "@/contexts/SocketContext";
+import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/shared/button";
 import {
   Question,
@@ -50,9 +50,9 @@ interface CodePageProps {
 
 export default function CodePage({ round }: CodePageProps) {
   // const { matchId } = useParams();
-  /*const router = useRouter();*/
-  // const { socket } = useSocket();
-  // const { user } = useAuth();
+  const router = useRouter();
+  const { socket } = useSocket();
+  const { user } = useAuth();
 
   // Use sample question from the new question types
   const mockQuestion: Question = sampleQuestions[0];
@@ -274,6 +274,28 @@ export default function CodePage({ round }: CodePageProps) {
     return () => clearInterval(saveInterval);
   }, [saveSession]);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    // Listen for round ending while playing
+    const handleRoundEnd = (data: any) => {
+      const endedRound = String(data?.round ?? "");
+      const currentRound = String(round ?? "");
+
+      if (!data?.round || endedRound === currentRound) {
+        console.log(`Round ${round} ended by admin, redirecting to dashboard...`);
+        router.push("/dashboard");
+        router.refresh();
+      }
+    };
+
+    socket.on("round:ended", handleRoundEnd);
+
+    return () => {
+      socket.off("round:ended", handleRoundEnd);
+    };
+  }, [socket, router,round]);
+
   // Get timer display with color coding
   const getTimerDisplay = (): { time: string; className: string } => {
     if (!currentQuestion)
@@ -327,6 +349,12 @@ export default function CodePage({ round }: CodePageProps) {
   // Enhanced handleSubmit for client-only mode with session tracking
   function handleSubmit() {
     if (!currentQuestion || isSubmitting || !questionSession) return;
+
+    socket?.emit("client:optimisticScore", {
+    username:user?.user_metadata?.full_name|| user?.email || "Player",
+    points: currentQuestion.points || 100,
+    round: String(round),
+  });
 
     setIsSubmitting(true);
 

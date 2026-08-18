@@ -68,6 +68,22 @@ export default function Dashboard() {
     },
     [isClient],
   );
+  const handleOptimisticScoreUpdate = useCallback(
+    (data: { username: string; points: number }) => {
+      setLeaderboard((prev) => {
+        const updated = prev.map((entry) => {
+          if (entry.username === data.username || entry.name === data.username) {
+            return { ...entry, score: entry.score + data.points };
+          }
+          return entry;
+        });
+        return updated
+          .sort((a, b) => b.score - a.score)
+          .map((entry, index) => ({ ...entry, rank: index + 1 }));
+      });
+    },
+    []
+  );
 
   const handleCurrentRound = useCallback(
     (data: CurrentRoundData) => {
@@ -299,20 +315,22 @@ export default function Dashboard() {
     // Set up event listeners - just pass the function references
     socket.on("server:leaderboard", handleLeaderboard);
     socket.on("server:currentRound", handleCurrentRound);
+    socket.on("client:optimisticScore", handleOptimisticScoreUpdate);
     socket.on("round0:adminAdded", () => handleAdminAdded(0));
     socket.on("round1:adminAdded", () => handleAdminAdded(1));
     socket.on("round2:adminAdded", () => handleAdminAdded(2));
     socket.on("round3:adminAdded", () => handleAdminAdded(3));
 
     // Request initial data when socket connects
-    socket.emit("client:join");
-    socket.emit("client:getLeaderboard");
-    socket.emit("client:getCurrentRound");
+    socket.emit("user:join");
+    socket.emit("user:leaderboard");
+    socket.emit("user:current-round");
 
     // Cleanup function
     return () => {
       socket.off("server:leaderboard", handleLeaderboard);
       socket.off("server:currentRound", handleCurrentRound);
+      socket.off("client:optimisticScore", handleOptimisticScoreUpdate);
       socket.off("round0:adminAdded");
       socket.off("round1:adminAdded");
       socket.off("round2:adminAdded");
@@ -322,6 +340,7 @@ export default function Dashboard() {
     socket,
     isConnected,
     handleLeaderboard,
+    handleOptimisticScoreUpdate,
     handleCurrentRound,
     handleAdminAdded,
   ]);
