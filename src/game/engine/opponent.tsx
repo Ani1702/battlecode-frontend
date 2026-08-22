@@ -1,5 +1,8 @@
+import {
+  getAttackDirectionTowardPlayer,
+  getAttackDirectionTowardTarget,
+} from "./beam";
 import { ALL_DIRECTIONS, canUseAction } from "./constants";
-import { getAttackDirectionTowardPlayer } from "./beam";
 import {
   inBounds,
   isWalkable,
@@ -7,7 +10,7 @@ import {
   offsetPosition,
   positionsEqual,
 } from "./grid";
-import type { Bot, GameState, Instruction, Position } from "./types";
+import type { Bot, Direction, GameState, Instruction, Position } from "./types";
 
 function cloneBot(bot: Bot): Bot {
   return { ...bot };
@@ -48,69 +51,122 @@ function getMoveTarget(
   return canMoveTo(state.grid, to, otherPos) ? to : null;
 }
 
-function getPreferredMoveDirections(state: GameState): Instruction[] {
-  const from = { row: state.opponent.row, col: state.opponent.col };
-  const to = { row: state.player.row, col: state.player.col };
+function getPreferredDirections(from: Position, to: Position): Direction[] {
   const rowDelta = to.row - from.row;
   const colDelta = to.col - from.col;
-
-  const directions: Instruction[] = [];
+  const directions: Direction[] = [];
 
   if (Math.abs(rowDelta) >= Math.abs(colDelta)) {
     if (rowDelta < 0) {
-      directions.push({ type: "MOVE", direction: "UP" });
+      directions.push("UP");
     } else if (rowDelta > 0) {
-      directions.push({ type: "MOVE", direction: "DOWN" });
+      directions.push("DOWN");
     }
 
     if (colDelta < 0) {
-      directions.push({ type: "MOVE", direction: "LEFT" });
+      directions.push("LEFT");
     } else if (colDelta > 0) {
-      directions.push({ type: "MOVE", direction: "RIGHT" });
+      directions.push("RIGHT");
     }
   } else {
     if (colDelta < 0) {
-      directions.push({ type: "MOVE", direction: "LEFT" });
+      directions.push("LEFT");
     } else if (colDelta > 0) {
-      directions.push({ type: "MOVE", direction: "RIGHT" });
+      directions.push("RIGHT");
     }
 
     if (rowDelta < 0) {
-      directions.push({ type: "MOVE", direction: "UP" });
+      directions.push("UP");
     } else if (rowDelta > 0) {
-      directions.push({ type: "MOVE", direction: "DOWN" });
+      directions.push("DOWN");
     }
   }
 
   for (const direction of ALL_DIRECTIONS) {
-    const candidate: Instruction = { type: "MOVE", direction };
-    if (
-      !directions.some(
-        (existing) =>
-          existing.type === "MOVE" && existing.direction === direction,
-      )
-    ) {
-      directions.push(candidate);
+    if (!directions.includes(direction)) {
+      directions.push(direction);
     }
   }
 
   return directions;
 }
 
-export function chooseOpponentInstruction(state: GameState): Instruction {
-  const attackDirection = getAttackDirectionTowardPlayer(state);
-  if (
-    attackDirection !== null &&
-    canUseAction(state.opponent, "ATTACK") &&
-    Math.random() < 0.6
-  ) {
-    return { type: "ATTACK", direction: attackDirection };
+function getPreferredMoveDirections(state: GameState): Instruction[] {
+  return getPreferredDirections(
+    { row: state.opponent.row, col: state.opponent.col },
+    { row: state.player.row, col: state.player.col },
+  ).map((direction) => ({ type: "MOVE" as const, direction }));
+}
+
+function getPredictedPlayerLanding(state: GameState): Position | null {
+  const playerPos = { row: state.player.row, col: state.player.col };
+  const opponentPos = { row: state.opponent.row, col: state.opponent.col };
+
+  // Only the first legal closing step — same axis preference the bot uses.
+  // Side-steps and hesitation are not covered. That is the tell.
+  for (const direction of getPreferredDirections(playerPos, opponentPos)) {
+    const landing = offsetPosition(playerPos, direction);
+    if (canMoveTo(state.grid, landing, opponentPos)) {
+      return landing;
+    }
   }
 
+  return null;
+}
+
+const CLOSE_RANGE = 2;
+
+function isCloseRange(state: GameState): boolean {
+  return (
+    manhattanDistance(
+      { row: state.opponent.row, col: state.opponent.col },
+      { row: state.player.row, col: state.player.col },
+    ) <= CLOSE_RANGE
+  );
+}
+
+function getOffensiveAttackDirection(state: GameState): Direction | null {
+  const aligned = getAttackDirectionTowardPlayer(state);
+  if (aligned !== null) {
+    return aligned;
+  }
+
+  // Only reads the next step when you are already in its face.
+  if (!isCloseRange(state)) {
+    return null;
+  }
+
+  const landing = getPredictedPlayerLanding(state);
+  if (landing === null) {
+    return null;
+  }
+
+  return getAttackDirectionTowardTarget(
+    state.grid,
+    { row: state.opponent.row, col: state.opponent.col },
+    landing,
+  );
+}
+
+function playerCanHit(state: GameState, pos: Position): boolean {
+  return (
+    getAttackDirectionTowardTarget(
+      state.grid,
+      { row: state.player.row, col: state.player.col },
+      pos,
+    ) !== null
+  );
+}
+
+function pickMove(
+  state: GameState,
+  options: { requireCloser: boolean; avoidExposure: boolean },
+): Instruction | null {
   const opponent = state.opponent;
+  const playerPos = { row: state.player.row, col: state.player.col };
   const startDistance = manhattanDistance(
     { row: opponent.row, col: opponent.col },
-    { row: state.player.row, col: state.player.col },
+    playerPos,
   );
 
   for (const candidate of getPreferredMoveDirections(state)) {
@@ -119,13 +175,49 @@ export function chooseOpponentInstruction(state: GameState): Instruction {
       continue;
     }
 
-    const nextDistance = manhattanDistance(target, {
-      row: state.player.row,
-      col: state.player.col,
-    });
+    if (options.avoidExposure && playerCanHit(state, target)) {
+      continue;
+    }
 
-    if (nextDistance < startDistance) {
-      return candidate;
+    if (
+      options.requireCloser &&
+      manhattanDistance(target, playerPos) >= startDistance
+    ) {
+      continue;
+    }
+
+    return candidate;
+  }
+
+  return null;
+}
+
+export function chooseOpponentInstruction(state: GameState): Instruction {
+  const attackDirection = getOffensiveAttackDirection(state);
+  if (attackDirection !== null && canUseAction(state.opponent, "ATTACK")) {
+    return { type: "ATTACK", direction: attackDirection };
+  }
+
+  // At close range it will not walk into a cell you can already snipe.
+  // From farther away it just chases, including into your beam.
+  const avoidExposure =
+    canUseAction(state.opponent, "ATTACK") && isCloseRange(state);
+
+  const closing = pickMove(state, {
+    requireCloser: true,
+    avoidExposure,
+  });
+  if (closing) {
+    return closing;
+  }
+
+  if (avoidExposure) {
+    const sidestep = pickMove(state, {
+      requireCloser: false,
+      avoidExposure: true,
+    });
+    if (sidestep) {
+      return sidestep;
     }
   }
 
@@ -135,7 +227,7 @@ export function chooseOpponentInstruction(state: GameState): Instruction {
 
   for (const direction of ALL_DIRECTIONS) {
     const candidate: Instruction = { type: "MOVE", direction };
-    if (getMoveTarget(state, opponent, candidate) !== null) {
+    if (getMoveTarget(state, state.opponent, candidate) !== null) {
       return candidate;
     }
   }

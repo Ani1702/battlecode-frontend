@@ -15,6 +15,9 @@ import { SimEvents } from "@/lib/analytics";
 const INSTAGRAM_URL =
   "https://www.instagram.com/ieeecs_vit?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==";
 
+export const REGISTRATION_URL =
+  "https://gravitas.vit.ac.in/events/4160a46a-3701-4622-8e7c-66909769704b";
+
 type EndVariant = "win" | "loss";
 
 const HOW_IT_WORKS_SECTIONS = [
@@ -64,7 +67,6 @@ export default function EndScreen({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [shareHint, setShareHint] = useState<string | null>(null);
   const [overlayOpen, setOverlayOpen] = useState(false);
-  const [comingSoonVisible, setComingSoonVisible] = useState(false);
   const titleId = useId();
   const analyticsVariant = variant;
 
@@ -121,23 +123,6 @@ export default function EndScreen({
     };
   }, [overlayOpen]);
 
-  useEffect(() => {
-    if (!comingSoonVisible) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setComingSoonVisible(false);
-    }, 2500);
-
-    return () => window.clearTimeout(timer);
-  }, [comingSoonVisible]);
-
-  const handleRegister = () => {
-    setComingSoonVisible(true);
-    SimEvents.registerComingSoon(analyticsVariant);
-  };
-
   const handleOpenHowItWorks = () => {
     setOverlayOpen(true);
     SimEvents.howItWorksOpen(analyticsVariant);
@@ -177,44 +162,44 @@ export default function EndScreen({
 
   return (
     <>
-      <div className="glass-box rounded-lg p-3 sm:p-5">
-        <div className="relative flex items-start justify-center">
+      <div className="glass-box flex w-full flex-col rounded-lg p-3 sm:p-5 lg:h-full lg:max-h-full lg:min-h-0 lg:overflow-hidden lg:p-4">
+        <div className="relative flex shrink-0 items-start justify-center pr-20 sm:pr-24">
           <p className="text-center text-[0.65rem] font-medium uppercase tracking-[0.2em] text-orange-300/90 sm:text-xs">
             Welcome to BattleCode
           </p>
           <button
             type="button"
             onClick={handleOpenHowItWorks}
-            className="absolute right-0 top-0 text-[0.65rem] uppercase tracking-wider text-white/60 transition hover:text-orange-300 sm:text-xs"
+            className="absolute right-0 top-0 rounded-md border border-orange-300/50 bg-orange-300/10 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-wider text-orange-200 transition hover:border-orange-300/80 hover:bg-orange-300/20 hover:text-orange-100 sm:px-3 sm:text-xs"
           >
             Know more
           </button>
         </div>
 
-        <h2 className="orbitron mt-1.5 text-center text-lg sm:mt-2 sm:text-2xl">
+        <h2 className="orbitron mt-1.5 shrink-0 text-center text-lg sm:mt-2 sm:text-2xl lg:mt-1 lg:text-xl">
           {variant === "win" ? "Victory" : "Mission Report"}
         </h2>
 
-        <div className="mx-auto mt-3 max-w-[min(22rem,88vw)] overflow-hidden rounded-lg border border-white/10 bg-black/40 sm:mt-4 sm:max-w-[24rem]">
+        <div className="mx-auto mt-3 flex min-h-0 w-full max-w-[min(22rem,88vw)] flex-1 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black/40 sm:mt-4 sm:max-w-[24rem] lg:mt-2 lg:max-h-[calc(100dvh-18rem)]">
           {previewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={previewUrl}
               alt="BattleCode share card preview"
-              className="h-auto max-h-[42dvh] w-full object-contain sm:max-h-[50dvh]"
+              className="h-auto max-h-[42dvh] w-full object-contain sm:max-h-[36dvh] lg:max-h-full"
             />
           ) : (
-            <div className="flex aspect-[9/16] max-h-[42dvh] items-center justify-center text-xs text-white/50 sm:max-h-[50dvh]">
+            <div className="flex aspect-[9/16] max-h-[42dvh] w-full items-center justify-center text-xs text-white/50 sm:max-h-[36dvh] lg:max-h-full">
               Generating share card...
             </div>
           )}
         </div>
 
-        <p className="mt-3 text-center text-xs text-orange-300/90 sm:text-sm">
+        <p className="mt-2 shrink-0 text-center text-xs text-orange-300/90 sm:mt-3 sm:text-sm lg:mt-2">
           {GAME_URL.replace(/^https?:\/\//, "")}
         </p>
 
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-3 sm:mt-4 sm:gap-4">
+        <div className="mt-2 flex shrink-0 flex-wrap items-center justify-center gap-3 sm:mt-3 sm:gap-4 lg:mt-2">
           <ShareActionButton
             icon={Download}
             label="Download share card"
@@ -232,27 +217,30 @@ export default function EndScreen({
           />
         </div>
 
-        {onRetry ? (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="gradient-border-button mx-auto mt-4 block w-auto min-w-[12rem] max-w-[16rem] px-8 py-3 text-sm font-semibold uppercase tracking-widest text-white sm:mt-5 sm:py-3.5 sm:text-base"
-          >
-            Retry
-          </button>
-        ) : null}
+        <div className="mt-3 flex shrink-0 flex-col items-center gap-2 sm:mt-4 lg:mt-3 lg:flex-row lg:justify-center lg:gap-3">
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="gradient-border-button flex h-12 w-[15.5rem] items-center justify-center px-3 py-0 text-[0.7rem] font-semibold uppercase tracking-wider text-white sm:h-14 sm:w-[17rem] sm:text-xs"
+            >
+              Retry
+            </button>
+          ) : null}
 
-        {comingSoonVisible ? (
-          <p
-            className="mt-2 text-center text-xs font-medium uppercase tracking-wider text-orange-300"
-            role="status"
+          <a
+            href={REGISTRATION_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => SimEvents.registerClick(analyticsVariant)}
+            className="gradient-border-button flex h-12 w-[15.5rem] items-center justify-center px-3 py-0 text-[0.7rem] font-semibold uppercase tracking-wider text-white sm:h-14 sm:w-[17rem] sm:text-xs"
           >
-            Coming soon
-          </p>
-        ) : null}
+            Register for BattleCode
+          </a>
+        </div>
 
         {shareHint ? (
-          <p className="mt-2 whitespace-pre-line text-center text-[0.65rem] leading-snug text-white/60 sm:mt-3 sm:text-sm">
+          <p className="mt-2 shrink-0 whitespace-pre-line text-center text-[0.65rem] leading-snug text-white/60 sm:mt-3 sm:text-sm">
             {shareHint}
           </p>
         ) : null}
@@ -342,21 +330,15 @@ export default function EndScreen({
             </div>
 
             <div className="shrink-0 border-t border-white/10 px-4 py-3 text-center">
-              <button
-                type="button"
-                onClick={handleRegister}
+              <a
+                href={REGISTRATION_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => SimEvents.registerClick(analyticsVariant)}
                 className="gradient-border-button mx-auto block w-auto min-w-[12rem] max-w-[18rem] px-8 py-2.5 text-sm font-semibold uppercase tracking-widest text-white"
               >
                 Register for BattleCode
-              </button>
-              {comingSoonVisible ? (
-                <p
-                  className="mt-2 text-xs font-medium uppercase tracking-wider text-orange-300"
-                  role="status"
-                >
-                  Coming soon
-                </p>
-              ) : null}
+              </a>
             </div>
           </div>
         </div>
