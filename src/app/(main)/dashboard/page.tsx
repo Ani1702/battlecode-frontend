@@ -4,6 +4,7 @@
 // import Navbar from "@/components/shared/Navbar";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { showErrorToast, showSuccessToast } from "@/components/shared/CustomToast";
+
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
@@ -12,6 +13,7 @@ import Image from "next/image";
 import SignOut from "@/components/auth/SignOut"
 // import toast from "react-hot-toast";
 import { useRef } from 'react';
+
 
 
 
@@ -42,6 +44,13 @@ interface CurrentRoundData {
 }
 
 export default function Dashboard() {
+
+  // Admin controls state
+  
+  // NEW: Round 3 Qualification State
+  const [qualifyCount, setQualifyCount] = useState<number | ''>('');
+  const [isQualifying, setIsQualifying] = useState(false);
+
   const { user, session, isLoading, userRole, userName /*username*/ } = useAuth();
   const { socket, isConnected } = useSocket();
   const router = useRouter();
@@ -273,11 +282,28 @@ export default function Dashboard() {
       'LOBBY': ['IN_PROGRESS', 'LOCKED'],
       'IN_PROGRESS': ['COMPLETED', 'LOBBY'],
       'COMPLETED': ['LOBBY']
-    };
-    
+    };    
     return validTransitions[currentStatus]?.includes(targetStatus) || false;
   };
 
+  // NEW: Handle R3 Qualification Emission
+  const handleQualifyR3 = () => {
+    if (!qualifyCount || qualifyCount <= 0) {
+      showErrorToast("Please enter a valid number of players");
+      return;
+    }
+    
+    setIsQualifying(true);
+    socket?.emit("admin:qualifyRound3", { count: Number(qualifyCount) }, (response: any) => {
+      setIsQualifying(false);
+      if (response?.success) {
+        showSuccessToast(`Successfully qualified top ${qualifyCount} players for Round 3!`);
+        setQualifyCount(''); // Reset input after success
+      } else {
+        showErrorToast(response?.error || "Failed to qualify players");
+      }
+    });
+  };
   // Fallback leaderboard data (in case socket hasn't loaded yet)
   const fallbackLeaderboard = [
     [1, "cypher", 2450, ""],
@@ -557,6 +583,40 @@ export default function Dashboard() {
               })}
             </div>
             
+            {/* NEW: Automated R3 Qualification Card */}
+            <div className="mt-6 bg-gray-800/80 border border-orange-500/30 rounded-lg p-5">
+              <h4 className="text-orange-400 font-bold mb-3 text-lg">Automate R3 Qualification</h4>
+              <p className="text-sm text-gray-300 mb-4">
+                Enter the number of top players to automatically qualify based on their current event score.
+              </p>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Number of Top Players (X)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={qualifyCount}
+                    onChange={(e) => setQualifyCount(e.target.value ? parseInt(e.target.value) : '')}
+                    className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-orange-500 transition-colors"
+                    placeholder="e.g., 40"
+                  />
+                </div>
+                <button
+                  onClick={handleQualifyR3}
+                  disabled={isQualifying || !qualifyCount}
+                  className={`px-6 py-2 rounded font-medium transition-all duration-200 whitespace-nowrap
+                    ${isQualifying || !qualifyCount
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 shadow-lg shadow-orange-500/20'
+                    }
+                  `}
+                >
+                  {isQualifying ? 'Processing...' : 'Qualify Players'}
+                </button>
+              </div>
+            </div>
             <div className="mt-6 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-4">
               <h4 className="text-orange-400 font-medium mb-2">Status Transitions:</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
