@@ -130,50 +130,37 @@ export default function Admin() {
 
   // Load currentRoundData and participants from localStorage on mount
   useEffect(() => {
-    console.log("[ADMIN STATE] Loading initial state from localStorage");
-
-    const savedRounds = localStorage.getItem("battlecode_rounds");
-    if (savedRounds) {
-      try {
-        const parsedRounds = JSON.parse(savedRounds);
-        console.log("[ADMIN STATE] Loaded saved rounds:", parsedRounds);
-        setCurrentRoundData(parsedRounds);
-      } catch (error) {
-        console.error("[ADMIN STATE] Failed to parse saved rounds:", error);
-        localStorage.removeItem("battlecode_rounds");
-      }
-    } else {
-      console.log("[ADMIN STATE] No saved rounds found in localStorage");
+    if (!socket) {
+      console.log("[SOCKET] No socket available for real-time updates");
+      return;
     }
 
-    // Load participants from localStorage
-    const savedParticipants = loadParticipantsFromStorage();
-    console.log(
-      "[ADMIN STATE] Loaded saved participants:",
-      savedParticipants.length,
-    );
-    if (savedParticipants.length > 0) {
-      setParticipants(savedParticipants);
-    }
+    const handleCurrentRound = (data: CurrentRoundData) => {
+      setCurrentRoundData(data);
+    };
 
-    // Load match participants for the selected round
-    const savedMatchParticipants = loadMatchParticipantsFromStorage(
-      selectedRoundForMatches,
-    );
-    console.log(
-      "[ADMIN STATE] Loaded saved match participants for round",
-      selectedRoundForMatches,
-      ":",
-      savedMatchParticipants.length,
-    );
-    if (savedMatchParticipants.length > 0) {
-      setMatchParticipants(savedMatchParticipants);
-    }
-  }, [
-    loadParticipantsFromStorage,
-    loadMatchParticipantsFromStorage,
-    selectedRoundForMatches,
-  ]);
+    const handleRedisResetSuccess = () => {
+      showSuccessToast("Redis cleared successfully");
+    };
+
+    // NEW: Catch the hidden backend errors!
+    const handleAdminError = (data: { error: string }) => {
+      console.error("[ADMIN ERROR]", data.error);
+      showErrorToast(`Backend Error: ${data.error}`);
+    };
+
+    socket.on("server:currentRound", handleCurrentRound);
+    socket.on("admin:reset:success", handleRedisResetSuccess);
+    socket.on("admin:error", handleAdminError); // <-- ADD THIS
+
+    socket.emit("client:getCurrentRound");
+
+    return () => {
+      socket.off("server:currentRound", handleCurrentRound);
+      socket.off("admin:reset:success", handleRedisResetSuccess);
+      socket.off("admin:error", handleAdminError); // <-- ADD THIS
+    };
+  }, [socket]);
 
   const addUserToRound = async (userEmail: string, roundNumber: number) => {
     console.log("[ADMIN ACTION] Adding user to round:", {
@@ -1464,7 +1451,8 @@ export default function Admin() {
                             <div className="flex items-center gap-3">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-white">
-                                {participant.username}
+                                {/* FIX: Add fallbacks so names don't show up blank */}
+                                {participant.username || participant.userId || "Unknown"}
                               </span>
                             </div>
                             <span className="text-gray-400 text-xs">
@@ -1540,7 +1528,8 @@ export default function Admin() {
                                 ></div>
                                 <div className="flex flex-col">
                                   <span className="text-white font-medium">
-                                    {participant.username}
+                                    {/* FIX: Add fallbacks so names don't show up blank */}
+                                    {participant.username || participant.userId || "Unknown"}
                                   </span>
                                   {participant.status === "in_match" &&
                                     participant.opponentUsername && (
@@ -1614,10 +1603,10 @@ export default function Admin() {
                             {p.username}
                           </td>
                           <td className="py-2 px-3 font-mono text-cyan-400">
-                            0
+                            {p.eventScore ?? 0}
                           </td>
                           <td className="py-2 px-3 text-sm">
-                            {p.status === "in_match" ? "In-match" : "Waiting"}
+                            {p.status === "in_match" || p.status === "in-match" ? "In-match" : "Waiting"}
                           </td>
                         </tr>
                       ))}
