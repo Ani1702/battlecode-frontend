@@ -91,9 +91,10 @@ interface Round3State extends BaseRoundState {
 
 interface Participant {
   userId: string;
+  id?: string; // Some round payloads (e.g. Round 2) key participants by `id`
   username: string;
   email?: string;
-  role?: string;
+  role?: "elite" | "challenger" | string; // Round 2: elite vs challenger
   status: string;
   rank?: number;
   eventScore?: number;
@@ -105,6 +106,8 @@ interface Participant {
   cooldownEndTime?: number;
   isReady?: boolean;
   opponentUsername?: string; // Included by backend for matched users
+  opponentRole?: "elite" | "challenger"; // Round 2: opponent's role when in a match
+  matchId?: string; // Round 2: match identifier when in_match
 }
 
 interface Problem {

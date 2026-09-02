@@ -335,15 +335,19 @@ export default function Admin() {
           roundNumber,
         );
 
-        // Backend already filtered waiting + in_match users
+        // Backend already filtered waiting + in_match users.
+        // Round 2 also parks elites/challengers in the bounty queue (in_bounty),
+        // so include them here otherwise the admin never sees those players.
         const activeUsers = [
           ...(participants.byStatus?.waiting || []),
           ...(participants.byStatus?.in_match || []),
+          ...(participants.byStatus?.in_bounty || []),
         ];
 
         console.log("[SOCKET STATE] Active users count:", {
           waiting: participants.byStatus?.waiting?.length || 0,
           in_match: participants.byStatus?.in_match?.length || 0,
+          in_bounty: participants.byStatus?.in_bounty?.length || 0,
           total: activeUsers.length,
         });
 
@@ -1016,6 +1020,36 @@ export default function Admin() {
   const isInCooldown =
     currentUser?.status === "cooldown" && cooldownTimeRemaining > 0;
 
+  // Round 2 splits players into "elite" and "challenger" roles. Render a small
+  // colour-coded badge so the admin can tell them apart at a glance.
+  const renderRoleBadge = (role?: string) => {
+    if (role !== "elite" && role !== "challenger") return null;
+    const isElite = role === "elite";
+    return (
+      <span
+        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+          isElite
+            ? "bg-purple-500/20 text-purple-300 border border-purple-500/50"
+            : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50"
+        }`}
+      >
+        {role}
+      </span>
+    );
+  };
+
+  const isRound2View = selectedRoundForMatches === 2;
+  const round2RoleCounts = isRound2View
+    ? matchParticipants.reduce(
+        (acc, p) => {
+          if (p.role === "elite") acc.elite += 1;
+          else if (p.role === "challenger") acc.challenger += 1;
+          return acc;
+        },
+        { elite: 0, challenger: 0 },
+      )
+    : null;
+
   return (
     <>
       <LoadingOverlay
@@ -1489,6 +1523,16 @@ export default function Admin() {
                 <h4 className="text-orange-400 font-medium">
                   Active Users in IN_PROGRESS Rounds
                 </h4>
+                {round2RoleCounts && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="px-2 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/50 font-semibold">
+                      {round2RoleCounts.elite} Elite
+                    </span>
+                    <span className="px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 font-semibold">
+                      {round2RoleCounts.challenger} Challenger
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="space-y-4">
                 <div className="flex gap-2">
@@ -1522,7 +1566,7 @@ export default function Admin() {
                       <div className="max-h-96 overflow-y-auto space-y-2">
                         {matchParticipants.map((participant, idx) => (
                           <div
-                            key={`match-${participant.userId}-${idx}`}
+                            key={`match-${participant.userId ?? participant.id}-${idx}`}
                             className={`bg-gray-600/50 px-4 py-3 rounded border-l-4 ${
                               participant.status === "in_match"
                                 ? "border-blue-500"
@@ -1539,16 +1583,20 @@ export default function Admin() {
                                   }`}
                                 ></div>
                                 <div className="flex flex-col">
-                                  <span className="text-white font-medium">
+                                  <span className="flex items-center gap-2 text-white font-medium">
                                     {participant.username}
+                                    {renderRoleBadge(participant.role)}
                                   </span>
                                   {participant.status === "in_match" &&
                                     participant.opponentUsername && (
-                                      <span className="text-sm text-blue-300 mt-1">
+                                      <span className="flex items-center gap-1 text-sm text-blue-300 mt-1">
                                         🎮 vs{" "}
                                         <span className="font-semibold text-blue-200">
                                           {participant.opponentUsername}
                                         </span>
+                                        {renderRoleBadge(
+                                          participant.opponentRole,
+                                        )}
                                       </span>
                                     )}
                                 </div>
@@ -1599,6 +1647,7 @@ export default function Admin() {
                       <tr className="border-b border-gray-700">
                         <th className="py-2 px-3 font-bold">#</th>
                         <th className="py-2 px-3 font-bold">Player</th>
+                        <th className="py-2 px-3 font-bold">Role</th>
                         <th className="py-2 px-3 font-bold">Score</th>
                         <th className="py-2 px-3 font-bold">Status</th>
                       </tr>
@@ -1606,12 +1655,17 @@ export default function Admin() {
                     <tbody>
                       {matchParticipants.map((p, idx) => (
                         <tr
-                          key={`${p.userId}-${idx}`}
+                          key={`${p.userId ?? p.id}-${idx}`}
                           className="border-gray-800 hover:bg-white/5 transition"
                         >
                           <td className="py-2 px-3">{idx + 1}</td>
                           <td className="py-2 px-3 max-w-[100px] truncate">
                             {p.username}
+                          </td>
+                          <td className="py-2 px-3">
+                            {renderRoleBadge(p.role) ?? (
+                              <span className="text-gray-500">—</span>
+                            )}
                           </td>
                           <td className="py-2 px-3 font-mono text-cyan-400">
                             0

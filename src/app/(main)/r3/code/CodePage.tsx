@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
-import Editor, { useMonaco } from "@monaco-editor/react";
+import { useMonaco } from "@monaco-editor/react";
+import Editor from "@/components/editor/LazyEditor";
 import * as monaco from "monaco-editor";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import {
@@ -22,7 +24,10 @@ import {
   Lock,
   Swords,
 } from "lucide-react";
-import HackModal from "@/components/shared/HackModal";
+// Hacking arena + its Monaco instance load on demand, not in the route bundle.
+const HackModal = dynamic(() => import("@/components/shared/HackModal"), {
+  ssr: false,
+});
 import SecureWrapper from "@/components/shared/SecureWrapper";
 
 // --- Interfaces ---
@@ -641,12 +646,14 @@ export default function CodePage({
     //remove this securewrapper also to disable copy paste
     <SecureWrapper>
       <>
-        <HackModal
-          isOpen={isHackModalOpen}
-          onClose={() => setIsHackModalOpen(false)}
-          submissions={hackableSubmissions[currentProblem.id] || []}
-          onSubmitHack={handleHackSubmit}
-        />
+        {isHackModalOpen && (
+          <HackModal
+            isOpen={isHackModalOpen}
+            onClose={() => setIsHackModalOpen(false)}
+            submissions={hackableSubmissions[currentProblem.id] || []}
+            onSubmitHack={handleHackSubmit}
+          />
+        )}
         <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
           <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
             <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">

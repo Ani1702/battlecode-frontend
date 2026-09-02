@@ -2,12 +2,19 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Editor, { useMonaco } from "@monaco-editor/react";
+import { useMonaco } from "@monaco-editor/react";
+import Editor from "@/components/editor/LazyEditor";
 import * as monaco from "monaco-editor";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
-import HackModal from "@/components/shared/HackModal";
+import dynamic from "next/dynamic";
+
+// The hacking arena (and the Monaco instance it renders) is only needed once a
+// player opens it, so load it on demand instead of in the route's main bundle.
+const HackModal = dynamic(() => import("@/components/shared/HackModal"), {
+  ssr: false,
+});
 import {
   showSuccessToast,
   showErrorToast,
@@ -1209,12 +1216,14 @@ export default function Round3Page() {
 
   return (
     <SecureWrapper>
-      <HackModal
-        isOpen={isHackModalOpen}
-        onClose={() => setIsHackModalOpen(false)}
-        submissions={hackableSubmissions[currentProblem.id] || []}
-        onSubmitHack={handleHackAttempt}
-      />
+      {isHackModalOpen && (
+        <HackModal
+          isOpen={isHackModalOpen}
+          onClose={() => setIsHackModalOpen(false)}
+          submissions={hackableSubmissions[currentProblem.id] || []}
+          onSubmitHack={handleHackAttempt}
+        />
+      )}
       <div className="flex flex-col h-screen text-white overflow-hidden bg-[url('/bg-code.svg')] bg-fixed bg-cover bg-center oxanium">
         <div className="flex-1 flex p-4 gap-4 bg-black/40 min-h-0">
           <CustomScrollbar className="w-1/2 flex border rounded-lg border-amber-600 bg-black/40 p-4 flex-col min-h-0 overflow-hidden glass-box">

@@ -11,7 +11,8 @@ import {
   Play,
 } from "lucide-react";
 import Button from "@/components/shared/button";
-import Editor, { useMonaco } from "@monaco-editor/react";
+import { useMonaco } from "@monaco-editor/react";
+import Editor from "@/components/editor/LazyEditor";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import {
   showSuccessToast,

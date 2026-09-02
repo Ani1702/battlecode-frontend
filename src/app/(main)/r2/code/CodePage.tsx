@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Editor, { useMonaco } from "@monaco-editor/react";
+import { useMonaco } from "@monaco-editor/react";
+import Editor from "@/components/editor/LazyEditor";
 import * as monaco from "monaco-editor";
 import { useAuth } from "@/contexts/AuthContext";
 import CustomScrollbar from "@/components/shared/CustomScrollbar";

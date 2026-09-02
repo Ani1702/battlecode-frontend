@@ -1,6 +1,7 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
-import Editor, { useMonaco } from "@monaco-editor/react";
+import { useMonaco } from "@monaco-editor/react";
+import Editor from "@/components/editor/LazyEditor";
 import { ChevronLeft, ChevronRight, X, Swords } from "lucide-react";
 // import CustomScrollbar from "@/components/shared/CustomScrollbar";
 
