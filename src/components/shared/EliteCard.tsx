@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface Player {
   id: string;
@@ -11,25 +11,18 @@ interface EliteCardProps {
   onChallenge: (playerId: string) => void;
 }
 
-export default function EliteCard({ 
-  player, 
-  onChallenge 
-}: EliteCardProps) {
+export default function EliteCard({ player, onChallenge }: EliteCardProps) {
   return (
-    <div 
-      className="rounded-lg p-4 mb-3 shadow-md bg-orange-500"
-    >
+    <div className="rounded-lg p-4 mb-3 shadow-md bg-orange-500">
       <div className="flex items-center justify-between">
         {/* Player Info */}
         <div className="flex-1">
           <h3 className="text-white font-semibold text-lg font-orbitron">
             {player.username}
           </h3>
-          <p className="text-orange-100 text-sm">
-            Rank: #{player.rank}
-          </p>
+          <p className="text-orange-100 text-sm">Rank: #{player.rank}</p>
         </div>
-        
+
         {/* Challenge Button */}
         <div className="flex gap-2 ml-4">
           <button

@@ -9,7 +9,7 @@ interface Problem {
   difficulty?: string;
   constraints?: string[];
   hints?: string[];
-  [key: string]: unknown; 
+  [key: string]: unknown;
 }
 
 interface RoundData {

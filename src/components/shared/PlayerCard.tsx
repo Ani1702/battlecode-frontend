@@ -12,7 +12,7 @@ export default function PlayerCard({ username }: PlayerCardProps) {
         className="absolute inset-0 w-full z-0 h-full bg-contain bg-no-repeat bg-center"
         style={{
           backgroundImage: "url('/player_card.svg')",
-          backgroundSize: '100% 100%'
+          backgroundSize: "100% 100%",
         }}
       />
 
@@ -35,7 +35,6 @@ export default function PlayerCard({ username }: PlayerCardProps) {
           {username}
         </p>
       </div>
-
     </div>
   );
 }

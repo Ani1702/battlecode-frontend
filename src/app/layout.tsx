@@ -7,7 +7,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import MobileOnly from "@/components/MobileOnly";
 
-
 export const metadata: Metadata = {
   title: "BattleCode IEEE-CS VIT",
   description: "One v One Gamified Programming Platform",

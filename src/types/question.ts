@@ -25,7 +25,7 @@ export interface Question {
   id: string;
   title: string;
   description: string;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
+  difficulty: "Easy" | "Medium" | "Hard";
   constraints: string[];
   hints: string[];
   boilerplate: Record<string, string>;
@@ -45,7 +45,7 @@ export interface QuestionSession {
   endTime?: Date;
   timeRemaining: number;
   attempts: number;
-  status: 'active' | 'completed' | 'timeout' | 'abandoned';
+  status: "active" | "completed" | "timeout" | "abandoned";
   score?: number;
   submissionHistory: Submission[];
 }
@@ -84,8 +84,8 @@ export class QuestionManager {
       startTime: new Date(),
       timeRemaining: question.timeLimit,
       attempts: 0,
-      status: 'active',
-      submissionHistory: []
+      status: "active",
+      submissionHistory: [],
     };
   }
 
@@ -94,7 +94,10 @@ export class QuestionManager {
     return Math.floor((now.getTime() - session.startTime.getTime()) / 1000);
   }
 
-  static calculateTimeRemaining(session: QuestionSession, question: Question): number {
+  static calculateTimeRemaining(
+    session: QuestionSession,
+    question: Question,
+  ): number {
     const elapsed = this.calculateTimeElapsed(session);
     return Math.max(0, question.timeLimit - elapsed);
   }
@@ -103,19 +106,23 @@ export class QuestionManager {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
       return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   }
 
-  static getDifficultyColor(difficulty: Question['difficulty']): string {
+  static getDifficultyColor(difficulty: Question["difficulty"]): string {
     switch (difficulty) {
-      case 'Easy': return 'bg-green-800 text-green-300';
-      case 'Medium': return 'bg-yellow-800 text-yellow-300';
-      case 'Hard': return 'bg-red-800 text-red-300';
-      default: return 'bg-gray-800 text-gray-300';
+      case "Easy":
+        return "bg-green-800 text-green-300";
+      case "Medium":
+        return "bg-yellow-800 text-yellow-300";
+      case "Hard":
+        return "bg-red-800 text-red-300";
+      default:
+        return "bg-gray-800 text-gray-300";
     }
   }
 
@@ -137,43 +144,44 @@ export const sampleQuestions: Question[] = [
   {
     id: "q001",
     title: "Two Sum",
-    description: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\n\nYou can return the answer in any order.",
+    description:
+      "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\n\nYou can return the answer in any order.",
     difficulty: "Easy",
     constraints: [
       "2 ≤ nums.length ≤ 10⁴",
       "-10⁹ ≤ nums[i] ≤ 10⁹",
       "-10⁹ ≤ target ≤ 10⁹",
-      "Only one valid answer exists"
+      "Only one valid answer exists",
     ],
     hints: [
       "A brute force approach would be to check every pair of numbers.",
       "Try using a hash map to store values you've seen before.",
-      "For each number, check if target - number exists in your hash map."
+      "For each number, check if target - number exists in your hash map.",
     ],
     boilerplate: {
       javascript: "function twoSum(nums, target) {\n    // Your code here\n}",
       python: "def two_sum(nums, target):\n    # Your code here\n    pass",
       java: "public int[] twoSum(int[] nums, int target) {\n    // Your code here\n}",
       cpp: "vector<int> twoSum(vector<int>& nums, int target) {\n    // Your code here\n}",
-      c: "#include <stdio.h>\n#include <stdlib.h>"
+      c: "#include <stdio.h>\n#include <stdlib.h>",
     },
     sampleTestCases: [
       {
         input: { json: { nums: [2, 7, 11, 15], target: 9 } },
         output: { json: [0, 1] },
-        explanation: "Because nums[0] + nums[1] == 9, we return [0, 1]."
+        explanation: "Because nums[0] + nums[1] == 9, we return [0, 1].",
       },
       {
         input: { json: { nums: [3, 2, 4], target: 6 } },
         output: { json: [1, 2] },
-        explanation: "Because nums[1] + nums[2] == 6, we return [1, 2]."
-      }
+        explanation: "Because nums[1] + nums[2] == 6, we return [1, 2].",
+      },
     ],
     hiddenTestCases: [
       {
         input: { json: { nums: [3, 3], target: 6 } },
-        output: { json: [0, 1] }
-      }
+        output: { json: [0, 1] },
+      },
     ],
     categories: ["Array", "Hash Table"],
     avgTimeComplexity: "O(n)",
@@ -188,7 +196,7 @@ export const sampleQuestions: Question[] = [
       attempted: 3200000,
       tags: ["fundamental", "hash-table", "beginner-friendly"],
       averageRating: 4.2,
-      totalRatings: 12000
-    }
-  }
+      totalRatings: 12000,
+    },
+  },
 ];

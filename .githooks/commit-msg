@@ -1,0 +1,10 @@
+#!/bin/sh
+
+commit_msg=$(cat "$1")
+
+pattern="^(feat|fix|chore|docs|refactor|test|perf|ci|build|revert): .+"
+
+if ! echo "$commit_msg" | grep -Eq "$pattern"; then
+  echo "❌ Invalid commit message format"
+  exit 1
+fi

@@ -1,0 +1,13 @@
+#!/bin/sh
+
+echo "Running ESLint..."
+npx eslint . || exit 1
+
+echo "Checking formatting..."
+if ! npx prettier --check . ; then
+  echo "Auto-fixing formatting..."
+  npx prettier --write .
+  git add -u
+fi
+
+echo "Pre-commit checks passed"

@@ -21,11 +21,11 @@ export async function GET(request: Request) {
             },
             setAll(cookiesToSet) {
               cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options)
+                cookieStore.set(name, value, options),
               );
             },
           },
-        }
+        },
       );
 
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
@@ -33,13 +33,16 @@ export async function GET(request: Request) {
       if (!error && data.session) {
         // NOW verify with backend BEFORE proceeding
         try {
-          const backendResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/user/verify`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${data.session.access_token}`,
-              'Content-Type': 'application/json'
+          const backendResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/user/verify`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${data.session.access_token}`,
+                "Content-Type": "application/json",
+              },
             },
-          });
+          );
 
           if (backendResponse.ok) {
             // Backend verification successful - proceed with redirect
@@ -56,17 +59,26 @@ export async function GET(request: Request) {
             // Backend verification failed - clear the session and redirect to error
             console.error("Backend verification failed after OAuth success");
             await supabase.auth.signOut();
-            return NextResponse.redirect(`${origin}/auth-error?reason=backend_verification_failed`);
+            return NextResponse.redirect(
+              `${origin}/auth-error?reason=backend_verification_failed`,
+            );
           }
         } catch (backendError) {
           // Backend connection failed - clear the session and redirect to error
-          console.error("Backend connection failed after OAuth success:", backendError);
+          console.error(
+            "Backend connection failed after OAuth success:",
+            backendError,
+          );
           await supabase.auth.signOut();
-          return NextResponse.redirect(`${origin}/auth-error?reason=backend_connection_failed`);
+          return NextResponse.redirect(
+            `${origin}/auth-error?reason=backend_connection_failed`,
+          );
         }
       } else {
         console.error("OAuth exchange failed:", error);
-        return NextResponse.redirect(`${origin}/auth-error?reason=oauth_exchange_failed`);
+        return NextResponse.redirect(
+          `${origin}/auth-error?reason=oauth_exchange_failed`,
+        );
       }
     }
 
@@ -74,6 +86,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth-error?reason=no_code`);
   } catch (error) {
     console.error("Auth callback error:", error);
-    return NextResponse.redirect(`${new URL(request.url).origin}/auth-error?reason=callback_error`);
+    return NextResponse.redirect(
+      `${new URL(request.url).origin}/auth-error?reason=callback_error`,
+    );
   }
 }
