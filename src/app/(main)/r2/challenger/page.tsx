@@ -1,5 +1,5 @@
 ﻿"use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
@@ -47,7 +47,7 @@ const formatTime = (ms: number) => {
 export default function ChallengerDashboard() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
-
+  const retriedStateRef = useRef(false);
   const [availableElites, setAvailableElites] = useState<Participant[]>([]);
   const [bountyQuestions, setBountyQuestions] = useState<BountyQuestion[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(
@@ -105,6 +105,12 @@ export default function ChallengerDashboard() {
 
       // If user is not a challenger, redirect
       if (role !== "challenger") {
+        const expectedRole = sessionStorage.getItem("r2_user_role");
+        if (expectedRole === "challenger" && !retriedStateRef.current) {
+          retriedStateRef.current = true;
+          setTimeout(() => socket.emit("round2:getState"), 1500);
+          return;
+        }
         clearTimeout(stateTimeout);
         setIsLoading(false);
         showErrorToast("Access denied. Redirecting...");
