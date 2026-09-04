@@ -322,15 +322,17 @@ export default function Admin() {
           roundNumber,
         );
 
-        // Backend already filtered waiting + in_match users
+        // Backend already filtered waiting + in_match + in_bounty users
         const activeUsers = [
           ...(participants.byStatus?.waiting || []),
           ...(participants.byStatus?.in_match || []),
+          ...(participants.byStatus?.in_bounty || []),
         ];
 
         console.log("[SOCKET STATE] Active users count:", {
           waiting: participants.byStatus?.waiting?.length || 0,
           in_match: participants.byStatus?.in_match?.length || 0,
+          in_bounty: participants.byStatus?.in_bounty?.length || 0,
           total: activeUsers.length,
         });
 
@@ -388,7 +390,10 @@ export default function Admin() {
 
       // Update lobby participants if this is the selected round for users (pre-filtered by backend)
       if (roundNumber === selectedRoundForUsers) {
-        const lobbyUsers = participants.byStatus?.lobby || [];
+        const lobbyUsers =
+          participants.byStatus?.lobby && participants.byStatus.lobby.length > 0
+            ? participants.byStatus.lobby
+            : participants.all || [];
         console.log(
           "[SOCKET STATE] Updating lobby participants for round",
           roundNumber,
@@ -440,7 +445,7 @@ export default function Admin() {
     socket.emit(`round${roundNumber}:ready`, {}, (response: BaseRoundState) => {
       console.log("[ADMIN ACTION] Start round response:", response);
 
-      if (response.success) {
+      if (response?.success) {
         showSuccessToast(`Round ${roundNumber} started successfully`);
 
         // Clear lobby participants from localStorage
@@ -461,7 +466,9 @@ export default function Admin() {
           fetchMatchUsers(roundNumber);
         }, 500); // Small delay to ensure backend has processed the state change
       } else {
-        showErrorToast(response.error || "Failed to start the round");
+        showErrorToast(
+          response?.error || (response as any)?.message || "Failed to start the round",
+        );
       }
     });
   };
@@ -907,14 +914,7 @@ export default function Admin() {
   };
 
   const canTransition = (currentStatus: string, targetStatus: string) => {
-    const validTransitions: { [key: string]: string[] } = {
-      LOCKED: ["LOBBY"],
-      LOBBY: ["IN_PROGRESS", "LOCKED"],
-      IN_PROGRESS: ["COMPLETED", "LOBBY"],
-      COMPLETED: ["LOBBY"],
-    };
-
-    return validTransitions[currentStatus]?.includes(targetStatus) || false;
+    return true;
   };
 
   // Listen to timer updates from server to stay in sync with user timers
