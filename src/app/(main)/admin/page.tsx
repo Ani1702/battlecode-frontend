@@ -1452,7 +1452,9 @@ export default function Admin() {
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-white">
                                 {/* FIX: Add fallbacks so names don't show up blank */}
-                                {participant.username || participant.userId || "Unknown"}
+                                {participant.username ||
+                                  participant.userId ||
+                                  "Unknown"}
                               </span>
                             </div>
                             <span className="text-gray-400 text-xs">
@@ -1529,7 +1531,9 @@ export default function Admin() {
                                 <div className="flex flex-col">
                                   <span className="text-white font-medium">
                                     {/* FIX: Add fallbacks so names don't show up blank */}
-                                    {participant.username || participant.userId || "Unknown"}
+                                    {participant.username ||
+                                      participant.userId ||
+                                      "Unknown"}
                                   </span>
                                   {participant.status === "in_match" &&
                                     participant.opponentUsername && (
@@ -1606,7 +1610,9 @@ export default function Admin() {
                             {p.eventScore ?? 0}
                           </td>
                           <td className="py-2 px-3 text-sm">
-                            {p.status === "in_match" || p.status === "in-match" ? "In-match" : "Waiting"}
+                            {p.status === "in_match" || p.status === "in-match"
+                              ? "In-match"
+                              : "Waiting"}
                           </td>
                         </tr>
                       ))}

@@ -181,7 +181,9 @@ export default function CodePage({
     editor.addAction({
       id: "editor.action.clipboardPasteAction",
       label: "Paste",
-      keybindings: [monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV],
+      keybindings: [
+        monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyV,
+      ],
       precondition: "false",
       run: () => {
         showErrorToast("Paste is disabled");

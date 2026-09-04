@@ -13,29 +13,45 @@ type Violation = { timestamp: number; message: string };
 // counted 2-3x for what is really one action.
 const VIOLATION_DEDUPE_WINDOW_MS = 2000;
 
+function isSecureWrapperEnabled() {
+  const value = process.env.NEXT_PUBLIC_SECURE_WRAPPER_ENABLED;
+  if (value === undefined || value === "") return true;
+  return value !== "false";
+}
+
 export default function SecureWrapper({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  if (!isSecureWrapperEnabled()) {
+    return <>{children}</>;
+  }
+
+  return <EnforcedSecureWrapper>{children}</EnforcedSecureWrapper>;
+}
+
+function EnforcedSecureWrapper({ children }: { children: React.ReactNode }) {
   const { socket, isConnected } = useSocket();
   const { userId } = useAuth();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showWarning, setShowWarning] = useState(true);
-  const [fullscreenViolations, setFullscreenViolations] = useState<Violation[]>(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem("fullscreen_violations");
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch (e) {
-          console.error("Failed to parse stored violations:", e);
-          return [];
+  const [fullscreenViolations, setFullscreenViolations] = useState<Violation[]>(
+    () => {
+      if (typeof window !== "undefined") {
+        const stored = sessionStorage.getItem("fullscreen_violations");
+        if (stored) {
+          try {
+            return JSON.parse(stored);
+          } catch (e) {
+            console.error("Failed to parse stored violations:", e);
+            return [];
+          }
         }
       }
-    }
-    return [];
-  });
+      return [];
+    },
+  );
 
   const violationsRef = useRef<Violation[]>([]);
   const lastToastRef = useRef(0);
@@ -191,14 +207,8 @@ export default function SecureWrapper({
       document.removeEventListener("beforecopy", prevent, true);
       document.removeEventListener("beforecut", prevent, true);
       document.removeEventListener("beforepaste", prevent, true);
-      document.removeEventListener(
-        "fullscreenchange",
-        fullScreenChangeHandler,
-      );
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
+      document.removeEventListener("fullscreenchange", fullScreenChangeHandler);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
     };
     // isFullscreen still drives whether copy/paste blocking is attached,
