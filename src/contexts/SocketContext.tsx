@@ -18,6 +18,22 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const { session } = useAuth();
 
   useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Prevent Next.js dev overlay from showing [object Object] modal for raw object rejections or cancelled navigations
+      if (event.reason !== undefined) {
+        console.warn("Caught unhandled promise rejection:", event.reason);
+        if (typeof event.reason === "object" && !(event.reason instanceof Error)) {
+          event.preventDefault();
+        }
+      }
+    };
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    return () => {
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!session?.access_token) {
       setSocket(null);
       setIsConnected(false);
