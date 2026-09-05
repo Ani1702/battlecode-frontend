@@ -390,10 +390,7 @@ export default function Admin() {
 
       // Update lobby participants if this is the selected round for users (pre-filtered by backend)
       if (roundNumber === selectedRoundForUsers) {
-        const lobbyUsers =
-          participants.byStatus?.lobby && participants.byStatus.lobby.length > 0
-            ? participants.byStatus.lobby
-            : participants.all || [];
+        const lobbyUsers = participants.byStatus?.lobby || [];
         console.log(
           "[SOCKET STATE] Updating lobby participants for round",
           roundNumber,
@@ -467,7 +464,9 @@ export default function Admin() {
         }, 500); // Small delay to ensure backend has processed the state change
       } else {
         showErrorToast(
-          response?.error || (response as any)?.message || "Failed to start the round",
+          response?.error ||
+            (response as any)?.message ||
+            "Failed to start the round",
         );
       }
     });
@@ -914,7 +913,14 @@ export default function Admin() {
   };
 
   const canTransition = (currentStatus: string, targetStatus: string) => {
-    return true;
+    const validTransitions: { [key: string]: string[] } = {
+      LOCKED: ["LOBBY"],
+      LOBBY: ["IN_PROGRESS", "LOCKED"],
+      IN_PROGRESS: ["COMPLETED", "LOBBY"],
+      COMPLETED: ["LOBBY"],
+    };
+
+    return validTransitions[currentStatus]?.includes(targetStatus) || false;
   };
 
   // Listen to timer updates from server to stay in sync with user timers

@@ -268,10 +268,7 @@ export default function Lobbyr3() {
               console.log("✅ [R3 Lobby] User joined successfully");
             } else {
               showErrorToast(joinResponse.error || "Failed to join lobby");
-              console.warn(
-                "⚠️ [R3 Lobby] Failed to join:",
-                joinResponse.error,
-              );
+              console.warn("⚠️ [R3 Lobby] Failed to join:", joinResponse.error);
             }
           },
         );

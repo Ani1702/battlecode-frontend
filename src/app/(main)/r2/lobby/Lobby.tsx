@@ -52,6 +52,20 @@ interface SimpleSocketResponse {
   message?: string;
 }
 
+const getLobbyParticipants = (payload: {
+  participants?: {
+    byStatus?: { lobby?: Participant[] };
+  };
+}): Participant[] | null => {
+  const lobby = payload.participants?.byStatus?.lobby;
+  return Array.isArray(lobby) ? lobby : null;
+};
+
+const isAlreadyInRoundError = (res?: SimpleSocketResponse) =>
+  /already|joined|in (the )?round|in lobby/i.test(
+    `${res?.error || ""} ${res?.message || ""}`,
+  );
+
 // --- Component ---
 
 export default function LobbyR2() {
@@ -103,40 +117,42 @@ export default function LobbyR2() {
   useEffect(() => {
     if (!socket || !isConnected || !authenticationChecked) return;
 
-    socket.emit("user:current-round", {}, (response: CurrentRoundResponse) => {
+    socket.emit("user:current-round", {}, (response?: CurrentRoundResponse) => {
       console.log("[R2 Lobby] Current round response:", response);
-      setIsCheckingRound(false);
 
-      if (!response.success) {
-        showErrorToast(response.error || "Failed to check round status");
+      if (!response?.success || !response.currentRound) {
+        showErrorToast(response?.error || "Failed to check round status");
         router.back();
         return;
       }
 
       const currentRound = response.currentRound;
-
-      if (!currentRound) {
-        showErrorToast("No active round found");
-        try { router.back(); } catch (e) {}
-        return;
-      }
-
-      // Check Round 2 status from rounds array or currentRound
       const r2 = currentRound.rounds?.find((r) => r.roundNumber === 2);
-      const r2Status = r2?.status || (currentRound.currentRoundNumber === 2 ? currentRound.currentRoundStatus : null);
+      const r2Status =
+        r2?.status ||
+        (currentRound.currentRoundNumber === 2
+          ? currentRound.currentRoundStatus
+          : null);
 
       if (r2Status !== "LOBBY" && r2Status !== "IN_PROGRESS") {
         showErrorToast(
-          r2Status ? `Round 2 is currently ${r2Status.toLowerCase()}.` : "Round 2 is not active"
+          r2Status
+            ? `Round 2 is currently ${r2Status.toLowerCase()}.`
+            : "Round 2 is not active",
         );
-        console.log("Current Round 2 status:", r2Status);
-        try { router.back(); } catch (e) {}
+        router.back();
         return;
       }
 
-      console.log("[R2 Lobby] Round status valid, proceeding to join/get state");
+      setIsCheckingRound(false);
     });
   }, [socket, isConnected, authenticationChecked, router]);
+
+  useEffect(() => {
+    if (!isConnected) {
+      hasAttemptedJoin.current = false;
+    }
+  }, [isConnected]);
 
   // 🔑 Join Round 2 lobby and fetch state
   useEffect(() => {
@@ -154,25 +170,26 @@ export default function LobbyR2() {
     hasAttemptedJoin.current = true;
     console.debug("[R2 Lobby] Emitting round2:join & round2:getState");
 
-    // Set a timeout to prevent infinite loading
     joinTimeoutRef.current = setTimeout(() => {
       console.error("[R2 Lobby] Join/GetState timeout");
       setIsLoading(false);
       showErrorToast("Failed to connect to lobby. Please refresh.");
     }, 10000);
 
+    const requestState = () => {
+      socket.emit("round2:getState");
+    };
+
     socket.emit("round2:join", {}, (res?: SimpleSocketResponse) => {
-      if (!res?.success) {
-        console.error("[R2 Lobby] Failed to join lobby:", res);
-        clearJoinTimeout();
-        setIsLoading(false);
-        showErrorToast(res?.error || "Failed to join lobby");
-        return;
+      if (res && res.success === false && !isAlreadyInRoundError(res)) {
+        console.warn("[R2 Lobby] Failed to join lobby:", res);
+        showErrorToast(res.error || res.message || "Failed to join lobby");
       }
 
-      // After successful join, request state
-      socket.emit("round2:getState");
+      requestState();
     });
+
+    requestState();
 
     return () => {
       clearJoinTimeout();
@@ -216,10 +233,7 @@ export default function LobbyR2() {
       clearJoinTimeout();
 
       if (stateResponse?.success) {
-        const lobbyParticipants =
-          stateResponse.participants?.all ||
-          stateResponse.participants?.byStatus?.lobby ||
-          [];
+        const lobbyParticipants = getLobbyParticipants(stateResponse) || [];
         setParticipants(lobbyParticipants);
         setRoundStatus(stateResponse.round?.status || "LOBBY");
 
@@ -240,8 +254,9 @@ export default function LobbyR2() {
 
     const handleLobbyUpdate = (data: any) => {
       console.debug("[R2 Lobby] Lobby update received:", data);
-      if (data?.participants?.all) {
-        setParticipants(data.participants.all);
+      const lobbyParticipants = getLobbyParticipants(data);
+      if (lobbyParticipants) {
+        setParticipants(lobbyParticipants);
         setIsLoading(false);
       } else {
         socket.emit("round2:getState");
@@ -264,7 +279,8 @@ export default function LobbyR2() {
     authLoading ||
     !authenticationChecked ||
     isCheckingRound ||
-    (isLoading && participants.length === 0)
+    socketLoading ||
+    isLoading
   ) {
     const loadingMessage = authLoading
       ? "Loading Authentication..."
@@ -300,9 +316,14 @@ export default function LobbyR2() {
             {participants.length > 0 ? (
               participants.map((participant: any, index) => {
                 const displayName =
-                  participant.username || participant.id || participant.userId || `Player ${index + 1}`;
+                  participant.username ||
+                  participant.id ||
+                  participant.userId ||
+                  `Player ${index + 1}`;
                 const participantKey =
-                  participant.id || participant.userId || `participant-${index}`;
+                  participant.id ||
+                  participant.userId ||
+                  `participant-${index}`;
                 return (
                   <PlayerCard
                     key={participantKey}

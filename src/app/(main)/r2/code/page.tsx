@@ -675,10 +675,16 @@ export default function R2CodePage() {
       } else {
         type = isWinner ? "win" : "lose";
       }
-      const newRole =data.newRole ??(sessionStorage.getItem("r2_user_role") as "elite" | "challenger" | null);
-      if (!newRole) 
-        {console.error("Could not determine new Round 2 role.");
-        return;}
+      const newRole =
+        data.newRole ??
+        (sessionStorage.getItem("r2_user_role") as
+          | "elite"
+          | "challenger"
+          | null);
+      if (!newRole) {
+        console.error("Could not determine new Round 2 role.");
+        return;
+      }
 
       safeTriggerSessionEnd(type, newRole);
     };
@@ -729,7 +735,8 @@ export default function R2CodePage() {
 
       safeTriggerSessionEnd("opponent-violation", userRole);
     };
-    const handleRoleUpdate = (data: { newRole: "elite" | "challenger" }) => {sessionStorage.setItem("r2_user_role", data.newRole);
+    const handleRoleUpdate = (data: { newRole: "elite" | "challenger" }) => {
+      sessionStorage.setItem("r2_user_role", data.newRole);
     };
     socket.on("round2:roleUpdate", handleRoleUpdate);
     socket.on("round2:matchResult", handleMatchResult);
