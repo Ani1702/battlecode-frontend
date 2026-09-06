@@ -117,6 +117,7 @@ export default function Admin() {
     null,
   );
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
+  const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
   const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<
     number | null
   >(null);
@@ -289,7 +290,9 @@ export default function Admin() {
 
         setActiveRoundNumber(roundNumber);
         setIsRoundActive(true);
-        setGlobalTimeRemaining(round.timeRemaining || 0);
+        if (roundNumber !== 2) {
+          setGlobalTimeRemaining(round.timeRemaining || 0);
+          setRoundEndTime(round.endTime ?? null);}
         // Use roundSpecific for Round 1's nextMatchmakingCycle
         setNextMatchmakingCycle(
           response.roundSpecific?.nextMatchmakingCycle ?? null,
@@ -312,6 +315,7 @@ export default function Admin() {
         setIsRoundActive(false);
         setActiveRoundNumber(null);
         setGlobalTimeRemaining(0);
+        setRoundEndTime(null);
         setNextMatchmakingCycle(null);
       }
 
@@ -439,11 +443,37 @@ export default function Admin() {
       return;
     }
 
-    socket.emit(`round${roundNumber}:ready`, {}, (response: BaseRoundState) => {
+    socket.emit(`round${roundNumber}:ready`, {}, (response: BaseRoundState  & {startTime?: number;
+      duration?: number;
+      },
+    ) => {
       console.log("[ADMIN ACTION] Start round response:", response);
 
       if (response?.success) {
         showSuccessToast(`Round ${roundNumber} started successfully`);
+        setActiveRoundNumber(roundNumber);
+        setIsRoundActive(true);
+
+        if (roundNumber === 3) {
+          setGlobalTimeRemaining(3600);
+          setRoundEndTime(Date.now() + 3600 * 1000);
+        }
+
+        if (roundNumber === 2) {
+          setGlobalTimeRemaining(3600);
+          setRoundEndTime(Date.now() + 3600 * 1000);
+        }
+
+        if (roundNumber === 1) {
+          setGlobalTimeRemaining(3600);
+        }
+
+        if (roundNumber === 0 && response.startTime && response.duration) {
+          setGlobalTimeRemaining(response.duration);
+          setRoundEndTime(
+            response.startTime + response.duration * 1000,
+          );
+        }
 
         // Clear lobby participants from localStorage
         localStorage.removeItem("participants");
@@ -458,10 +488,10 @@ export default function Admin() {
         );
 
         // Fetch the updated state to get in-progress participants
-        setTimeout(() => {
+        /*setTimeout(() => {
           console.log("[ADMIN ACTION] Fetching updated match state");
           fetchMatchUsers(roundNumber);
-        }, 500); // Small delay to ensure backend has processed the state change
+        }, 500);*/ // Small delay to ensure backend has processed the state change
       } else {
         showErrorToast(
           response?.error ||
@@ -495,6 +525,12 @@ export default function Admin() {
 
         if (response?.success) {
           showSuccessToast(`Round ${roundNumber} ended successfully`);
+          if (roundNumber === activeRoundNumber) {
+            setIsRoundActive(false);
+            setActiveRoundNumber(null);
+            setRoundEndTime(null);
+            setGlobalTimeRemaining(0);
+          }
         } else {
           showErrorToast(
             response?.error || `Failed to end Round ${roundNumber}`,
@@ -881,7 +917,7 @@ export default function Admin() {
 
         if (data.success) {
           showSuccessToast(`Round ${roundNumber} ${newStatus.toLowerCase()}`);
-          await fetchRoundData();
+            await fetchRoundData();
         } else {
           showErrorToast(data.error || "Failed to update round status");
         }
@@ -998,6 +1034,27 @@ export default function Admin() {
     }, 1000);
     return () => clearInterval(cooldownInterval);
   }, [currentUser, cooldownTimeRemaining]);
+  //Timer
+  useEffect(() => {
+  if (!roundEndTime || !isRoundActive) {
+    return;
+  }
+
+  const updateTimer = () => {
+    const remaining = Math.max(
+      0,
+      Math.floor((roundEndTime - Date.now()) / 1000)
+    );
+
+    setGlobalTimeRemaining(remaining);
+  };
+
+  updateTimer();
+
+  const interval = setInterval(updateTimer, 1000);
+
+  return () => clearInterval(interval);
+}, [roundEndTime, isRoundActive,activeRoundNumber]);
   // Format time helper
   const formatTime = (seconds: number | null | undefined): string => {
     if (typeof seconds !== "number" || seconds < 0 || isNaN(seconds))
