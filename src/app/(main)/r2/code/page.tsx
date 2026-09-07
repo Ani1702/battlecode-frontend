@@ -80,7 +80,7 @@ interface MatchResultData {
   winnerId: string;
   loserId: string;
   reason: "submission" | "disconnect" | "timeout" | "violation";
-  newRole: "elite" | "challenger";
+  newRole?: "elite" | "challenger";
 }
 
 interface BountyEndedData {
@@ -675,8 +675,18 @@ export default function R2CodePage() {
       } else {
         type = isWinner ? "win" : "lose";
       }
+      const newRole =
+        data.newRole ??
+        (sessionStorage.getItem("r2_user_role") as
+          | "elite"
+          | "challenger"
+          | null);
+      if (!newRole) {
+        console.error("Could not determine new Round 2 role.");
+        return;
+      }
 
-      safeTriggerSessionEnd(type, data.newRole);
+      safeTriggerSessionEnd(type, newRole);
     };
 
     const handleBountyEnded = (data: BountyEndedData) => {
@@ -725,7 +735,10 @@ export default function R2CodePage() {
 
       safeTriggerSessionEnd("opponent-violation", userRole);
     };
-
+    const handleRoleUpdate = (data: { newRole: "elite" | "challenger" }) => {
+      sessionStorage.setItem("r2_user_role", data.newRole);
+    };
+    socket.on("round2:roleUpdate", handleRoleUpdate);
     socket.on("round2:matchResult", handleMatchResult);
     socket.on("round2:bountyEnded", handleBountyEnded);
     socket.on("round2:ended", handleRoundEnd);
@@ -736,6 +749,7 @@ export default function R2CodePage() {
 
     return () => {
       socket.off("round2:redirect", handleRound2Redirect);
+      socket.off("round2:roleUpdate", handleRoleUpdate);
       socket.off("round2:matchResult", handleMatchResult);
       socket.off("round2:bountyEnded", handleBountyEnded);
       socket.off("round2:ended", handleRoundEnd);

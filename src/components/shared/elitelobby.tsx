@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
@@ -128,6 +128,7 @@ ChallengerRequestRow.displayName = "ChallengerRequestRow";
 export default function EliteDashboard() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
+  const retriedStateRef = useRef(false);
 
   const [incomingChallengers, setIncomingChallengers] = useState<Participant[]>(
     [],
@@ -191,6 +192,12 @@ export default function EliteDashboard() {
 
       // If user is not an elite, redirect
       if (role !== "elite") {
+        const expectedRole = sessionStorage.getItem("r2_user_role");
+        if (expectedRole === "elite" && !retriedStateRef.current) {
+          retriedStateRef.current = true;
+          setTimeout(() => socket.emit("round2:getState"), 1500);
+          return;
+        }
         clearTimeout(stateTimeout);
         setIsLoading(false);
         showErrorToast("Access denied. Redirecting...");

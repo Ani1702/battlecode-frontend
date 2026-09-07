@@ -38,6 +38,117 @@ interface CurrentRoundData {
   rounds: RoundStatus[];
 }
 
+const TIMER_DRIFT_SECONDS = 2;
+
+type TimerSource = {
+  endTime?: number | null;
+  startTime?: number | null;
+  duration?: number | null;
+  timeRemaining?: number | null;
+};
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function resolveDeadlineFromResponse(response: {
+  roundNumber?: number;
+  round?: TimerSource;
+  startTime?: number;
+  duration?: number;
+  timeRemaining?: number;
+  roundSpecific?: { globalTimeRemaining?: number };
+}): number | null {
+  const roundNumber = response.roundNumber;
+  const round = response.round;
+
+  // Round 1 never sends endTime. Whole-round clock is remaining seconds.
+  if (roundNumber === 1) {
+    const remainingSeconds = isPositiveNumber(round?.timeRemaining)
+      ? round.timeRemaining
+      : isPositiveNumber(response.roundSpecific?.globalTimeRemaining)
+        ? response.roundSpecific.globalTimeRemaining
+        : null;
+    if (remainingSeconds != null) {
+      return Date.now() + remainingSeconds * 1000;
+    }
+    if (
+      isPositiveNumber(round?.startTime) &&
+      isPositiveNumber(round?.duration)
+    ) {
+      return round.startTime + round.duration;
+    }
+    return null;
+  }
+
+  // Rounds 0 / 2 / 3: prefer the absolute end timestamp (ms).
+  if (isPositiveNumber(round?.endTime)) {
+    return round.endTime;
+  }
+
+  // Round 2 remaining + duration are already milliseconds.
+  if (roundNumber === 2) {
+    if (isPositiveNumber(round?.timeRemaining)) {
+      return Date.now() + round.timeRemaining;
+    }
+    if (
+      isPositiveNumber(round?.startTime) &&
+      isPositiveNumber(round?.duration)
+    ) {
+      return round.startTime + round.duration;
+    }
+    return null;
+  }
+
+  // Round 0 can send timeRemaining: 0 while still IN_PROGRESS. Ignore that 0.
+  if (isPositiveNumber(round?.startTime) && isPositiveNumber(round?.duration)) {
+    const durationMs =
+      round.duration >= 10_000 ? round.duration : round.duration * 1000;
+    return round.startTime + durationMs;
+  }
+
+  if (isPositiveNumber(round?.timeRemaining)) {
+    return Date.now() + round.timeRemaining * 1000;
+  }
+
+  // lobby:round0 still puts remaining seconds on the packet root.
+  if (isPositiveNumber(response.timeRemaining)) {
+    return Date.now() + response.timeRemaining * 1000;
+  }
+
+  return null;
+}
+
+function hasAbsoluteDeadline(
+  roundNumber: number | undefined,
+  round?: TimerSource | null,
+): boolean {
+  if (roundNumber === 1) return false;
+  return isPositiveNumber(round?.endTime);
+}
+
+function resolveTimerTickEndTime(
+  roundNumber: number,
+  data: { timeRemaining?: number; endTime?: number },
+): number | null {
+  if (isPositiveNumber(data.endTime)) return data.endTime;
+  if (!isPositiveNumber(data.timeRemaining)) return null;
+  if (roundNumber === 2) {
+    return Date.now() + data.timeRemaining;
+  }
+  return Date.now() + data.timeRemaining * 1000;
+}
+
+function shouldCorrectTimer(
+  localEndTime: number | null,
+  serverEndTime: number,
+): boolean {
+  if (localEndTime == null) return true;
+  const localRemaining = Math.floor((localEndTime - Date.now()) / 1000);
+  const serverRemaining = Math.floor((serverEndTime - Date.now()) / 1000);
+  return Math.abs(serverRemaining - localRemaining) > TIMER_DRIFT_SECONDS;
+}
+
 export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -51,7 +162,7 @@ export default function Admin() {
   const [showResetRedisConfirm, setShowResetRedisConfirm] = useState(false);
   const [matchParticipants, setMatchParticipants] = useState<Participant[]>([]);
   const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(0);
-  const [qualifyCount, setQualifyCount] = useState<number | ''>('');
+  const [qualifyCount, setQualifyCount] = useState<number | "">("");
   const [isQualifying, setIsQualifying] = useState(false);
 
   // Helper functions for localStorage persistence
@@ -117,6 +228,7 @@ export default function Admin() {
     null,
   );
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
+  const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
   const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<
     number | null
   >(null);
@@ -130,50 +242,37 @@ export default function Admin() {
 
   // Load currentRoundData and participants from localStorage on mount
   useEffect(() => {
-    console.log("[ADMIN STATE] Loading initial state from localStorage");
-
-    const savedRounds = localStorage.getItem("battlecode_rounds");
-    if (savedRounds) {
-      try {
-        const parsedRounds = JSON.parse(savedRounds);
-        console.log("[ADMIN STATE] Loaded saved rounds:", parsedRounds);
-        setCurrentRoundData(parsedRounds);
-      } catch (error) {
-        console.error("[ADMIN STATE] Failed to parse saved rounds:", error);
-        localStorage.removeItem("battlecode_rounds");
-      }
-    } else {
-      console.log("[ADMIN STATE] No saved rounds found in localStorage");
+    if (!socket) {
+      console.log("[SOCKET] No socket available for real-time updates");
+      return;
     }
 
-    // Load participants from localStorage
-    const savedParticipants = loadParticipantsFromStorage();
-    console.log(
-      "[ADMIN STATE] Loaded saved participants:",
-      savedParticipants.length,
-    );
-    if (savedParticipants.length > 0) {
-      setParticipants(savedParticipants);
-    }
+    const handleCurrentRound = (data: CurrentRoundData) => {
+      setCurrentRoundData(data);
+    };
 
-    // Load match participants for the selected round
-    const savedMatchParticipants = loadMatchParticipantsFromStorage(
-      selectedRoundForMatches,
-    );
-    console.log(
-      "[ADMIN STATE] Loaded saved match participants for round",
-      selectedRoundForMatches,
-      ":",
-      savedMatchParticipants.length,
-    );
-    if (savedMatchParticipants.length > 0) {
-      setMatchParticipants(savedMatchParticipants);
-    }
-  }, [
-    loadParticipantsFromStorage,
-    loadMatchParticipantsFromStorage,
-    selectedRoundForMatches,
-  ]);
+    const handleRedisResetSuccess = () => {
+      showSuccessToast("Redis cleared successfully");
+    };
+
+    // NEW: Catch the hidden backend errors!
+    const handleAdminError = (data: { error: string }) => {
+      console.error("[ADMIN ERROR]", data.error);
+      showErrorToast(`Backend Error: ${data.error}`);
+    };
+
+    socket.on("server:currentRound", handleCurrentRound);
+    socket.on("admin:reset:success", handleRedisResetSuccess);
+    socket.on("admin:error", handleAdminError); // <-- ADD THIS
+
+    socket.emit("client:getCurrentRound");
+
+    return () => {
+      socket.off("server:currentRound", handleCurrentRound);
+      socket.off("admin:reset:success", handleRedisResetSuccess);
+      socket.off("admin:error", handleAdminError); // <-- ADD THIS
+    };
+  }, [socket]);
 
   const addUserToRound = async (userEmail: string, roundNumber: number) => {
     console.log("[ADMIN ACTION] Adding user to round:", {
@@ -280,14 +379,8 @@ export default function Admin() {
       const { roundNumber, round, participants, currentUser, session } =
         response;
 
-      // Early return if required data is missing
-      // Fix: Use explicit checks for null/undefined instead of falsy check (roundNumber can be 0)
-      if (
-        roundNumber === null ||
-        roundNumber === undefined ||
-        !round ||
-        !participants
-      ) {
+      // Time lives on round, not on the participants list.
+      if (roundNumber === null || roundNumber === undefined || !round) {
         console.warn("[SOCKET STATE] Missing required data in response");
         return;
       }
@@ -302,7 +395,15 @@ export default function Admin() {
 
         setActiveRoundNumber(roundNumber);
         setIsRoundActive(true);
-        setGlobalTimeRemaining(round.timeRemaining || 0);
+        const incomingDeadline = resolveDeadlineFromResponse(response);
+        if (incomingDeadline != null) {
+          const forceDeadline = hasAbsoluteDeadline(roundNumber, round);
+          setRoundEndTime((prev) =>
+            forceDeadline || shouldCorrectTimer(prev, incomingDeadline)
+              ? incomingDeadline
+              : prev,
+          );
+        }
         // Use roundSpecific for Round 1's nextMatchmakingCycle
         setNextMatchmakingCycle(
           response.roundSpecific?.nextMatchmakingCycle ?? null,
@@ -325,7 +426,12 @@ export default function Admin() {
         setIsRoundActive(false);
         setActiveRoundNumber(null);
         setGlobalTimeRemaining(0);
+        setRoundEndTime(null);
         setNextMatchmakingCycle(null);
+      }
+
+      if (!participants) {
+        return;
       }
 
       // Update match participants (pre-filtered by backend)
@@ -335,15 +441,17 @@ export default function Admin() {
           roundNumber,
         );
 
-        // Backend already filtered waiting + in_match users
+        // Backend already filtered waiting + in_match + in_bounty users
         const activeUsers = [
           ...(participants.byStatus?.waiting || []),
           ...(participants.byStatus?.in_match || []),
+          ...(participants.byStatus?.in_bounty || []),
         ];
 
         console.log("[SOCKET STATE] Active users count:", {
           waiting: participants.byStatus?.waiting?.length || 0,
           in_match: participants.byStatus?.in_match?.length || 0,
+          in_bounty: participants.byStatus?.in_bounty?.length || 0,
           total: activeUsers.length,
         });
 
@@ -450,33 +558,57 @@ export default function Admin() {
       return;
     }
 
-    socket.emit(`round${roundNumber}:ready`, {}, (response: BaseRoundState) => {
-      console.log("[ADMIN ACTION] Start round response:", response);
+    socket.emit(
+      `round${roundNumber}:ready`,
+      {},
+      (
+        response: BaseRoundState & {
+          startTime?: number;
+          duration?: number;
+          timeRemaining?: number;
+        },
+      ) => {
+        console.log("[ADMIN ACTION] Start round response:", response);
 
-      if (response.success) {
-        showSuccessToast(`Round ${roundNumber} started successfully`);
+        if (response?.success) {
+          showSuccessToast(`Round ${roundNumber} started successfully`);
+          setActiveRoundNumber(roundNumber);
+          setIsRoundActive(true);
 
-        // Clear lobby participants from localStorage
-        localStorage.removeItem("participants");
-        setParticipants([]);
-        console.log("[ADMIN ACTION] Cleared lobby participants");
+          const startDeadline = resolveDeadlineFromResponse({
+            ...response,
+            roundNumber: response.roundNumber ?? roundNumber,
+          });
+          if (startDeadline != null) {
+            setRoundEndTime(startDeadline);
+          }
 
-        // Switch to the match view for this round
-        setSelectedRoundForMatches(roundNumber);
-        console.log(
-          "[ADMIN ACTION] Switched to match view for round",
-          roundNumber,
-        );
+          // Clear lobby participants from localStorage
+          localStorage.removeItem("participants");
+          setParticipants([]);
+          console.log("[ADMIN ACTION] Cleared lobby participants");
 
-        // Fetch the updated state to get in-progress participants
-        setTimeout(() => {
-          console.log("[ADMIN ACTION] Fetching updated match state");
-          fetchMatchUsers(roundNumber);
-        }, 500); // Small delay to ensure backend has processed the state change
-      } else {
-        showErrorToast(response.error || "Failed to start the round");
-      }
-    });
+          // Switch to the match view for this round
+          setSelectedRoundForMatches(roundNumber);
+          console.log(
+            "[ADMIN ACTION] Switched to match view for round",
+            roundNumber,
+          );
+
+          // Fetch the updated state to get the server deadline and in-progress participants
+          setTimeout(() => {
+            console.log("[ADMIN ACTION] Fetching updated match state");
+            fetchMatchUsers(roundNumber);
+          }, 500);
+        } else {
+          showErrorToast(
+            response?.error ||
+              (response as { message?: string })?.message ||
+              "Failed to start the round",
+          );
+        }
+      },
+    );
   };
 
   const endRound = (roundNumber: number) => {
@@ -502,6 +634,12 @@ export default function Admin() {
 
         if (response?.success) {
           showSuccessToast(`Round ${roundNumber} ended successfully`);
+          if (roundNumber === activeRoundNumber) {
+            setIsRoundActive(false);
+            setActiveRoundNumber(null);
+            setRoundEndTime(null);
+            setGlobalTimeRemaining(0);
+          }
         } else {
           showErrorToast(
             response?.error || `Failed to end Round ${roundNumber}`,
@@ -604,15 +742,21 @@ export default function Admin() {
     }
 
     setIsQualifying(true);
-    socket?.emit("admin:qualifyRound3", { count: Number(qualifyCount) }, (response: any) => {
-      setIsQualifying(false);
-      if (response?.success) {
-        showSuccessToast(`Successfully qualified top ${qualifyCount} players for Round 3!`);
-        setQualifyCount('');
-      } else {
-        showErrorToast(response?.error || "Failed to qualify players");
-      }
-    });
+    socket?.emit(
+      "admin:qualifyRound3",
+      { count: Number(qualifyCount) },
+      (response: any) => {
+        setIsQualifying(false);
+        if (response?.success) {
+          showSuccessToast(
+            `Successfully qualified top ${qualifyCount} players for Round 3!`,
+          );
+          setQualifyCount("");
+        } else {
+          showErrorToast(response?.error || "Failed to qualify players");
+        }
+      },
+    );
   };
 
   const fetchRoundData = useCallback(async () => {
@@ -780,11 +924,38 @@ export default function Admin() {
     fetchMatchUsers(selectedRoundForMatches);
   }, [socket, selectedRoundForMatches, fetchMatchUsers]);
 
+  const inProgressRoundNumber =
+    currentRoundData?.rounds?.find(
+      (round) => round.isActive || round.status === "IN_PROGRESS",
+    )?.roundNumber ??
+    (currentRoundData?.currentRoundStatus === "IN_PROGRESS"
+      ? currentRoundData.currentRoundNumber
+      : null);
+
+  // After refresh, ask the active round for its deadline instead of only the default tab (round 0)
+  useEffect(() => {
+    if (!socket || inProgressRoundNumber == null) return;
+    socket.emit(`round${inProgressRoundNumber}:getState`, {});
+  }, [socket, inProgressRoundNumber]);
+
   // Listen for live lobby updates
   useEffect(() => {
     if (!socket) return;
 
-    const handleLobbyUpdate0 = (data: BaseRoundState) => {
+    const handleLobbyUpdate0 = (
+      data: BaseRoundState & { timeRemaining?: number },
+    ) => {
+      if (activeRoundNumber === 0) {
+        const lobbyDeadline = resolveDeadlineFromResponse({
+          ...data,
+          roundNumber: 0,
+        });
+        if (lobbyDeadline != null) {
+          setRoundEndTime((prev) =>
+            shouldCorrectTimer(prev, lobbyDeadline) ? lobbyDeadline : prev,
+          );
+        }
+      }
       if (0 === selectedRoundForUsers) {
         console.log("[LOBBY UPDATE Round 0]", data);
         if (data.participants?.byStatus?.lobby) {
@@ -839,7 +1010,12 @@ export default function Admin() {
       socket.off("lobby:round2", handleLobbyUpdate2);
       socket.off("lobby:round3", handleLobbyUpdate3);
     };
-  }, [socket, selectedRoundForUsers, saveParticipantsToStorage]);
+  }, [
+    socket,
+    selectedRoundForUsers,
+    activeRoundNumber,
+    saveParticipantsToStorage,
+  ]);
 
   const resetAllRounds = async () => {
     try {
@@ -948,40 +1124,31 @@ export default function Admin() {
     return validTransitions[currentStatus]?.includes(targetStatus) || false;
   };
 
-  // Listen to timer updates from server to stay in sync with user timers
+  // Listen to timer updates from server and re-anchor only when drifted
   useEffect(() => {
     if (!socket) return;
 
-    const handleTimer0 = (data: { timeRemaining?: number }) => {
-      if (activeRoundNumber === 0) {
-        setGlobalTimeRemaining(data.timeRemaining || 0);
-      }
+    const applyTimerTick = (
+      roundNumber: number,
+      data: { timeRemaining?: number; endTime?: number },
+    ) => {
+      if (activeRoundNumber !== roundNumber) return;
+      const serverEndTime = resolveTimerTickEndTime(roundNumber, data);
+      if (serverEndTime == null) return;
+      setRoundEndTime((prev) =>
+        shouldCorrectTimer(prev, serverEndTime) ? serverEndTime : prev,
+      );
     };
 
-    const handleTimer1 = (data: { timeRemaining?: number }) => {
-      if (activeRoundNumber === 1) {
-        setGlobalTimeRemaining(data.timeRemaining || 0);
-      }
-    };
+    const handleTimer0 = (data: { timeRemaining?: number; endTime?: number }) =>
+      applyTimerTick(0, data);
+    const handleGlobalTimer = (data: {
+      timeRemaining?: number;
+      endTime?: number;
+    }) => applyTimerTick(1, data);
+    const handleTimer3 = (data: { timeRemaining?: number; endTime?: number }) =>
+      applyTimerTick(3, data);
 
-    const handleTimer2 = (data: { timeRemaining?: number }) => {
-      if (activeRoundNumber === 2) {
-        setGlobalTimeRemaining(data.timeRemaining || 0);
-      }
-    };
-
-    const handleTimer3 = (data: { timeRemaining?: number }) => {
-      if (activeRoundNumber === 3) {
-        setGlobalTimeRemaining(data.timeRemaining || 0);
-      }
-    };
-
-    // Handle global timer events for rounds that use them (Round 1+)
-    const handleGlobalTimer = (data: { timeRemaining?: number }) => {
-      setGlobalTimeRemaining(data.timeRemaining || 0);
-    };
-
-    // Handle matchmaking cycle updates for Round 1
     const handleMatchmakingCycle = (data: { nextCycle: number }) => {
       if (activeRoundNumber === 1) {
         setNextMatchmakingCycle(data.nextCycle);
@@ -989,18 +1156,14 @@ export default function Admin() {
     };
 
     socket.on("round0:timer", handleTimer0);
-    socket.on("round1:timer", handleTimer1);
     socket.on("round1:globalTimer", handleGlobalTimer);
     socket.on("round1:matchmakingCycle", handleMatchmakingCycle);
-    socket.on("round2:timer", handleTimer2);
     socket.on("round3:timer", handleTimer3);
 
     return () => {
       socket.off("round0:timer", handleTimer0);
-      socket.off("round1:timer", handleTimer1);
       socket.off("round1:globalTimer", handleGlobalTimer);
       socket.off("round1:matchmakingCycle", handleMatchmakingCycle);
-      socket.off("round2:timer", handleTimer2);
       socket.off("round3:timer", handleTimer3);
     };
   }, [socket, activeRoundNumber]);
@@ -1023,6 +1186,24 @@ export default function Admin() {
     }, 1000);
     return () => clearInterval(cooldownInterval);
   }, [currentUser, cooldownTimeRemaining]);
+  // Display-only countdown from the server deadline
+  useEffect(() => {
+    if (!roundEndTime || !isRoundActive) {
+      return;
+    }
+
+    const updateTimer = () => {
+      const remaining = Math.max(
+        0,
+        Math.floor((roundEndTime - Date.now()) / 1000),
+      );
+      setGlobalTimeRemaining(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [roundEndTime, isRoundActive]);
   // Format time helper
   const formatTime = (seconds: number | null | undefined): string => {
     if (typeof seconds !== "number" || seconds < 0 || isNaN(seconds))
@@ -1228,9 +1409,12 @@ export default function Admin() {
 
             {/* Automated R3 Qualification Card */}
             <div className="mt-6 bg-gray-800/80 border border-orange-500/30 rounded-lg p-5">
-              <h4 className="text-orange-400 font-bold mb-3 text-lg">Automate R3 Qualification</h4>
+              <h4 className="text-orange-400 font-bold mb-3 text-lg">
+                Automate R3 Qualification
+              </h4>
               <p className="text-sm text-gray-300 mb-4">
-                Enter the number of top players to automatically qualify based on their current event score.
+                Enter the number of top players to automatically qualify based
+                on their current event score.
               </p>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
                 <div className="flex-1">
@@ -1241,7 +1425,11 @@ export default function Admin() {
                     type="number"
                     min="1"
                     value={qualifyCount}
-                    onChange={(e) => setQualifyCount(e.target.value ? parseInt(e.target.value) : '')}
+                    onChange={(e) =>
+                      setQualifyCount(
+                        e.target.value ? parseInt(e.target.value) : "",
+                      )
+                    }
                     className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-orange-500 transition-colors"
                     placeholder="e.g., 40"
                   />
@@ -1250,13 +1438,14 @@ export default function Admin() {
                   onClick={handleQualifyR3}
                   disabled={isQualifying || !qualifyCount}
                   className={`px-6 py-2 rounded font-medium transition-all duration-200 whitespace-nowrap
-                    ${isQualifying || !qualifyCount
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : 'bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 shadow-lg shadow-orange-500/20'
+                    ${
+                      isQualifying || !qualifyCount
+                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                        : "bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 shadow-lg shadow-orange-500/20"
                     }
                   `}
                 >
-                  {isQualifying ? 'Processing...' : 'Qualify Players'}
+                  {isQualifying ? "Processing..." : "Qualify Players"}
                 </button>
               </div>
             </div>
@@ -1517,7 +1706,10 @@ export default function Admin() {
                             <div className="flex items-center gap-3">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-white">
-                                {participant.username}
+                                {/* FIX: Add fallbacks so names don't show up blank */}
+                                {participant.username ||
+                                  participant.userId ||
+                                  "Unknown"}
                               </span>
                             </div>
                             <span className="text-gray-400 text-xs">
@@ -1593,7 +1785,10 @@ export default function Admin() {
                                 ></div>
                                 <div className="flex flex-col">
                                   <span className="text-white font-medium">
-                                    {participant.username}
+                                    {/* FIX: Add fallbacks so names don't show up blank */}
+                                    {participant.username ||
+                                      participant.userId ||
+                                      "Unknown"}
                                   </span>
                                   {participant.status === "in_match" &&
                                     participant.opponentUsername && (
@@ -1667,10 +1862,12 @@ export default function Admin() {
                             {p.username}
                           </td>
                           <td className="py-2 px-3 font-mono text-cyan-400">
-                            0
+                            {p.eventScore ?? 0}
                           </td>
                           <td className="py-2 px-3 text-sm">
-                            {p.status === "in_match" ? "In-match" : "Waiting"}
+                            {p.status === "in_match" || p.status === "in-match"
+                              ? "In-match"
+                              : "Waiting"}
                           </td>
                         </tr>
                       ))}

@@ -209,7 +209,7 @@ export default function Lobbyr3() {
       setHasAttemptedJoin(true);
 
       if (!response.success) {
-        console.error("❌ [R3 Lobby] State response failed:", response.error);
+        console.warn("⚠️ [R3 Lobby] State response failed:", response.error);
         showErrorToast(response.error || "Could not sync with the server.");
         return;
       }
@@ -268,10 +268,7 @@ export default function Lobbyr3() {
               console.log("✅ [R3 Lobby] User joined successfully");
             } else {
               showErrorToast(joinResponse.error || "Failed to join lobby");
-              console.error(
-                "❌ [R3 Lobby] Failed to join:",
-                joinResponse.error,
-              );
+              console.warn("⚠️ [R3 Lobby] Failed to join:", joinResponse.error);
             }
           },
         );
