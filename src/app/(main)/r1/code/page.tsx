@@ -303,11 +303,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
       if (currentContext) {
         const currentCode = codeRef.current;
-        const boilerplate = contextManager.getBoilerplate(
-          problem,
-          currentContext.language,
-        );
-        if (currentCode && currentCode !== boilerplate) {
+        if (currentCode) {
           updatedStore = contextManager.setCodeForContext(
             updatedStore,
             currentContext,
@@ -317,6 +313,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
         }
       }
 
+      const currentCode = codeRef.current;
       const savedCode = contextManager.getCodeForContext(
         updatedStore,
         newContext,
@@ -326,14 +323,38 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
         newLanguage,
       );
 
+      let codeToSet: string;
+      if (savedCode !== undefined && savedCode !== "") {
+        codeToSet = savedCode;
+      } else if (newProblem.id === problem?.id && currentCode && currentCode.trim() !== "") {
+        // Carry over code when switching language on same problem if target language has no saved code yet
+        codeToSet = currentCode;
+        updatedStore = contextManager.setCodeForContext(
+          updatedStore,
+          newContext,
+          currentCode,
+        );
+        contextManager.saveCodeStore("1", updatedStore);
+      } else {
+        codeToSet = newBoilerplate;
+      }
+
       setCodeStore(updatedStore);
-      setCode(savedCode || newBoilerplate);
+      setCode(codeToSet);
       setCurrentContext(newContext);
       setSubmissionResults(null);
       setActiveTab("testcases");
     },
     [currentContext, problem, codeStore, contextManager],
   );
+
+  const handleLanguageChange = (newLanguage: string) => {
+    if (newLanguage === language) return;
+    setLanguage(newLanguage);
+    if (problem) {
+      handleContextTransition(problem, newLanguage);
+    }
+  };
 
   const executeCode = useCallback(
     async (isFinalSubmission: boolean) => {
@@ -765,7 +786,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
               <div className="flex justify-between items-center mb-2 gap-2">
                 <select
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
                   className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="python">Python</option>

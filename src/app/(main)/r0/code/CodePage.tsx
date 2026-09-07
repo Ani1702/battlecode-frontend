@@ -416,23 +416,17 @@ export default function CodePage({
         return;
       }
 
-      // STEP 1: Save current code to current context
+      // STEP 1: Save current code to current context synchronously
       const currentCode = codeRef.current;
-      const currentBoilerplate = contextManager.getBoilerplate(
-        currentProblem,
-        currentContextRef.current?.language || language,
-      );
+      let updatedStore = { ...codeStore };
 
-      if (currentCode && currentCode !== currentBoilerplate) {
-        setCodeStore((prevStore) => {
-          const updatedStore = contextManager.setCodeForContext(
-            prevStore,
-            currentContext,
-            currentCode,
-          );
-          contextManager.saveCodeStore(round, updatedStore);
-          return updatedStore;
-        });
+      if (currentCode) {
+        updatedStore = contextManager.setCodeForContext(
+          updatedStore,
+          currentContext,
+          currentCode,
+        );
+        contextManager.saveCodeStore(round, updatedStore);
       }
 
       // STEP 2: Clear UI state for clean transition
@@ -441,18 +435,38 @@ export default function CodePage({
         setShowHints(false); // Only reset hints when changing problems, not languages
       }
 
-      // STEP 3: Load code for new context
+      // STEP 3: Load code for new context from updatedStore
       const savedCodeForNewContext = contextManager.getCodeForContext(
-        codeStore,
+        updatedStore,
         newContext,
       );
       const newBoilerplate = contextManager.getBoilerplate(
         newProblem,
         newLanguage,
       );
-      const codeToLoad = savedCodeForNewContext || newBoilerplate;
+      
+      let codeToLoad: string;
+      if (savedCodeForNewContext !== undefined && savedCodeForNewContext !== "") {
+        codeToLoad = savedCodeForNewContext;
+      } else if (
+        newProblem.id === currentProblem?.id &&
+        currentCode &&
+        currentCode.trim() !== ""
+      ) {
+        // Carry over code when switching language on same problem if target language has no saved code yet
+        codeToLoad = currentCode;
+        updatedStore = contextManager.setCodeForContext(
+          updatedStore,
+          newContext,
+          currentCode,
+        );
+        contextManager.saveCodeStore(round, updatedStore);
+      } else {
+        codeToLoad = newBoilerplate;
+      }
 
       // STEP 4: Update state atomically
+      setCodeStore(updatedStore);
       setCurrentContext(newContext);
       setCode(codeToLoad);
     },
@@ -460,11 +474,18 @@ export default function CodePage({
       currentContext,
       currentProblem,
       round,
-      language,
       codeStore,
       contextManager,
     ],
   );
+
+  const handleLanguageChange = (newLanguage: string) => {
+    if (newLanguage === language) return;
+    setLanguage(newLanguage);
+    if (currentProblem) {
+      handleContextTransition(currentProblem, newLanguage);
+    }
+  };
 
   // ============================================================================
   // REACT TO PROP CHANGES - Problem or Language Changes
@@ -1183,7 +1204,7 @@ export default function CodePage({
                 <div className="flex-1 flex gap-2 px-4">
                   <select
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
+                    onChange={(e) => handleLanguageChange(e.target.value)}
                     className="bg-black flex-[0.3] text-white rounded border w-20 px-4 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none bg-no-repeat bg-right "
                     style={{
                       backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23f59e0b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,

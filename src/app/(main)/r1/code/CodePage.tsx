@@ -216,6 +216,11 @@ export default function R1CodePage() {
     return String(data);
   };
 
+  const codeRef = useRef(code);
+  useEffect(() => {
+    codeRef.current = code;
+  }, [code]);
+
   const saveCurrentState = useCallback(() => {
     if (!problem) return;
     const key = getMatchStorageKey(problem.id);
@@ -226,7 +231,7 @@ export default function R1CodePage() {
         : { currentLanguage: language, languages: {} };
       state.currentLanguage = language;
       if (!state.languages) state.languages = {};
-      state.languages[language] = { code };
+      state.languages[language] = { code: codeRef.current || code };
       localStorage.setItem(key, JSON.stringify(state));
     } catch (e) {
       console.error("Failed to save state:", e);
@@ -235,20 +240,31 @@ export default function R1CodePage() {
 
   const handleLanguageChange = (newLanguage: string) => {
     if (!problem || language === newLanguage) return;
+    const currentCode = codeRef.current;
     saveCurrentState();
     const key = getMatchStorageKey(problem.id);
     const savedStateStr = localStorage.getItem(key);
-    let newCode = problem.boilerplate?.[newLanguage] || "";
+    let newCode = "";
     if (savedStateStr) {
       try {
         const state: SavedMatchState = JSON.parse(savedStateStr);
-        newCode =
-          state.languages?.[newLanguage]?.code ||
-          problem.boilerplate?.[newLanguage] ||
-          "";
+        const savedLangCode = state.languages?.[newLanguage]?.code;
+        if (savedLangCode !== undefined && savedLangCode !== "") {
+          newCode = savedLangCode;
+        } else if (currentCode && currentCode.trim() !== "") {
+          newCode = currentCode;
+          if (!state.languages) state.languages = {};
+          state.languages[newLanguage] = { code: currentCode };
+          localStorage.setItem(key, JSON.stringify(state));
+        } else {
+          newCode = problem.boilerplate?.[newLanguage] || "";
+        }
       } catch (e) {
         console.error("Failed to parse saved state on language change", e);
+        newCode = currentCode || problem.boilerplate?.[newLanguage] || "";
       }
+    } else {
+      newCode = currentCode || problem.boilerplate?.[newLanguage] || "";
     }
     setCode(newCode);
     setLanguage(newLanguage);
