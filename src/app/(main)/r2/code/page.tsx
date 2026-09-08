@@ -293,8 +293,36 @@ export default function R2CodePage() {
     }
   }, [code, currentContext, scheduleAutoSave]);
 
+  const handleLanguageChange = (newLanguage: string) => {
+    if (!sessionData?.question || newLanguage === language) return;
+
+    // Save current code for current language
+    const currentCode = codeRef.current;
+    let store = contextManager.loadCodeStore();
+    if (currentContext && currentCode !== undefined) {
+      store = contextManager.setCodeForContext(
+        store,
+        currentContext,
+        currentCode,
+      );
+      contextManager.saveCodeStore(store);
+    }
+
+    // Load code for new language
+    const newContext = contextManager.createContext(
+      sessionData.question.id,
+      newLanguage,
+    );
+    const savedCode = contextManager.getCodeForContext(store, newContext);
+    const codeToSet = savedCode || "";
+
+    setCurrentContext(newContext);
+    setCode(codeToSet);
+    setLanguage(newLanguage);
+  };
+
   useEffect(() => {
-    if (!sessionData?.question) return;
+    if (!sessionData?.question || currentContext) return;
 
     const loadedStore = contextManager.loadCodeStore();
     const newContext = contextManager.createContext(
@@ -304,12 +332,8 @@ export default function R2CodePage() {
     setCurrentContext(newContext);
 
     const savedCode = contextManager.getCodeForContext(loadedStore, newContext);
-    const boilerplate = contextManager.getBoilerplate(
-      sessionData.question,
-      language,
-    );
-    setCode(savedCode || boilerplate);
-  }, [sessionData, language, contextManager]);
+    setCode(savedCode || "");
+  }, [sessionData, language, currentContext, contextManager]);
 
   const executeCode = useCallback(
     async (isFinalSubmission: boolean) => {
@@ -997,7 +1021,7 @@ export default function R2CodePage() {
               <div className="flex justify-between items-center mb-2 gap-2">
                 <select
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
                   className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="python">Python</option>

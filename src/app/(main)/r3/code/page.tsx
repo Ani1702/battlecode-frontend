@@ -367,11 +367,7 @@ export default function Round3Page() {
       let updatedStore = { ...codeStore };
       if (currentContext && !isLocked) {
         const currentCode = codeRef.current;
-        const boilerplate = contextManager.getBoilerplate(
-          currentProblem,
-          currentContext.language,
-        );
-        if (currentCode && currentCode !== boilerplate) {
+        if (currentCode) {
           updatedStore = contextManager.setCodeForContext(
             updatedStore,
             currentContext,
@@ -385,13 +381,10 @@ export default function Round3Page() {
         updatedStore,
         newContext,
       );
-      const newBoilerplate = contextManager.getBoilerplate(
-        newProblem,
-        newLanguage,
-      );
+      const codeToSet = savedCode || "";
 
       setCodeStore(updatedStore);
-      setCode(savedCode || newBoilerplate);
+      setCode(codeToSet);
       setCurrentContext(newContext);
       setSubmissionResults(null);
       setActiveTab("testcases");
@@ -405,6 +398,14 @@ export default function Round3Page() {
       isLocked,
     ],
   );
+
+  const handleLanguageChange = (newLanguage: string) => {
+    if (newLanguage === language) return;
+    setLanguage(newLanguage);
+    if (currentProblem) {
+      handleContextTransition(currentProblem, newLanguage);
+    }
+  };
 
   useEffect(() => {
     if (!currentProblem || isContextInitialized) return;
@@ -420,8 +421,7 @@ export default function Round3Page() {
       loadedStore,
       initialContext,
     );
-    const boilerplate = contextManager.getBoilerplate(currentProblem, language);
-    setCode(savedCode || boilerplate);
+    setCode(savedCode || "");
     setIsContextInitialized(true);
   }, [currentProblem, language, isContextInitialized, contextManager, round]);
 
@@ -1331,7 +1331,7 @@ export default function Round3Page() {
               <div className="flex justify-between items-center mb-2 gap-2">
                 <select
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
                   className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   disabled={isLocked}
                 >

@@ -215,7 +215,9 @@ export default function Lobbyr3() {
       }
 
       // Update participants from the new state structure
-      if (response.participants?.byStatus) {
+      if (response.participants?.all && response.participants.all.length > 0) {
+        setParticipants(response.participants.all);
+      } else if (response.participants?.byStatus) {
         console.log(
           "👥 [R3 Lobby] Participants by status:",
           response.participants.byStatus,
@@ -235,7 +237,7 @@ export default function Lobbyr3() {
         );
         setParticipants(lobbyParticipants);
       } else {
-        console.warn("⚠️ [R3 Lobby] No participants.byStatus in response");
+        console.warn("⚠️ [R3 Lobby] No participants in response");
       }
 
       // Update round active status
@@ -366,12 +368,18 @@ export default function Lobbyr3() {
     const handleLobbyUpdate = (data: LobbyData) => {
       console.log("🔄 [R3 Lobby] Lobby update received:", data);
       setIsLoading(false);
-      if (data.participants?.byStatus?.lobby) {
+      if (data.participants?.all && data.participants.all.length > 0) {
+        setParticipants(data.participants.all);
+      } else if (data.participants?.byStatus) {
+        const lobbyParticipants = [
+          ...(data.participants.byStatus.lobby || []),
+          ...(data.participants.byStatus.waiting || []),
+        ];
         console.log(
           "👥 [R3 Lobby] Updating participants from lobby update:",
-          data.participants.byStatus.lobby,
+          lobbyParticipants,
         );
-        setParticipants(data.participants.byStatus.lobby);
+        setParticipants(lobbyParticipants);
       }
       if (data.round?.isActive !== undefined) {
         console.log(

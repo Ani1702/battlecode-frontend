@@ -303,11 +303,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
 
       if (currentContext) {
         const currentCode = codeRef.current;
-        const boilerplate = contextManager.getBoilerplate(
-          problem,
-          currentContext.language,
-        );
-        if (currentCode && currentCode !== boilerplate) {
+        if (currentCode) {
           updatedStore = contextManager.setCodeForContext(
             updatedStore,
             currentContext,
@@ -321,19 +317,24 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
         updatedStore,
         newContext,
       );
-      const newBoilerplate = contextManager.getBoilerplate(
-        newProblem,
-        newLanguage,
-      );
+      const codeToSet = savedCode || "";
 
       setCodeStore(updatedStore);
-      setCode(savedCode || newBoilerplate);
+      setCode(codeToSet);
       setCurrentContext(newContext);
       setSubmissionResults(null);
       setActiveTab("testcases");
     },
     [currentContext, problem, codeStore, contextManager],
   );
+
+  const handleLanguageChange = (newLanguage: string) => {
+    if (newLanguage === language) return;
+    setLanguage(newLanguage);
+    if (problem) {
+      handleContextTransition(problem, newLanguage);
+    }
+  };
 
   const executeCode = useCallback(
     async (isFinalSubmission: boolean) => {
@@ -555,8 +556,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       loadedStore,
       initialContext,
     );
-    const boilerplate = contextManager.getBoilerplate(problemData, language);
-    setCode(savedCode || boilerplate);
+    setCode(savedCode || "");
     setProblem(problemData);
     setIsContextInitialized(true);
   }, [matchData, language, isContextInitialized, contextManager]);
@@ -765,7 +765,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
               <div className="flex justify-between items-center mb-2 gap-2">
                 <select
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
                   className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="python">Python</option>

@@ -54,11 +54,32 @@ interface SimpleSocketResponse {
 
 const getLobbyParticipants = (payload: {
   participants?: {
-    byStatus?: { lobby?: Participant[] };
+    byStatus?: {
+      lobby?: Participant[];
+      waiting?: Participant[];
+      in_match?: Participant[];
+      in_bounty?: Participant[];
+      cooldown?: Participant[];
+      finished?: Participant[];
+      disconnected?: Participant[];
+    };
+    all?: Participant[];
   };
 }): Participant[] | null => {
-  const lobby = payload.participants?.byStatus?.lobby;
-  return Array.isArray(lobby) ? lobby : null;
+  if (
+    Array.isArray(payload.participants?.all) &&
+    payload.participants.all.length > 0
+  ) {
+    return payload.participants.all;
+  }
+  if (payload.participants?.byStatus) {
+    const { lobby = [], waiting = [] } = payload.participants.byStatus;
+    const combined = [...lobby, ...waiting];
+    if (combined.length > 0) return combined;
+  }
+  return Array.isArray(payload.participants?.all)
+    ? payload.participants.all
+    : null;
 };
 
 const isAlreadyInRoundError = (res?: SimpleSocketResponse) =>
