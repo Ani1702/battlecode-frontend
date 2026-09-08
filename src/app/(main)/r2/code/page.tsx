@@ -295,7 +295,7 @@ export default function R2CodePage() {
 
   const handleLanguageChange = (newLanguage: string) => {
     if (!sessionData?.question || newLanguage === language) return;
-    
+
     // Save current code for current language
     const currentCode = codeRef.current;
     let store = contextManager.loadCodeStore();
@@ -314,24 +314,7 @@ export default function R2CodePage() {
       newLanguage,
     );
     const savedCode = contextManager.getCodeForContext(store, newContext);
-
-    let codeToSet: string;
-    if (savedCode !== undefined && savedCode !== "") {
-      codeToSet = savedCode;
-    } else if (currentCode && currentCode.trim() !== "") {
-      codeToSet = currentCode;
-      store = contextManager.setCodeForContext(
-        store,
-        newContext,
-        currentCode,
-      );
-      contextManager.saveCodeStore(store);
-    } else {
-      codeToSet = contextManager.getBoilerplate(
-        sessionData.question,
-        newLanguage,
-      );
-    }
+    const codeToSet = savedCode || "";
 
     setCurrentContext(newContext);
     setCode(codeToSet);
@@ -349,11 +332,7 @@ export default function R2CodePage() {
     setCurrentContext(newContext);
 
     const savedCode = contextManager.getCodeForContext(loadedStore, newContext);
-    const boilerplate = contextManager.getBoilerplate(
-      sessionData.question,
-      language,
-    );
-    setCode(savedCode || boilerplate);
+    setCode(savedCode || "");
   }, [sessionData, language, currentContext, contextManager]);
 
   const executeCode = useCallback(

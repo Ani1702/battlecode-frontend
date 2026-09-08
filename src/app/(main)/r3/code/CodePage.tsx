@@ -290,34 +290,11 @@ export default function CodePage({
         }
       }
 
-      const currentCode = codeRef.current;
       const savedCode = contextManager.getCodeForContext(
         updatedStore,
         newContext,
       );
-      const newBoilerplate = contextManager.getBoilerplate(
-        newProblem,
-        newLanguage,
-      );
-
-      let codeToSet: string;
-      if (savedCode !== undefined && savedCode !== "") {
-        codeToSet = savedCode;
-      } else if (
-        newProblem.id === currentProblem?.id &&
-        currentCode &&
-        currentCode.trim() !== ""
-      ) {
-        codeToSet = currentCode;
-        updatedStore = contextManager.setCodeForContext(
-          updatedStore,
-          newContext,
-          currentCode,
-        );
-        contextManager.saveCodeStore(round, updatedStore);
-      } else {
-        codeToSet = newBoilerplate;
-      }
+      const codeToSet = savedCode || "";
 
       setCodeStore(updatedStore);
       setCode(codeToSet);
@@ -358,8 +335,7 @@ export default function CodePage({
       loadedStore,
       initialContext,
     );
-    const boilerplate = contextManager.getBoilerplate(currentProblem, language);
-    setCode(savedCode || boilerplate);
+    setCode(savedCode || "");
     setIsContextInitialized(true);
   }, [currentProblem, language, isContextInitialized, contextManager, round]);
 

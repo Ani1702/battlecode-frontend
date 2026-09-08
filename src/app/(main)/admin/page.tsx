@@ -149,6 +149,26 @@ function shouldCorrectTimer(
   return Math.abs(serverRemaining - localRemaining) > TIMER_DRIFT_SECONDS;
 }
 
+function hasBackendOpponent(
+  user: Pick<Participant, "opponentUsername">,
+): boolean {
+  const opponent = user.opponentUsername?.trim();
+  return Boolean(opponent && opponent !== "undefined");
+}
+
+function isPairedInMatch(user: Participant): boolean {
+  const inMatch = user.status === "in_match" || user.status === "in-match";
+  return inMatch && hasBackendOpponent(user);
+}
+
+function activeUserStatusLabel(user: Participant): string {
+  if (isPairedInMatch(user)) return "In Match";
+  if (user.status === "in_match" || user.status === "in-match")
+    return "Playing";
+  if (user.status === "in_bounty") return "Bounty";
+  return "Waiting";
+}
+
 export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -455,37 +475,20 @@ export default function Admin() {
           total: activeUsers.length,
         });
 
-        // Client-side opponent matching: If opponentUsername is undefined, match users by pairs
-        const activeUsersWithOpponents = activeUsers.map((user, index) => {
-          // If backend already provided opponentUsername and it's not "undefined", use it
-          if (user.opponentUsername && user.opponentUsername !== "undefined") {
-            return user;
-          }
-
-          // Client-side matching: pair users in order (0-1, 2-3, etc.)
-          if (user.status === "in_match") {
-            const isEvenIndex = index % 2 === 0;
-            const opponentIndex = isEvenIndex ? index + 1 : index - 1;
-            const opponent = activeUsers[opponentIndex];
-
-            if (opponent && opponent.status === "in_match") {
-              return {
-                ...user,
-                opponentUsername: opponent.username,
-              };
-            }
-          }
-
-          return user;
-        });
+        // Only keep an opponent when the backend sent one. Do not invent pairs.
+        const activeUsersFromBackend = activeUsers.map((user) =>
+          hasBackendOpponent(user)
+            ? user
+            : { ...user, opponentUsername: undefined },
+        );
 
         console.log(
           "[SOCKET STATE] Setting match participants:",
-          activeUsersWithOpponents.length,
+          activeUsersFromBackend.length,
         );
-        setMatchParticipants(activeUsersWithOpponents);
+        setMatchParticipants(activeUsersFromBackend);
         // Save to localStorage
-        saveMatchParticipantsToStorage(activeUsersWithOpponents, roundNumber);
+        saveMatchParticipantsToStorage(activeUsersFromBackend, roundNumber);
       } else {
         if (!round.isActive && roundNumber === selectedRoundForMatches) {
           console.log(
@@ -1698,33 +1701,30 @@ export default function Admin() {
                         {matchParticipants.length !== 1 ? "s" : ""}
                       </p>
                       <div className="max-h-96 overflow-y-auto space-y-2">
-                        {matchParticipants.map((participant, idx) => (
-                          <div
-                            key={`match-${participant.userId}-${idx}`}
-                            className={`bg-gray-600/50 px-4 py-3 rounded border-l-4 ${
-                              participant.status === "in_match"
-                                ? "border-blue-500"
-                                : "border-yellow-500"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={`w-2 h-2 rounded-full ${
-                                    participant.status === "in_match"
-                                      ? "bg-blue-500"
-                                      : "bg-yellow-500"
-                                  }`}
-                                ></div>
-                                <div className="flex flex-col">
-                                  <span className="text-white font-medium">
-                                    {/* FIX: Add fallbacks so names don't show up blank */}
-                                    {participant.username ||
-                                      participant.userId ||
-                                      "Unknown"}
-                                  </span>
-                                  {participant.status === "in_match" &&
-                                    participant.opponentUsername && (
+                        {matchParticipants.map((participant, idx) => {
+                          const paired = isPairedInMatch(participant);
+                          return (
+                            <div
+                              key={`match-${participant.userId}-${idx}`}
+                              className={`bg-gray-600/50 px-4 py-3 rounded border-l-4 ${
+                                paired ? "border-blue-500" : "border-yellow-500"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className={`w-2 h-2 rounded-full ${
+                                      paired ? "bg-blue-500" : "bg-yellow-500"
+                                    }`}
+                                  ></div>
+                                  <div className="flex flex-col">
+                                    <span className="text-white font-medium">
+                                      {/* FIX: Add fallbacks so names don't show up blank */}
+                                      {participant.username ||
+                                        participant.userId ||
+                                        "Unknown"}
+                                    </span>
+                                    {paired && participant.opponentUsername && (
                                       <span className="text-sm text-blue-300 mt-1">
                                         🎮 vs{" "}
                                         <span className="font-semibold text-blue-200">
@@ -1732,22 +1732,19 @@ export default function Admin() {
                                         </span>
                                       </span>
                                     )}
+                                  </div>
                                 </div>
+                                <span
+                                  className={`text-xs font-semibold uppercase ${
+                                    paired ? "text-blue-400" : "text-yellow-400"
+                                  }`}
+                                >
+                                  {activeUserStatusLabel(participant)}
+                                </span>
                               </div>
-                              <span
-                                className={`text-xs font-semibold uppercase ${
-                                  participant.status === "in_match"
-                                    ? "text-blue-400"
-                                    : "text-yellow-400"
-                                }`}
-                              >
-                                {participant.status === "in_match"
-                                  ? "In Match"
-                                  : "Waiting"}
-                              </span>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ) : (
@@ -1798,9 +1795,7 @@ export default function Admin() {
                             {p.eventScore ?? 0}
                           </td>
                           <td className="py-2 px-3 text-sm">
-                            {p.status === "in_match" || p.status === "in-match"
-                              ? "In-match"
-                              : "Waiting"}
+                            {activeUserStatusLabel(p)}
                           </td>
                         </tr>
                       ))}

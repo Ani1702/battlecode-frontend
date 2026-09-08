@@ -172,11 +172,7 @@ export default function CodePage({
         const store = stored ? JSON.parse(stored) : {};
         const contextKey = `${round}:${currentProblem.id}:${language}`;
         const savedCode = store[contextKey];
-        const boilerplate =
-          currentProblem.boilerplate?.[language] ||
-          currentProblem.boilerplate?.["python"] ||
-          "";
-        setCode(savedCode !== undefined ? savedCode : boilerplate);
+        setCode(savedCode || "");
       }
     } catch (error) {
       console.error("Error loading code for problem change:", error);
@@ -201,19 +197,7 @@ export default function CodePage({
       const newContextKey = `${round}:${currentProblem.id}:${newLanguage}`;
       const savedCode = store[newContextKey];
 
-      let codeToSet: string;
-      if (savedCode !== undefined && savedCode !== "") {
-        codeToSet = savedCode;
-      } else if (currentCode && currentCode.trim() !== "") {
-        // Carry over code from previous language if new language has no saved code yet
-        codeToSet = currentCode;
-        store[newContextKey] = currentCode;
-      } else {
-        codeToSet =
-          currentProblem.boilerplate?.[newLanguage] ||
-          currentProblem.boilerplate?.["python"] ||
-          "";
-      }
+      const codeToSet = savedCode || "";
 
       localStorage.setItem(key, JSON.stringify(store));
       setCode(codeToSet);

@@ -313,31 +313,11 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
         }
       }
 
-      const currentCode = codeRef.current;
       const savedCode = contextManager.getCodeForContext(
         updatedStore,
         newContext,
       );
-      const newBoilerplate = contextManager.getBoilerplate(
-        newProblem,
-        newLanguage,
-      );
-
-      let codeToSet: string;
-      if (savedCode !== undefined && savedCode !== "") {
-        codeToSet = savedCode;
-      } else if (newProblem.id === problem?.id && currentCode && currentCode.trim() !== "") {
-        // Carry over code when switching language on same problem if target language has no saved code yet
-        codeToSet = currentCode;
-        updatedStore = contextManager.setCodeForContext(
-          updatedStore,
-          newContext,
-          currentCode,
-        );
-        contextManager.saveCodeStore("1", updatedStore);
-      } else {
-        codeToSet = newBoilerplate;
-      }
+      const codeToSet = savedCode || "";
 
       setCodeStore(updatedStore);
       setCode(codeToSet);
@@ -576,8 +556,7 @@ function CodePageComponent({ matchData, timeRemaining }: CodePageProps) {
       loadedStore,
       initialContext,
     );
-    const boilerplate = contextManager.getBoilerplate(problemData, language);
-    setCode(savedCode || boilerplate);
+    setCode(savedCode || "");
     setProblem(problemData);
     setIsContextInitialized(true);
   }, [matchData, language, isContextInitialized, contextManager]);

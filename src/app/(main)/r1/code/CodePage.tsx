@@ -240,7 +240,6 @@ export default function R1CodePage() {
 
   const handleLanguageChange = (newLanguage: string) => {
     if (!problem || language === newLanguage) return;
-    const currentCode = codeRef.current;
     saveCurrentState();
     const key = getMatchStorageKey(problem.id);
     const savedStateStr = localStorage.getItem(key);
@@ -248,23 +247,13 @@ export default function R1CodePage() {
     if (savedStateStr) {
       try {
         const state: SavedMatchState = JSON.parse(savedStateStr);
-        const savedLangCode = state.languages?.[newLanguage]?.code;
-        if (savedLangCode !== undefined && savedLangCode !== "") {
-          newCode = savedLangCode;
-        } else if (currentCode && currentCode.trim() !== "") {
-          newCode = currentCode;
-          if (!state.languages) state.languages = {};
-          state.languages[newLanguage] = { code: currentCode };
-          localStorage.setItem(key, JSON.stringify(state));
-        } else {
-          newCode = problem.boilerplate?.[newLanguage] || "";
-        }
+        newCode = state.languages?.[newLanguage]?.code || "";
       } catch (e) {
         console.error("Failed to parse saved state on language change", e);
-        newCode = currentCode || problem.boilerplate?.[newLanguage] || "";
+        newCode = "";
       }
     } else {
-      newCode = currentCode || problem.boilerplate?.[newLanguage] || "";
+      newCode = "";
     }
     setCode(newCode);
     setLanguage(newLanguage);
@@ -600,14 +589,11 @@ export default function R1CodePage() {
           const key = getMatchStorageKey(data.question.id);
           const savedStateStr = localStorage.getItem(key);
           let restoredLanguage = "python";
-          let restoredCode = problemData.boilerplate?.["python"] || "";
+          let restoredCode = "";
           if (savedStateStr) {
             const savedState: SavedMatchState = JSON.parse(savedStateStr);
             restoredLanguage = savedState.currentLanguage || "python";
-            restoredCode =
-              savedState.languages?.[restoredLanguage]?.code ||
-              problemData.boilerplate?.[restoredLanguage] ||
-              "";
+            restoredCode = savedState.languages?.[restoredLanguage]?.code || "";
           }
           setLanguage(restoredLanguage);
           setCode(restoredCode);

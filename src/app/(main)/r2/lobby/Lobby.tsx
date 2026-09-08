@@ -66,7 +66,10 @@ const getLobbyParticipants = (payload: {
     all?: Participant[];
   };
 }): Participant[] | null => {
-  if (Array.isArray(payload.participants?.all) && payload.participants.all.length > 0) {
+  if (
+    Array.isArray(payload.participants?.all) &&
+    payload.participants.all.length > 0
+  ) {
     return payload.participants.all;
   }
   if (payload.participants?.byStatus) {
@@ -74,7 +77,9 @@ const getLobbyParticipants = (payload: {
     const combined = [...lobby, ...waiting];
     if (combined.length > 0) return combined;
   }
-  return Array.isArray(payload.participants?.all) ? payload.participants.all : null;
+  return Array.isArray(payload.participants?.all)
+    ? payload.participants.all
+    : null;
 };
 
 const isAlreadyInRoundError = (res?: SimpleSocketResponse) =>

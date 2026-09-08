@@ -352,8 +352,7 @@ export default function CodePage({
       loadedStore,
       initialContext,
     );
-    const boilerplate = contextManager.getBoilerplate(currentProblem, language);
-    const codeToLoad = savedCode || boilerplate;
+    const codeToLoad = savedCode || "";
 
     setCode(codeToLoad);
 
@@ -440,43 +439,14 @@ export default function CodePage({
         updatedStore,
         newContext,
       );
-      const newBoilerplate = contextManager.getBoilerplate(
-        newProblem,
-        newLanguage,
-      );
-      
-      let codeToLoad: string;
-      if (savedCodeForNewContext !== undefined && savedCodeForNewContext !== "") {
-        codeToLoad = savedCodeForNewContext;
-      } else if (
-        newProblem.id === currentProblem?.id &&
-        currentCode &&
-        currentCode.trim() !== ""
-      ) {
-        // Carry over code when switching language on same problem if target language has no saved code yet
-        codeToLoad = currentCode;
-        updatedStore = contextManager.setCodeForContext(
-          updatedStore,
-          newContext,
-          currentCode,
-        );
-        contextManager.saveCodeStore(round, updatedStore);
-      } else {
-        codeToLoad = newBoilerplate;
-      }
+      const codeToLoad = savedCodeForNewContext || "";
 
       // STEP 4: Update state atomically
       setCodeStore(updatedStore);
       setCurrentContext(newContext);
       setCode(codeToLoad);
     },
-    [
-      currentContext,
-      currentProblem,
-      round,
-      codeStore,
-      contextManager,
-    ],
+    [currentContext, currentProblem, round, codeStore, contextManager],
   );
 
   const handleLanguageChange = (newLanguage: string) => {
