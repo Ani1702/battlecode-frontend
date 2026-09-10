@@ -164,6 +164,7 @@ export default function Round3Page() {
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
   const [pageIsLoading, setPageIsLoading] = useState(true);
   const [isHackingPhase, setIsHackingPhase] = useState(false);
   const [lockedQuestionIds, setLockedQuestionIds] = useState<string[]>([]);
@@ -205,6 +206,41 @@ export default function Round3Page() {
   const isMountedRef = useRef(true);
   const codeRef = useRef(code);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applyDeadline = useCallback(
+    (
+      source?: {
+        endTime?: number | null;
+        startTime?: number | null;
+        duration?: number | null;
+        timeRemaining?: number | null;
+        elapsed?: number | null;
+      } | null,
+    ) => {
+      if (!source || !isMountedRef.current) return;
+      if (
+        typeof source.endTime === "number" &&
+        Number.isFinite(source.endTime)
+      ) {
+        setRoundEndTime(source.endTime);
+      } else if (
+        typeof source.startTime === "number" &&
+        typeof source.duration === "number"
+      ) {
+        setRoundEndTime(source.startTime + source.duration);
+      } else if (
+        typeof source.duration === "number" &&
+        typeof source.elapsed === "number"
+      ) {
+        setRoundEndTime(
+          Date.now() + Math.max(0, source.duration - source.elapsed),
+        );
+      } else if ((source.timeRemaining ?? 0) > 0) {
+        setRoundEndTime(Date.now() + source.timeRemaining!);
+      }
+    },
+    [],
+  );
 
   // --- Core Hooks & Memos ---
   useEffect(() => {
@@ -456,18 +492,24 @@ export default function Round3Page() {
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    const handleTimerUpdate = (data: { timeRemaining?: number }) => {
-      if (isMountedRef.current) {
-        setTimeRemaining(data.timeRemaining || 0);
-
-        // Warn user when time is low
-        if (
-          data.timeRemaining &&
-          data.timeRemaining <= 60 &&
-          data.timeRemaining > 0
-        ) {
-          showErrorToast(`Only ${data.timeRemaining} seconds remaining!`);
-        }
+    const handleTimerUpdate = (data: {
+      timeRemaining?: number;
+      endTime?: number;
+      duration?: number;
+      elapsed?: number;
+      startTime?: number;
+    }) => {
+      applyDeadline(data);
+      const remainingSeconds = Math.max(
+        0,
+        Math.ceil(
+          (typeof data.endTime === "number"
+            ? data.endTime - Date.now()
+            : data.timeRemaining || 0) / 1000,
+        ),
+      );
+      if (remainingSeconds <= 60 && remainingSeconds > 0) {
+        showErrorToast(`Only ${remainingSeconds} seconds remaining!`);
       }
     };
 
@@ -478,10 +520,17 @@ export default function Round3Page() {
       router.push("/dashboard");
     };
 
-    const handleHackingPhaseStart = () => {
+    const handleHackingPhaseStart = (data?: {
+      elapsed?: number;
+      timeRemaining?: number;
+      duration?: number;
+      startTime?: number;
+      endTime?: number;
+    }) => {
       if (isMountedRef.current) {
         showInfoToast("Hacking phase has started!");
         setIsHackingPhase(true);
+        applyDeadline(data);
       }
     };
 
@@ -497,6 +546,9 @@ export default function Round3Page() {
     const handleRoundStart = (data: {
       questions: Problem[];
       duration: number;
+      startTime?: number;
+      endTime?: number;
+      timeRemaining?: number;
     }) => {
       if (!isMountedRef.current) return;
       showInfoToast("A new round has been started by the admin!");
@@ -504,7 +556,12 @@ export default function Round3Page() {
       setProblems(data.questions || []);
       setCurrentProblem(data.questions?.[0] || null);
       setCurrentProblemIndex(0);
-      setTimeRemaining(data.duration || 0);
+      applyDeadline({
+        endTime: data.endTime,
+        startTime: data.startTime,
+        duration: data.duration || 3_600_000,
+        timeRemaining: data.timeRemaining,
+      });
       setPageIsLoading(false);
     };
 
@@ -538,7 +595,7 @@ export default function Round3Page() {
           }
         }
 
-        setTimeRemaining(state.round.timeRemaining);
+        applyDeadline(state.round);
         setIsHackingPhase(state.roundSpecific.isHackingPhase);
         setLockedQuestionIds(state.roundSpecific.lockedQuestionIds);
       }
@@ -555,7 +612,7 @@ export default function Round3Page() {
         }
 
         if (typeof state.globalTimeRemaining === "number") {
-          setTimeRemaining(state.globalTimeRemaining);
+          applyDeadline({ timeRemaining: state.globalTimeRemaining });
         }
 
         if (typeof state.isHackingPhase === "boolean") {
@@ -618,6 +675,7 @@ export default function Round3Page() {
     clearMatchContext,
     currentProblem,
     pageIsLoading,
+    applyDeadline,
   ]);
 
   // --- Initial State Fetch ---
@@ -657,7 +715,7 @@ export default function Round3Page() {
           setProblems(state.roundSpecific.questions);
           setCurrentProblem(state.roundSpecific.questions[0]);
           setCurrentProblemIndex(0);
-          setTimeRemaining(state.round.timeRemaining);
+          applyDeadline(state.round);
           setIsHackingPhase(state.roundSpecific.isHackingPhase);
           setLockedQuestionIds(state.roundSpecific.lockedQuestionIds);
         }
@@ -672,7 +730,7 @@ export default function Round3Page() {
           setProblems(state.questions!);
           setCurrentProblem(state.questions![0]);
           setCurrentProblemIndex(0);
-          setTimeRemaining(state.timeRemaining || 0);
+          applyDeadline({ timeRemaining: state.timeRemaining });
           setIsHackingPhase(state.isHackingPhase || false);
           setLockedQuestionIds(state.lockedQuestionIds || []);
         } else {
@@ -700,7 +758,19 @@ export default function Round3Page() {
     isConnected,
     router,
     pageIsLoading,
+    applyDeadline,
   ]);
+
+  useEffect(() => {
+    if (!roundEndTime) return;
+    const tick = () =>
+      setTimeRemaining(
+        Math.max(0, Math.ceil((roundEndTime - Date.now()) / 1000)),
+      );
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [roundEndTime]);
 
   // Request timer sync and state updates when socket and problems are available
   useEffect(() => {

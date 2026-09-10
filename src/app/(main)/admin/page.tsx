@@ -45,10 +45,26 @@ type TimerSource = {
   startTime?: number | null;
   duration?: number | null;
   timeRemaining?: number | null;
+  elapsed?: number | null;
 };
 
 function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function deadlineFromSource(source?: TimerSource | null): number | null {
+  if (!source) return null;
+  if (isPositiveNumber(source.endTime)) return source.endTime;
+  if (isPositiveNumber(source.startTime) && isPositiveNumber(source.duration)) {
+    return source.startTime + source.duration;
+  }
+  if (isPositiveNumber(source.duration) && isPositiveNumber(source.elapsed)) {
+    return Date.now() + Math.max(0, source.duration - source.elapsed);
+  }
+  if (isPositiveNumber(source.timeRemaining)) {
+    return Date.now() + source.timeRemaining;
+  }
+  return null;
 }
 
 function resolveDeadlineFromResponse(response: {
@@ -57,86 +73,39 @@ function resolveDeadlineFromResponse(response: {
   startTime?: number;
   duration?: number;
   timeRemaining?: number;
-  roundSpecific?: { globalTimeRemaining?: number };
+  elapsed?: number;
+  endTime?: number;
 }): number | null {
-  const roundNumber = response.roundNumber;
-  const round = response.round;
-
-  // Round 1 never sends endTime. Whole-round clock is remaining seconds.
-  if (roundNumber === 1) {
-    const remainingSeconds = isPositiveNumber(round?.timeRemaining)
-      ? round.timeRemaining
-      : isPositiveNumber(response.roundSpecific?.globalTimeRemaining)
-        ? response.roundSpecific.globalTimeRemaining
-        : null;
-    if (remainingSeconds != null) {
-      return Date.now() + remainingSeconds * 1000;
-    }
-    if (
-      isPositiveNumber(round?.startTime) &&
-      isPositiveNumber(round?.duration)
-    ) {
-      return round.startTime + round.duration;
-    }
-    return null;
-  }
-
-  // Rounds 0 / 2 / 3: prefer the absolute end timestamp (ms).
-  if (isPositiveNumber(round?.endTime)) {
-    return round.endTime;
-  }
-
-  // Round 2 remaining + duration are already milliseconds.
-  if (roundNumber === 2) {
-    if (isPositiveNumber(round?.timeRemaining)) {
-      return Date.now() + round.timeRemaining;
-    }
-    if (
-      isPositiveNumber(round?.startTime) &&
-      isPositiveNumber(round?.duration)
-    ) {
-      return round.startTime + round.duration;
-    }
-    return null;
-  }
-
-  // Round 0 can send timeRemaining: 0 while still IN_PROGRESS. Ignore that 0.
-  if (isPositiveNumber(round?.startTime) && isPositiveNumber(round?.duration)) {
-    const durationMs =
-      round.duration >= 10_000 ? round.duration : round.duration * 1000;
-    return round.startTime + durationMs;
-  }
-
-  if (isPositiveNumber(round?.timeRemaining)) {
-    return Date.now() + round.timeRemaining * 1000;
-  }
-
-  // lobby:round0 still puts remaining seconds on the packet root.
-  if (isPositiveNumber(response.timeRemaining)) {
-    return Date.now() + response.timeRemaining * 1000;
-  }
-
-  return null;
+  return (
+    deadlineFromSource(response.round) ??
+    deadlineFromSource({
+      endTime: response.endTime,
+      startTime: response.startTime,
+      duration: response.duration,
+      timeRemaining: response.timeRemaining,
+      elapsed: response.elapsed,
+    })
+  );
 }
 
 function hasAbsoluteDeadline(
-  roundNumber: number | undefined,
+  _roundNumber: number | undefined,
   round?: TimerSource | null,
 ): boolean {
-  if (roundNumber === 1) return false;
   return isPositiveNumber(round?.endTime);
 }
 
 function resolveTimerTickEndTime(
-  roundNumber: number,
-  data: { timeRemaining?: number; endTime?: number },
+  _roundNumber: number,
+  data: {
+    timeRemaining?: number;
+    endTime?: number;
+    duration?: number;
+    elapsed?: number;
+    startTime?: number;
+  },
 ): number | null {
-  if (isPositiveNumber(data.endTime)) return data.endTime;
-  if (!isPositiveNumber(data.timeRemaining)) return null;
-  if (roundNumber === 2) {
-    return Date.now() + data.timeRemaining;
-  }
-  return Date.now() + data.timeRemaining * 1000;
+  return deadlineFromSource(data);
 }
 
 function shouldCorrectTimer(
@@ -424,9 +393,13 @@ export default function Admin() {
               : prev,
           );
         }
-        // Use roundSpecific for Round 1's nextMatchmakingCycle
         setNextMatchmakingCycle(
-          response.roundSpecific?.nextMatchmakingCycle ?? null,
+          response.roundSpecific?.nextMatchmakingCycle != null
+            ? Math.max(
+                0,
+                Math.ceil(response.roundSpecific.nextMatchmakingCycle / 1000),
+              )
+            : null,
         );
         if (currentUser) {
           console.log("[SOCKET STATE] Current user:", currentUser);
@@ -970,6 +943,17 @@ export default function Admin() {
     };
 
     const handleLobbyUpdate1 = (data: BaseRoundState) => {
+      if (activeRoundNumber === 1) {
+        const lobbyDeadline = resolveDeadlineFromResponse({
+          ...data,
+          roundNumber: 1,
+        });
+        if (lobbyDeadline != null) {
+          setRoundEndTime((prev) =>
+            shouldCorrectTimer(prev, lobbyDeadline) ? lobbyDeadline : prev,
+          );
+        }
+      }
       if (1 === selectedRoundForUsers) {
         console.log("[LOBBY UPDATE Round 1]", data);
         if (data.participants?.byStatus?.lobby) {
@@ -992,6 +976,17 @@ export default function Admin() {
     };
 
     const handleLobbyUpdate3 = (data: BaseRoundState) => {
+      if (activeRoundNumber === 3) {
+        const lobbyDeadline = resolveDeadlineFromResponse({
+          ...data,
+          roundNumber: 3,
+        });
+        if (lobbyDeadline != null) {
+          setRoundEndTime((prev) =>
+            shouldCorrectTimer(prev, lobbyDeadline) ? lobbyDeadline : prev,
+          );
+        }
+      }
       if (3 === selectedRoundForUsers) {
         console.log("[LOBBY UPDATE Round 3]", data);
         if (data.participants?.byStatus?.lobby) {
@@ -1143,30 +1138,50 @@ export default function Admin() {
       );
     };
 
-    const handleTimer0 = (data: { timeRemaining?: number; endTime?: number }) =>
-      applyTimerTick(0, data);
+    const handleTimer0 = (data: {
+      timeRemaining?: number;
+      endTime?: number;
+      duration?: number;
+      elapsed?: number;
+      startTime?: number;
+    }) => applyTimerTick(0, data);
     const handleGlobalTimer = (data: {
       timeRemaining?: number;
       endTime?: number;
     }) => applyTimerTick(1, data);
-    const handleTimer3 = (data: { timeRemaining?: number; endTime?: number }) =>
-      applyTimerTick(3, data);
+    const handleTimer3 = (data: {
+      timeRemaining?: number;
+      endTime?: number;
+      duration?: number;
+      elapsed?: number;
+      startTime?: number;
+    }) => applyTimerTick(3, data);
 
     const handleMatchmakingCycle = (data: { nextCycle: number }) => {
       if (activeRoundNumber === 1) {
-        setNextMatchmakingCycle(data.nextCycle);
+        setNextMatchmakingCycle(Math.max(0, Math.ceil(data.nextCycle / 1000)));
       }
+    };
+
+    const handleRound1Ended = (data: { endTime?: number }) => {
+      if (activeRoundNumber !== 1) return;
+      if (typeof data.endTime === "number" && Number.isFinite(data.endTime)) {
+        setRoundEndTime(data.endTime);
+      }
+      setGlobalTimeRemaining(0);
     };
 
     socket.on("round0:timer", handleTimer0);
     socket.on("round1:globalTimer", handleGlobalTimer);
     socket.on("round1:matchmakingCycle", handleMatchmakingCycle);
+    socket.on("round1:ended", handleRound1Ended);
     socket.on("round3:timer", handleTimer3);
 
     return () => {
       socket.off("round0:timer", handleTimer0);
       socket.off("round1:globalTimer", handleGlobalTimer);
       socket.off("round1:matchmakingCycle", handleMatchmakingCycle);
+      socket.off("round1:ended", handleRound1Ended);
       socket.off("round3:timer", handleTimer3);
     };
   }, [socket, activeRoundNumber]);
@@ -1198,7 +1213,7 @@ export default function Admin() {
     const updateTimer = () => {
       const remaining = Math.max(
         0,
-        Math.floor((roundEndTime - Date.now()) / 1000),
+        Math.ceil((roundEndTime - Date.now()) / 1000),
       );
       setGlobalTimeRemaining(remaining);
     };

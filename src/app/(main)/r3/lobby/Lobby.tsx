@@ -149,6 +149,10 @@ interface CurrentRoundResponse extends SimpleSocketResponse {
 
 interface TimerData {
   timeRemaining?: number;
+  duration?: number;
+  elapsed?: number;
+  startTime?: number;
+  endTime?: number;
 }
 
 interface ErrorData {
@@ -165,6 +169,7 @@ export default function Lobbyr3() {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isRoundActive, setIsRoundActive] = useState(false);
+  const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [roundStarted, setRoundStarted] = useState(false);
@@ -176,6 +181,39 @@ export default function Lobbyr3() {
   >(null);
 
   const isAdmin = userRole === "ADMIN";
+
+  const applyRoundEndTime = useCallback(
+    (source?: {
+      endTime?: number | null;
+      startTime?: number | null;
+      duration?: number | null;
+      timeRemaining?: number | null;
+      elapsed?: number | null;
+    }) => {
+      if (!source) return;
+      if (
+        typeof source.endTime === "number" &&
+        Number.isFinite(source.endTime)
+      ) {
+        setRoundEndTime(source.endTime);
+      } else if (
+        typeof source.startTime === "number" &&
+        typeof source.duration === "number"
+      ) {
+        setRoundEndTime(source.startTime + source.duration);
+      } else if (
+        typeof source.duration === "number" &&
+        typeof source.elapsed === "number"
+      ) {
+        setRoundEndTime(
+          Date.now() + Math.max(0, source.duration - source.elapsed),
+        );
+      } else if ((source.timeRemaining ?? 0) > 0) {
+        setRoundEndTime(Date.now() + (source.timeRemaining as number));
+      }
+    },
+    [],
+  );
 
   // Debug: Log participants whenever they change
   useEffect(() => {
@@ -242,7 +280,7 @@ export default function Lobbyr3() {
 
       // Update round active status
       setIsRoundActive(response.round.isActive);
-      setTimeRemaining(response.round.timeRemaining);
+      applyRoundEndTime(response.round);
       console.log(
         "⏰ [R3 Lobby] Round active:",
         response.round.isActive,
@@ -276,7 +314,7 @@ export default function Lobbyr3() {
         );
       }
     },
-    [router, socket, userId, user],
+    [router, socket, userId, user, applyRoundEndTime],
   );
 
   // Authentication check useEffect
@@ -388,13 +426,7 @@ export default function Lobbyr3() {
         );
         setIsRoundActive(data.round.isActive);
       }
-      if (data.round?.timeRemaining !== undefined) {
-        console.log(
-          "⏰ [R3 Lobby] Time remaining update:",
-          data.round.timeRemaining,
-        );
-        setTimeRemaining(data.round.timeRemaining);
-      }
+      applyRoundEndTime(data.round ?? data);
     };
 
     const handleRoundStart = (data: RoundStartData) => {
@@ -408,7 +440,7 @@ export default function Lobbyr3() {
           const dataToStore = {
             problems: data.questions,
             startTime: data.startTime,
-            duration: data.duration || 1200,
+            duration: data.duration || 3_600_000,
           };
           sessionStorage.setItem("round3_data", JSON.stringify(dataToStore));
         } catch (error) {
@@ -424,6 +456,10 @@ export default function Lobbyr3() {
 
       setRoundStarted(true);
       setIsRoundActive(true);
+      applyRoundEndTime({
+        startTime: data.startTime,
+        duration: data.duration || 3_600_000,
+      });
       localStorage.removeItem("battlecode-round-3-code-store");
       showSuccessToast("Round 3 has started! Redirecting...");
 
@@ -432,8 +468,7 @@ export default function Lobbyr3() {
       }, 1500);
     };
 
-    const handleTimer = (data: TimerData) =>
-      setTimeRemaining(data.timeRemaining || 0);
+    const handleTimer = (data: TimerData) => applyRoundEndTime(data);
 
     const handleRoundEnd = () => {
       showSuccessToast("Round 3 has ended.");
@@ -503,6 +538,17 @@ export default function Lobbyr3() {
       socket.off("round3:adminAdded", handleAdminAdded);
     };
   }, [socket, router, currentRoundData]);
+
+  useEffect(() => {
+    if (!roundEndTime || !isRoundActive) return;
+    const updateTimer = () =>
+      setTimeRemaining(
+        Math.max(0, Math.ceil((roundEndTime - Date.now()) / 1000)),
+      );
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [roundEndTime, isRoundActive]);
 
   // Early return for loading states
   if (authLoading || !authenticationChecked || isCheckingRound) {
