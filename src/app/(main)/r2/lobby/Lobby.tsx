@@ -104,6 +104,7 @@ export default function LobbyR2() {
 
   const hasNavigated = useRef(false);
   const hasAttemptedJoin = useRef(false);
+  const requestedStateOnProgress = useRef(false);
   const joinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isAdmin = userRole === "ADMIN";
@@ -249,6 +250,21 @@ export default function LobbyR2() {
       router.replace("/dashboard");
     };
 
+    const goToRole = (role?: string) => {
+      if (hasNavigated.current || (role !== "elite" && role !== "challenger")) {
+        return false;
+      }
+      hasNavigated.current = true;
+      showInfoToast(`Role assigned: ${role.toUpperCase()}`);
+      router.push(`/r2/${role}`);
+      return true;
+    };
+
+    const roleFrom = (data: any, people: any[] = []) =>
+      data?.roundSpecific?.role ||
+      data?.currentUser?.role ||
+      people.find((p) => p.userId === userId || p.id === userId)?.role;
+
     const handleStateUpdate = (stateResponse: any) => {
       console.debug("[R2 Lobby] State update:", stateResponse);
       clearJoinTimeout();
@@ -258,15 +274,8 @@ export default function LobbyR2() {
         setParticipants(lobbyParticipants);
         setRoundStatus(stateResponse.round?.status || "LOBBY");
 
-        const userRole = stateResponse.roundSpecific?.role;
-        if (
-          !hasNavigated.current &&
-          stateResponse.round?.status === "IN_PROGRESS" &&
-          userRole
-        ) {
-          hasNavigated.current = true;
-          showInfoToast(`Role assigned: ${userRole.toUpperCase()}`);
-          router.push(`/r2/${userRole}`);
+        if (stateResponse.round?.status === "IN_PROGRESS") {
+          goToRole(roleFrom(stateResponse, lobbyParticipants));
         }
 
         setIsLoading(false);
@@ -282,18 +291,44 @@ export default function LobbyR2() {
       } else {
         socket.emit("round2:getState");
       }
+
+      if (
+        hasNavigated.current ||
+        (data.round?.status ?? data.status) !== "IN_PROGRESS"
+      ) {
+        return;
+      }
+
+      if (
+        goToRole(
+          roleFrom(data, lobbyParticipants || data.participants?.all || []),
+        )
+      ) {
+        return;
+      }
+
+      if (!requestedStateOnProgress.current) {
+        requestedStateOnProgress.current = true;
+        socket.emit("round2:getState");
+      }
+    };
+
+    const handleRolesAssigned = (data: { role?: string }) => {
+      goToRole(data?.role);
     };
 
     socket.on("round2:lobby", handleLobbyUpdate);
     socket.on("round2:state", handleStateUpdate);
     socket.on("round2:redirect", handleRound2Redirect);
+    socket.on("round2:rolesAssigned", handleRolesAssigned);
 
     return () => {
       socket.off("round2:lobby", handleLobbyUpdate);
       socket.off("round2:state", handleStateUpdate);
       socket.off("round2:redirect", handleRound2Redirect);
+      socket.off("round2:rolesAssigned", handleRolesAssigned);
     };
-  }, [socket, isConnected, router, clearJoinTimeout]);
+  }, [socket, isConnected, router, userId, clearJoinTimeout]);
 
   // Early return for loading states
   if (
