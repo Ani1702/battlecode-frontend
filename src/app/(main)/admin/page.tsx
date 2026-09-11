@@ -1852,7 +1852,9 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {matchParticipants.map((p, idx) => (
+                      {[...matchParticipants]
+                        .sort((a, b) => (b.eventScore ?? 0) - (a.eventScore ?? 0))
+                        .map((p, idx) => (
                         <tr
                           key={`${p.userId}-${idx}`}
                           className="border-gray-800 hover:bg-white/5 transition"
