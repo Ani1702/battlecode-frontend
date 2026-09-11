@@ -38,6 +38,106 @@ interface CurrentRoundData {
   rounds: RoundStatus[];
 }
 
+const TIMER_DRIFT_SECONDS = 2;
+
+type TimerSource = {
+  endTime?: number | null;
+  startTime?: number | null;
+  duration?: number | null;
+  timeRemaining?: number | null;
+  elapsed?: number | null;
+};
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function deadlineFromSource(source?: TimerSource | null): number | null {
+  if (!source) return null;
+  if (isPositiveNumber(source.endTime)) return source.endTime;
+  if (isPositiveNumber(source.startTime) && isPositiveNumber(source.duration)) {
+    return source.startTime + source.duration;
+  }
+  if (isPositiveNumber(source.duration) && isPositiveNumber(source.elapsed)) {
+    return Date.now() + Math.max(0, source.duration - source.elapsed);
+  }
+  if (isPositiveNumber(source.timeRemaining)) {
+    return Date.now() + source.timeRemaining;
+  }
+  return null;
+}
+
+function resolveDeadlineFromResponse(response: {
+  roundNumber?: number;
+  round?: TimerSource;
+  startTime?: number;
+  duration?: number;
+  timeRemaining?: number;
+  elapsed?: number;
+  endTime?: number;
+}): number | null {
+  return (
+    deadlineFromSource(response.round) ??
+    deadlineFromSource({
+      endTime: response.endTime,
+      startTime: response.startTime,
+      duration: response.duration,
+      timeRemaining: response.timeRemaining,
+      elapsed: response.elapsed,
+    })
+  );
+}
+
+function hasAbsoluteDeadline(
+  _roundNumber: number | undefined,
+  round?: TimerSource | null,
+): boolean {
+  return isPositiveNumber(round?.endTime);
+}
+
+function resolveTimerTickEndTime(
+  _roundNumber: number,
+  data: {
+    timeRemaining?: number;
+    endTime?: number;
+    duration?: number;
+    elapsed?: number;
+    startTime?: number;
+  },
+): number | null {
+  return deadlineFromSource(data);
+}
+
+function shouldCorrectTimer(
+  localEndTime: number | null,
+  serverEndTime: number,
+): boolean {
+  if (localEndTime == null) return true;
+  const localRemaining = Math.floor((localEndTime - Date.now()) / 1000);
+  const serverRemaining = Math.floor((serverEndTime - Date.now()) / 1000);
+  return Math.abs(serverRemaining - localRemaining) > TIMER_DRIFT_SECONDS;
+}
+
+function hasBackendOpponent(
+  user: Pick<Participant, "opponentUsername">,
+): boolean {
+  const opponent = user.opponentUsername?.trim();
+  return Boolean(opponent && opponent !== "undefined");
+}
+
+function isPairedInMatch(user: Participant): boolean {
+  const inMatch = user.status === "in_match" || user.status === "in-match";
+  return inMatch && hasBackendOpponent(user);
+}
+
+function activeUserStatusLabel(user: Participant): string {
+  if (isPairedInMatch(user)) return "In Match";
+  if (user.status === "in_match" || user.status === "in-match")
+    return "Playing";
+  if (user.status === "in_bounty") return "Bounty";
+  return "Waiting";
+}
+
 export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -51,8 +151,8 @@ export default function Admin() {
   const [showResetRedisConfirm, setShowResetRedisConfirm] = useState(false);
   const [matchParticipants, setMatchParticipants] = useState<Participant[]>([]);
   const [selectedRoundForMatches, setSelectedRoundForMatches] = useState(0);
-  const [qualifyCount, setQualifyCount] = useState<number>(0);
-  const [qualifyLoading, setQualifyLoading] = useState(false);
+  const [qualifyCount, setQualifyCount] = useState<number | "">("");
+  const [isQualifying, setIsQualifying] = useState(false);
 
   // Helper functions for localStorage persistence
   const saveParticipantsToStorage = useCallback(
@@ -117,6 +217,7 @@ export default function Admin() {
     null,
   );
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState(0);
+  const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
   const [nextMatchmakingCycle, setNextMatchmakingCycle] = useState<
     number | null
   >(null);
@@ -267,14 +368,8 @@ export default function Admin() {
       const { roundNumber, round, participants, currentUser, session } =
         response;
 
-      // Early return if required data is missing
-      // Fix: Use explicit checks for null/undefined instead of falsy check (roundNumber can be 0)
-      if (
-        roundNumber === null ||
-        roundNumber === undefined ||
-        !round ||
-        !participants
-      ) {
+      // Time lives on round, not on the participants list.
+      if (roundNumber === null || roundNumber === undefined || !round) {
         console.warn("[SOCKET STATE] Missing required data in response");
         return;
       }
@@ -289,10 +384,22 @@ export default function Admin() {
 
         setActiveRoundNumber(roundNumber);
         setIsRoundActive(true);
-        setGlobalTimeRemaining(round.timeRemaining || 0);
-        // Use roundSpecific for Round 1's nextMatchmakingCycle
+        const incomingDeadline = resolveDeadlineFromResponse(response);
+        if (incomingDeadline != null) {
+          const forceDeadline = hasAbsoluteDeadline(roundNumber, round);
+          setRoundEndTime((prev) =>
+            forceDeadline || shouldCorrectTimer(prev, incomingDeadline)
+              ? incomingDeadline
+              : prev,
+          );
+        }
         setNextMatchmakingCycle(
-          response.roundSpecific?.nextMatchmakingCycle ?? null,
+          response.roundSpecific?.nextMatchmakingCycle != null
+            ? Math.max(
+                0,
+                Math.ceil(response.roundSpecific.nextMatchmakingCycle / 1000),
+              )
+            : null,
         );
         if (currentUser) {
           console.log("[SOCKET STATE] Current user:", currentUser);
@@ -312,7 +419,12 @@ export default function Admin() {
         setIsRoundActive(false);
         setActiveRoundNumber(null);
         setGlobalTimeRemaining(0);
+        setRoundEndTime(null);
         setNextMatchmakingCycle(null);
+      }
+
+      if (!participants) {
+        return;
       }
 
       // Update match participants (pre-filtered by backend)
@@ -322,49 +434,34 @@ export default function Admin() {
           roundNumber,
         );
 
-        // Backend already filtered waiting + in_match users
+        // Backend already filtered waiting + in_match + in_bounty users
         const activeUsers = [
           ...(participants.byStatus?.waiting || []),
           ...(participants.byStatus?.in_match || []),
+          ...(participants.byStatus?.in_bounty || []),
         ];
 
         console.log("[SOCKET STATE] Active users count:", {
           waiting: participants.byStatus?.waiting?.length || 0,
           in_match: participants.byStatus?.in_match?.length || 0,
+          in_bounty: participants.byStatus?.in_bounty?.length || 0,
           total: activeUsers.length,
         });
 
-        // Client-side opponent matching: If opponentUsername is undefined, match users by pairs
-        const activeUsersWithOpponents = activeUsers.map((user, index) => {
-          // If backend already provided opponentUsername and it's not "undefined", use it
-          if (user.opponentUsername && user.opponentUsername !== "undefined") {
-            return user;
-          }
-
-          // Client-side matching: pair users in order (0-1, 2-3, etc.)
-          if (user.status === "in_match") {
-            const isEvenIndex = index % 2 === 0;
-            const opponentIndex = isEvenIndex ? index + 1 : index - 1;
-            const opponent = activeUsers[opponentIndex];
-
-            if (opponent && opponent.status === "in_match") {
-              return {
-                ...user,
-                opponentUsername: opponent.username,
-              };
-            }
-          }
-
-          return user;
-        });
+        // Only keep an opponent when the backend sent one. Do not invent pairs.
+        const activeUsersFromBackend = activeUsers.map((user) =>
+          hasBackendOpponent(user)
+            ? user
+            : { ...user, opponentUsername: undefined },
+        );
 
         console.log(
           "[SOCKET STATE] Setting match participants:",
-          activeUsersWithOpponents.length,
+          activeUsersFromBackend.length,
         );
-        setMatchParticipants(activeUsersWithOpponents);
+        setMatchParticipants(activeUsersFromBackend);
         // Save to localStorage
-        saveMatchParticipantsToStorage(activeUsersWithOpponents, roundNumber);
+        saveMatchParticipantsToStorage(activeUsersFromBackend, roundNumber);
       } else {
         if (!round.isActive && roundNumber === selectedRoundForMatches) {
           console.log(
@@ -437,33 +534,57 @@ export default function Admin() {
       return;
     }
 
-    socket.emit(`round${roundNumber}:ready`, {}, (response: BaseRoundState) => {
-      console.log("[ADMIN ACTION] Start round response:", response);
+    socket.emit(
+      `round${roundNumber}:ready`,
+      {},
+      (
+        response: BaseRoundState & {
+          startTime?: number;
+          duration?: number;
+          timeRemaining?: number;
+        },
+      ) => {
+        console.log("[ADMIN ACTION] Start round response:", response);
 
-      if (response.success) {
-        showSuccessToast(`Round ${roundNumber} started successfully`);
+        if (response?.success) {
+          showSuccessToast(`Round ${roundNumber} started successfully`);
+          setActiveRoundNumber(roundNumber);
+          setIsRoundActive(true);
 
-        // Clear lobby participants from localStorage
-        localStorage.removeItem("participants");
-        setParticipants([]);
-        console.log("[ADMIN ACTION] Cleared lobby participants");
+          const startDeadline = resolveDeadlineFromResponse({
+            ...response,
+            roundNumber: response.roundNumber ?? roundNumber,
+          });
+          if (startDeadline != null) {
+            setRoundEndTime(startDeadline);
+          }
 
-        // Switch to the match view for this round
-        setSelectedRoundForMatches(roundNumber);
-        console.log(
-          "[ADMIN ACTION] Switched to match view for round",
-          roundNumber,
-        );
+          // Clear lobby participants from localStorage
+          localStorage.removeItem("participants");
+          setParticipants([]);
+          console.log("[ADMIN ACTION] Cleared lobby participants");
 
-        // Fetch the updated state to get in-progress participants
-        setTimeout(() => {
-          console.log("[ADMIN ACTION] Fetching updated match state");
-          fetchMatchUsers(roundNumber);
-        }, 500); // Small delay to ensure backend has processed the state change
-      } else {
-        showErrorToast(response.error || "Failed to start the round");
-      }
-    });
+          // Switch to the match view for this round
+          setSelectedRoundForMatches(roundNumber);
+          console.log(
+            "[ADMIN ACTION] Switched to match view for round",
+            roundNumber,
+          );
+
+          // Fetch the updated state to get the server deadline and in-progress participants
+          setTimeout(() => {
+            console.log("[ADMIN ACTION] Fetching updated match state");
+            fetchMatchUsers(roundNumber);
+          }, 500);
+        } else {
+          showErrorToast(
+            response?.error ||
+              (response as { message?: string })?.message ||
+              "Failed to start the round",
+          );
+        }
+      },
+    );
   };
 
   const endRound = (roundNumber: number) => {
@@ -489,6 +610,12 @@ export default function Admin() {
 
         if (response?.success) {
           showSuccessToast(`Round ${roundNumber} ended successfully`);
+          if (roundNumber === activeRoundNumber) {
+            setIsRoundActive(false);
+            setActiveRoundNumber(null);
+            setRoundEndTime(null);
+            setGlobalTimeRemaining(0);
+          }
         } else {
           showErrorToast(
             response?.error || `Failed to end Round ${roundNumber}`,
@@ -567,18 +694,42 @@ export default function Admin() {
       return;
     }
 
-    setQualifyLoading(true);
+    setIsQualifying(true);
 
     socket.emit(
       "admin:qualifyRound3",
       { count: qualifyCount },
       (response: { success: boolean; error?: string }) => {
-        setQualifyLoading(false);
+        setIsQualifying(false);
 
         if (response?.success) {
           showSuccessToast(`Top ${qualifyCount} users qualified for Round 3`);
         } else {
           showErrorToast(response?.error || "Failed to qualify users");
+        }
+      },
+    );
+  };
+
+  const handleQualifyR3 = () => {
+    if (!qualifyCount || qualifyCount <= 0) {
+      showErrorToast("Please enter a valid number of players");
+      return;
+    }
+
+    setIsQualifying(true);
+    socket?.emit(
+      "admin:qualifyRound3",
+      { count: Number(qualifyCount) },
+      (response: any) => {
+        setIsQualifying(false);
+        if (response?.success) {
+          showSuccessToast(
+            `Successfully qualified top ${qualifyCount} players for Round 3!`,
+          );
+          setQualifyCount("");
+        } else {
+          showErrorToast(response?.error || "Failed to qualify players");
         }
       },
     );
@@ -749,11 +900,38 @@ export default function Admin() {
     fetchMatchUsers(selectedRoundForMatches);
   }, [socket, selectedRoundForMatches, fetchMatchUsers]);
 
+  const inProgressRoundNumber =
+    currentRoundData?.rounds?.find(
+      (round) => round.isActive || round.status === "IN_PROGRESS",
+    )?.roundNumber ??
+    (currentRoundData?.currentRoundStatus === "IN_PROGRESS"
+      ? currentRoundData.currentRoundNumber
+      : null);
+
+  // After refresh, ask the active round for its deadline instead of only the default tab (round 0)
+  useEffect(() => {
+    if (!socket || inProgressRoundNumber == null) return;
+    socket.emit(`round${inProgressRoundNumber}:getState`, {});
+  }, [socket, inProgressRoundNumber]);
+
   // Listen for live lobby updates
   useEffect(() => {
     if (!socket) return;
 
-    const handleLobbyUpdate0 = (data: BaseRoundState) => {
+    const handleLobbyUpdate0 = (
+      data: BaseRoundState & { timeRemaining?: number },
+    ) => {
+      if (activeRoundNumber === 0) {
+        const lobbyDeadline = resolveDeadlineFromResponse({
+          ...data,
+          roundNumber: 0,
+        });
+        if (lobbyDeadline != null) {
+          setRoundEndTime((prev) =>
+            shouldCorrectTimer(prev, lobbyDeadline) ? lobbyDeadline : prev,
+          );
+        }
+      }
       if (0 === selectedRoundForUsers) {
         console.log("[LOBBY UPDATE Round 0]", data);
         if (data.participants?.byStatus?.lobby) {
@@ -765,6 +943,17 @@ export default function Admin() {
     };
 
     const handleLobbyUpdate1 = (data: BaseRoundState) => {
+      if (activeRoundNumber === 1) {
+        const lobbyDeadline = resolveDeadlineFromResponse({
+          ...data,
+          roundNumber: 1,
+        });
+        if (lobbyDeadline != null) {
+          setRoundEndTime((prev) =>
+            shouldCorrectTimer(prev, lobbyDeadline) ? lobbyDeadline : prev,
+          );
+        }
+      }
       if (1 === selectedRoundForUsers) {
         console.log("[LOBBY UPDATE Round 1]", data);
         if (data.participants?.byStatus?.lobby) {
@@ -787,6 +976,17 @@ export default function Admin() {
     };
 
     const handleLobbyUpdate3 = (data: BaseRoundState) => {
+      if (activeRoundNumber === 3) {
+        const lobbyDeadline = resolveDeadlineFromResponse({
+          ...data,
+          roundNumber: 3,
+        });
+        if (lobbyDeadline != null) {
+          setRoundEndTime((prev) =>
+            shouldCorrectTimer(prev, lobbyDeadline) ? lobbyDeadline : prev,
+          );
+        }
+      }
       if (3 === selectedRoundForUsers) {
         console.log("[LOBBY UPDATE Round 3]", data);
         if (data.participants?.byStatus?.lobby) {
@@ -808,7 +1008,12 @@ export default function Admin() {
       socket.off("lobby:round2", handleLobbyUpdate2);
       socket.off("lobby:round3", handleLobbyUpdate3);
     };
-  }, [socket, selectedRoundForUsers, saveParticipantsToStorage]);
+  }, [
+    socket,
+    selectedRoundForUsers,
+    activeRoundNumber,
+    saveParticipantsToStorage,
+  ]);
 
   const resetAllRounds = async () => {
     try {
@@ -917,59 +1122,66 @@ export default function Admin() {
     return validTransitions[currentStatus]?.includes(targetStatus) || false;
   };
 
-  // Listen to timer updates from server to stay in sync with user timers
+  // Listen to timer updates from server and re-anchor only when drifted
   useEffect(() => {
     if (!socket) return;
 
-    const handleTimer0 = (data: { timeRemaining?: number }) => {
-      if (activeRoundNumber === 0) {
-        setGlobalTimeRemaining(data.timeRemaining || 0);
-      }
+    const applyTimerTick = (
+      roundNumber: number,
+      data: { timeRemaining?: number; endTime?: number },
+    ) => {
+      if (activeRoundNumber !== roundNumber) return;
+      const serverEndTime = resolveTimerTickEndTime(roundNumber, data);
+      if (serverEndTime == null) return;
+      setRoundEndTime((prev) =>
+        shouldCorrectTimer(prev, serverEndTime) ? serverEndTime : prev,
+      );
     };
 
-    const handleTimer1 = (data: { timeRemaining?: number }) => {
-      if (activeRoundNumber === 1) {
-        setGlobalTimeRemaining(data.timeRemaining || 0);
-      }
-    };
+    const handleTimer0 = (data: {
+      timeRemaining?: number;
+      endTime?: number;
+      duration?: number;
+      elapsed?: number;
+      startTime?: number;
+    }) => applyTimerTick(0, data);
+    const handleGlobalTimer = (data: {
+      timeRemaining?: number;
+      endTime?: number;
+    }) => applyTimerTick(1, data);
+    const handleTimer3 = (data: {
+      timeRemaining?: number;
+      endTime?: number;
+      duration?: number;
+      elapsed?: number;
+      startTime?: number;
+    }) => applyTimerTick(3, data);
 
-    const handleTimer2 = (data: { timeRemaining?: number }) => {
-      if (activeRoundNumber === 2) {
-        setGlobalTimeRemaining(data.timeRemaining || 0);
-      }
-    };
-
-    const handleTimer3 = (data: { timeRemaining?: number }) => {
-      if (activeRoundNumber === 3) {
-        setGlobalTimeRemaining(data.timeRemaining || 0);
-      }
-    };
-
-    // Handle global timer events for rounds that use them (Round 1+)
-    const handleGlobalTimer = (data: { timeRemaining?: number }) => {
-      setGlobalTimeRemaining(data.timeRemaining || 0);
-    };
-
-    // Handle matchmaking cycle updates for Round 1
     const handleMatchmakingCycle = (data: { nextCycle: number }) => {
       if (activeRoundNumber === 1) {
-        setNextMatchmakingCycle(data.nextCycle);
+        setNextMatchmakingCycle(Math.max(0, Math.ceil(data.nextCycle / 1000)));
       }
+    };
+
+    const handleRound1Ended = (data: { endTime?: number }) => {
+      if (activeRoundNumber !== 1) return;
+      if (typeof data.endTime === "number" && Number.isFinite(data.endTime)) {
+        setRoundEndTime(data.endTime);
+      }
+      setGlobalTimeRemaining(0);
     };
 
     socket.on("round0:timer", handleTimer0);
-    socket.on("round1:timer", handleTimer1);
     socket.on("round1:globalTimer", handleGlobalTimer);
     socket.on("round1:matchmakingCycle", handleMatchmakingCycle);
-    socket.on("round2:timer", handleTimer2);
+    socket.on("round1:ended", handleRound1Ended);
     socket.on("round3:timer", handleTimer3);
 
     return () => {
       socket.off("round0:timer", handleTimer0);
-      socket.off("round1:timer", handleTimer1);
       socket.off("round1:globalTimer", handleGlobalTimer);
       socket.off("round1:matchmakingCycle", handleMatchmakingCycle);
-      socket.off("round2:timer", handleTimer2);
+      socket.off("round1:ended", handleRound1Ended);
       socket.off("round3:timer", handleTimer3);
     };
   }, [socket, activeRoundNumber]);
@@ -992,6 +1204,24 @@ export default function Admin() {
     }, 1000);
     return () => clearInterval(cooldownInterval);
   }, [currentUser, cooldownTimeRemaining]);
+  // Display-only countdown from the server deadline
+  useEffect(() => {
+    if (!roundEndTime || !isRoundActive) {
+      return;
+    }
+
+    const updateTimer = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((roundEndTime - Date.now()) / 1000),
+      );
+      setGlobalTimeRemaining(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [roundEndTime, isRoundActive]);
   // Format time helper
   const formatTime = (seconds: number | null | undefined): string => {
     if (typeof seconds !== "number" || seconds < 0 || isNaN(seconds))
@@ -1195,6 +1425,49 @@ export default function Admin() {
               })}
             </div>
 
+            {/* Automated R3 Qualification Card */}
+            <div className="mt-6 bg-gray-800/80 border border-orange-500/30 rounded-lg p-5">
+              <h4 className="text-orange-400 font-bold mb-3 text-lg">
+                Automate R3 Qualification
+              </h4>
+              <p className="text-sm text-gray-300 mb-4">
+                Enter the number of top players to automatically qualify based
+                on their current event score.
+              </p>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Number of Top Players (X)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={qualifyCount}
+                    onChange={(e) =>
+                      setQualifyCount(
+                        e.target.value ? parseInt(e.target.value) : "",
+                      )
+                    }
+                    className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-orange-500 transition-colors"
+                    placeholder="e.g., 40"
+                  />
+                </div>
+                <button
+                  onClick={handleQualifyR3}
+                  disabled={isQualifying || !qualifyCount}
+                  className={`px-6 py-2 rounded font-medium transition-all duration-200 whitespace-nowrap
+                    ${
+                      isQualifying || !qualifyCount
+                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                        : "bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 shadow-lg shadow-orange-500/20"
+                    }
+                  `}
+                >
+                  {isQualifying ? "Processing..." : "Qualify Players"}
+                </button>
+              </div>
+            </div>
+
             <div className="mt-6 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-4">
               <h4 className="text-orange-400 font-medium mb-2">
                 Status Transitions:
@@ -1323,14 +1596,14 @@ export default function Admin() {
 
                 <button
                   onClick={handleQualifyRound3}
-                  disabled={qualifyLoading || !socket}
+                  disabled={isQualifying || !socket}
                   className={`px-6 py-2 rounded font-medium text-white transition-all ${
-                    qualifyLoading || !socket
+                    isQualifying || !socket
                       ? "bg-gray-600 cursor-not-allowed opacity-50"
                       : "bg-green-600 hover:bg-green-500 hover:scale-105"
                   }`}
                 >
-                  {qualifyLoading ? "Qualifying..." : "Qualify for Round 3"}
+                  {isQualifying ? "Qualifying..." : "Qualify for Round 3"}
                 </button>
               </div>
             </div>
@@ -1452,7 +1725,9 @@ export default function Admin() {
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-white">
                                 {/* FIX: Add fallbacks so names don't show up blank */}
-                                {participant.username || participant.userId || "Unknown"}
+                                {participant.username ||
+                                  participant.userId ||
+                                  "Unknown"}
                               </span>
                             </div>
                             <span className="text-gray-400 text-xs">
@@ -1508,31 +1783,30 @@ export default function Admin() {
                         {matchParticipants.length !== 1 ? "s" : ""}
                       </p>
                       <div className="max-h-96 overflow-y-auto space-y-2">
-                        {matchParticipants.map((participant, idx) => (
-                          <div
-                            key={`match-${participant.userId}-${idx}`}
-                            className={`bg-gray-600/50 px-4 py-3 rounded border-l-4 ${
-                              participant.status === "in_match"
-                                ? "border-blue-500"
-                                : "border-yellow-500"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={`w-2 h-2 rounded-full ${
-                                    participant.status === "in_match"
-                                      ? "bg-blue-500"
-                                      : "bg-yellow-500"
-                                  }`}
-                                ></div>
-                                <div className="flex flex-col">
-                                  <span className="text-white font-medium">
-                                    {/* FIX: Add fallbacks so names don't show up blank */}
-                                    {participant.username || participant.userId || "Unknown"}
-                                  </span>
-                                  {participant.status === "in_match" &&
-                                    participant.opponentUsername && (
+                        {matchParticipants.map((participant, idx) => {
+                          const paired = isPairedInMatch(participant);
+                          return (
+                            <div
+                              key={`match-${participant.userId}-${idx}`}
+                              className={`bg-gray-600/50 px-4 py-3 rounded border-l-4 ${
+                                paired ? "border-blue-500" : "border-yellow-500"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className={`w-2 h-2 rounded-full ${
+                                      paired ? "bg-blue-500" : "bg-yellow-500"
+                                    }`}
+                                  ></div>
+                                  <div className="flex flex-col">
+                                    <span className="text-white font-medium">
+                                      {/* FIX: Add fallbacks so names don't show up blank */}
+                                      {participant.username ||
+                                        participant.userId ||
+                                        "Unknown"}
+                                    </span>
+                                    {paired && participant.opponentUsername && (
                                       <span className="text-sm text-blue-300 mt-1">
                                         🎮 vs{" "}
                                         <span className="font-semibold text-blue-200">
@@ -1540,22 +1814,19 @@ export default function Admin() {
                                         </span>
                                       </span>
                                     )}
+                                  </div>
                                 </div>
+                                <span
+                                  className={`text-xs font-semibold uppercase ${
+                                    paired ? "text-blue-400" : "text-yellow-400"
+                                  }`}
+                                >
+                                  {activeUserStatusLabel(participant)}
+                                </span>
                               </div>
-                              <span
-                                className={`text-xs font-semibold uppercase ${
-                                  participant.status === "in_match"
-                                    ? "text-blue-400"
-                                    : "text-yellow-400"
-                                }`}
-                              >
-                                {participant.status === "in_match"
-                                  ? "In Match"
-                                  : "Waiting"}
-                              </span>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ) : (
@@ -1593,23 +1864,27 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {matchParticipants.map((p, idx) => (
-                        <tr
-                          key={`${p.userId}-${idx}`}
-                          className="border-gray-800 hover:bg-white/5 transition"
-                        >
-                          <td className="py-2 px-3">{idx + 1}</td>
-                          <td className="py-2 px-3 max-w-[100px] truncate">
-                            {p.username}
-                          </td>
-                          <td className="py-2 px-3 font-mono text-cyan-400">
-                            {p.eventScore ?? 0}
-                          </td>
-                          <td className="py-2 px-3 text-sm">
-                            {p.status === "in_match" || p.status === "in-match" ? "In-match" : "Waiting"}
-                          </td>
-                        </tr>
-                      ))}
+                      {[...matchParticipants]
+                        .sort(
+                          (a, b) => (b.eventScore ?? 0) - (a.eventScore ?? 0),
+                        )
+                        .map((p, idx) => (
+                          <tr
+                            key={`${p.userId}-${idx}`}
+                            className="border-gray-800 hover:bg-white/5 transition"
+                          >
+                            <td className="py-2 px-3">{idx + 1}</td>
+                            <td className="py-2 px-3 max-w-[100px] truncate">
+                              {p.username}
+                            </td>
+                            <td className="py-2 px-3 font-mono text-cyan-400">
+                              {p.eventScore ?? 0}
+                            </td>
+                            <td className="py-2 px-3 text-sm">
+                              {activeUserStatusLabel(p)}
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 ) : (

@@ -1,5 +1,5 @@
 ﻿"use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
@@ -47,7 +47,7 @@ const formatTime = (ms: number) => {
 export default function ChallengerDashboard() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
-
+  const retriedStateRef = useRef(false);
   const [availableElites, setAvailableElites] = useState<Participant[]>([]);
   const [bountyQuestions, setBountyQuestions] = useState<BountyQuestion[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(
@@ -55,10 +55,20 @@ export default function ChallengerDashboard() {
   );
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [roundEndTime, setRoundEndTime] = useState<number | null>(null);
+  const [cooldownEndTime, setCooldownEndTime] = useState<number | null>(null);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [userRole, setUserRole] = useState<"elite" | "challenger" | null>(null);
   const [hasActiveSession, setHasActiveSession] = useState(false);
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem("r2_cooldown_end");
+    if (!stored) return;
+    const end = Number(stored);
+    sessionStorage.removeItem("r2_cooldown_end");
+    if (Number.isFinite(end) && end > Date.now()) setCooldownEndTime(end);
+  }, []);
 
   // Fetch initial state and dashboard data using state-based approach
   useEffect(() => {
@@ -105,6 +115,12 @@ export default function ChallengerDashboard() {
 
       // If user is not a challenger, redirect
       if (role !== "challenger") {
+        const expectedRole = sessionStorage.getItem("r2_user_role");
+        if (expectedRole === "challenger" && !retriedStateRef.current) {
+          retriedStateRef.current = true;
+          setTimeout(() => socket.emit("round2:getState"), 1500);
+          return;
+        }
         clearTimeout(stateTimeout);
         setIsLoading(false);
         showErrorToast("Access denied. Redirecting...");
@@ -116,6 +132,9 @@ export default function ChallengerDashboard() {
 
       // User is a challenger with no active session - set dashboard data from state
       setRoundEndTime(stateResponse.round?.endTime || null);
+      if (stateResponse.currentUser?.cooldownEndTime) {
+        setCooldownEndTime(stateResponse.currentUser.cooldownEndTime);
+      }
       const transformedBounties = bountyQuestions.map((q: any) => ({
         ...q,
         name: q.title,
@@ -167,6 +186,21 @@ export default function ChallengerDashboard() {
     }, 1000);
     return () => clearInterval(interval);
   }, [roundEndTime, router, isRedirecting]);
+
+  useEffect(() => {
+    if (!cooldownEndTime) {
+      setCooldownRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, cooldownEndTime - Date.now());
+      setCooldownRemaining(remaining);
+      if (remaining <= 0) setCooldownEndTime(null);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownEndTime]);
 
   useEffect(() => {
     if (!socket) return;
@@ -231,6 +265,19 @@ export default function ChallengerDashboard() {
       }
     };
 
+    const handleCooldown = (data: {
+      duration?: number;
+      cooldownEndTime?: number;
+    }) => {
+      const deadline =
+        typeof data.cooldownEndTime === "number"
+          ? data.cooldownEndTime
+          : typeof data.duration === "number"
+            ? Date.now() + data.duration
+            : null;
+      if (deadline != null) setCooldownEndTime(deadline);
+    };
+
     const handleRoundEnd = () => {
       // --- FIX: Use safeguard to prevent double redirection ---
       if (isRedirecting) return;
@@ -250,6 +297,7 @@ export default function ChallengerDashboard() {
     socket.on("round2:matchStarted", handleMatchStarted);
     socket.on("round2:dashboardUpdate", handleDashboardUpdate);
     socket.on("round2:ended", handleRoundEnd);
+    socket.on("round2:cooldown", handleCooldown);
 
     return () => {
       socket.off("round2:lobbyUpdate", handleLobbyUpdate);
@@ -259,11 +307,16 @@ export default function ChallengerDashboard() {
       socket.off("round2:dashboardUpdate", handleDashboardUpdate);
       socket.off("round2:ended", handleRoundEnd);
       socket.off("round2:redirect", handleRound2Redirect);
+      socket.off("round2:cooldown", handleCooldown);
     };
   }, [socket, router, isRedirecting]);
 
   const handleStartBounty = (questionId: string) => {
     if (!socket) return;
+    if (cooldownRemaining > 0) {
+      showInfoToast(`Cooldown: ${formatTime(cooldownRemaining)}`);
+      return;
+    }
 
     socket.emit(
       "round2:bountyBeginQuestion",
@@ -291,6 +344,10 @@ export default function ChallengerDashboard() {
 
   const handleChallengeElite = (eliteId: string) => {
     if (!socket) return;
+    if (cooldownRemaining > 0) {
+      showInfoToast(`Cooldown: ${formatTime(cooldownRemaining)}`);
+      return;
+    }
     setPendingRequests((prev) => new Set(prev).add(eliteId));
     socket.emit(
       "round2:challengeRequest",
@@ -333,8 +390,13 @@ export default function ChallengerDashboard() {
           height={80}
         />
         CHALLENGER
-        <div className="absolute top-4 right-4 bg-black/50 text-white text-2xl p-2 px-4 rounded-lg font-mono">
-          {formatTime(timeRemaining)}
+        <div className="absolute top-4 right-4 bg-black/50 text-white text-2xl p-2 px-4 rounded-lg font-mono text-right">
+          <div>{formatTime(timeRemaining)}</div>
+          {cooldownRemaining > 0 && (
+            <div className="text-sm text-red-400 mt-1">
+              Cooldown: {formatTime(cooldownRemaining)}
+            </div>
+          )}
         </div>
       </div>
       <div className="flex-4 flex flex-row">

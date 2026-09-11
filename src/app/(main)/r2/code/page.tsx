@@ -80,7 +80,7 @@ interface MatchResultData {
   winnerId: string;
   loserId: string;
   reason: "submission" | "disconnect" | "timeout" | "violation";
-  newRole: "elite" | "challenger";
+  newRole?: "elite" | "challenger";
 }
 
 interface BountyEndedData {
@@ -293,8 +293,36 @@ export default function R2CodePage() {
     }
   }, [code, currentContext, scheduleAutoSave]);
 
+  const handleLanguageChange = (newLanguage: string) => {
+    if (!sessionData?.question || newLanguage === language) return;
+
+    // Save current code for current language
+    const currentCode = codeRef.current;
+    let store = contextManager.loadCodeStore();
+    if (currentContext && currentCode !== undefined) {
+      store = contextManager.setCodeForContext(
+        store,
+        currentContext,
+        currentCode,
+      );
+      contextManager.saveCodeStore(store);
+    }
+
+    // Load code for new language
+    const newContext = contextManager.createContext(
+      sessionData.question.id,
+      newLanguage,
+    );
+    const savedCode = contextManager.getCodeForContext(store, newContext);
+    const codeToSet = savedCode || "";
+
+    setCurrentContext(newContext);
+    setCode(codeToSet);
+    setLanguage(newLanguage);
+  };
+
   useEffect(() => {
-    if (!sessionData?.question) return;
+    if (!sessionData?.question || currentContext) return;
 
     const loadedStore = contextManager.loadCodeStore();
     const newContext = contextManager.createContext(
@@ -304,12 +332,8 @@ export default function R2CodePage() {
     setCurrentContext(newContext);
 
     const savedCode = contextManager.getCodeForContext(loadedStore, newContext);
-    const boilerplate = contextManager.getBoilerplate(
-      sessionData.question,
-      language,
-    );
-    setCode(savedCode || boilerplate);
-  }, [sessionData, language, contextManager]);
+    setCode(savedCode || "");
+  }, [sessionData, language, currentContext, contextManager]);
 
   const executeCode = useCallback(
     async (isFinalSubmission: boolean) => {
@@ -548,12 +572,12 @@ export default function R2CodePage() {
   // --- Socket Event Handlers ---
   const handleTimerUpdate = useCallback(
     (data: { timeRemaining: number }) => {
-      const remaining = data.timeRemaining * 1000; // Convert to milliseconds
+      const remaining = data.timeRemaining;
       setTimeRemaining(remaining);
 
-      // Warn user when time is low
-      if (data.timeRemaining <= 60 && data.timeRemaining > 0) {
-        showErrorToast(`Only ${data.timeRemaining} seconds remaining!`);
+      const remainingSeconds = Math.max(0, Math.ceil(remaining / 1000));
+      if (remainingSeconds <= 60 && remainingSeconds > 0) {
+        showErrorToast(`Only ${remainingSeconds} seconds remaining!`);
       }
 
       // Auto-submit when time is up
@@ -588,29 +612,33 @@ export default function R2CodePage() {
     }
 
     if (typeof data.globalTimeRemaining === "number") {
-      setTimeRemaining(data.globalTimeRemaining * 1000); // Convert to milliseconds
+      setTimeRemaining(data.globalTimeRemaining);
     }
   }, []);
 
   useEffect(() => {
     if (!sessionData?.endTime || showEndPopup) return;
 
-    const timerInterval = setInterval(() => {
+    const tick = () => {
       const remaining = sessionData.endTime - Date.now();
+      setTimeRemaining(Math.max(0, remaining));
+      return remaining;
+    };
 
-      if (remaining <= 0) {
-        setTimeRemaining(0);
+    if (tick() <= 0) {
+      showErrorToast("Time's up. Waiting for server decision...");
+      return;
+    }
+
+    const timerInterval = setInterval(() => {
+      if (tick() <= 0) {
         clearInterval(timerInterval);
-
         showErrorToast("Time's up. Waiting for server decision...");
-      } else {
-        setTimeRemaining(remaining);
       }
     }, 1000);
 
     return () => clearInterval(timerInterval);
-    // --- FIX: Added triggerSessionEnd to dependency array ---
-  }, [sessionData, showEndPopup, triggerSessionEnd]);
+  }, [sessionData, showEndPopup]);
 
   // Initial state fetch
   useEffect(() => {
@@ -632,6 +660,11 @@ export default function R2CodePage() {
       (response: GetCodePageStateResponse) => {
         if (response.success && response.sessionData) {
           setSessionData(response.sessionData);
+          if (typeof response.sessionData.endTime === "number") {
+            setTimeRemaining(
+              Math.max(0, response.sessionData.endTime - Date.now()),
+            );
+          }
         } else {
           showErrorToast(response.message || "Could not load session data.");
           router.push(`/r2/${userRole}`);
@@ -675,8 +708,18 @@ export default function R2CodePage() {
       } else {
         type = isWinner ? "win" : "lose";
       }
+      const newRole =
+        data.newRole ??
+        (sessionStorage.getItem("r2_user_role") as
+          | "elite"
+          | "challenger"
+          | null);
+      if (!newRole) {
+        console.error("Could not determine new Round 2 role.");
+        return;
+      }
 
-      safeTriggerSessionEnd(type, data.newRole);
+      safeTriggerSessionEnd(type, newRole);
     };
 
     const handleBountyEnded = (data: BountyEndedData) => {
@@ -725,7 +768,24 @@ export default function R2CodePage() {
 
       safeTriggerSessionEnd("opponent-violation", userRole);
     };
-
+    const handleRoleUpdate = (data: { newRole: "elite" | "challenger" }) => {
+      sessionStorage.setItem("r2_user_role", data.newRole);
+    };
+    const handleCooldown = (data: {
+      duration?: number;
+      cooldownEndTime?: number;
+    }) => {
+      const deadline =
+        typeof data.cooldownEndTime === "number"
+          ? data.cooldownEndTime
+          : typeof data.duration === "number"
+            ? Date.now() + data.duration
+            : null;
+      if (deadline != null) {
+        sessionStorage.setItem("r2_cooldown_end", String(deadline));
+      }
+    };
+    socket.on("round2:roleUpdate", handleRoleUpdate);
     socket.on("round2:matchResult", handleMatchResult);
     socket.on("round2:bountyEnded", handleBountyEnded);
     socket.on("round2:ended", handleRoundEnd);
@@ -733,9 +793,12 @@ export default function R2CodePage() {
     socket.on("round2:adminRemoved", handleAdminRemoved);
     socket.on("round2:adminAdded", handleAdminAdded);
     socket.on("round2:redirect", handleRound2Redirect);
+    socket.on("round2:cooldown", handleCooldown);
 
     return () => {
       socket.off("round2:redirect", handleRound2Redirect);
+      socket.off("round2:cooldown", handleCooldown);
+      socket.off("round2:roleUpdate", handleRoleUpdate);
       socket.off("round2:matchResult", handleMatchResult);
       socket.off("round2:bountyEnded", handleBountyEnded);
       socket.off("round2:ended", handleRoundEnd);
@@ -983,7 +1046,7 @@ export default function R2CodePage() {
               <div className="flex justify-between items-center mb-2 gap-2">
                 <select
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
                   className="bg-black text-white p-2 rounded border w-32 border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="python">Python</option>
@@ -992,7 +1055,7 @@ export default function R2CodePage() {
                   <option value="C">C</option>
                 </select>
                 <div
-                  className={`text-center p-2 font-mono text-xl bg-gray-800 rounded border border-amber-600 ${timeRemaining <= 60000 ? "text-red-400 animate-pulse" : ""}`}
+                  className={`text-center p-2 font-mono text-xl bg-black rounded border border-amber-600 ${timeRemaining <= 60000 ? "text-red-400 animate-pulse" : ""}`}
                 >
                   {formatTime(timeRemaining)}
                 </div>
@@ -1015,6 +1078,7 @@ export default function R2CodePage() {
                       }
                     }}
                     disabled={isSubmitting || isRunning}
+                    className="flex items-center gap-2 bg-black text-white p-2 rounded border border-amber-600 hover:bg-amber-600 hover:text-black transition-colors disabled:opacity-50"
                   >
                     <p className="pl-2">
                       {isSubmitting ? "Submitting..." : "Submit"}

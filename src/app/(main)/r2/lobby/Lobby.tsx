@@ -52,6 +52,41 @@ interface SimpleSocketResponse {
   message?: string;
 }
 
+const getLobbyParticipants = (payload: {
+  participants?: {
+    byStatus?: {
+      lobby?: Participant[];
+      waiting?: Participant[];
+      in_match?: Participant[];
+      in_bounty?: Participant[];
+      cooldown?: Participant[];
+      finished?: Participant[];
+      disconnected?: Participant[];
+    };
+    all?: Participant[];
+  };
+}): Participant[] | null => {
+  if (
+    Array.isArray(payload.participants?.all) &&
+    payload.participants.all.length > 0
+  ) {
+    return payload.participants.all;
+  }
+  if (payload.participants?.byStatus) {
+    const { lobby = [], waiting = [] } = payload.participants.byStatus;
+    const combined = [...lobby, ...waiting];
+    if (combined.length > 0) return combined;
+  }
+  return Array.isArray(payload.participants?.all)
+    ? payload.participants.all
+    : null;
+};
+
+const isAlreadyInRoundError = (res?: SimpleSocketResponse) =>
+  /already|joined|in (the )?round|in lobby/i.test(
+    `${res?.error || ""} ${res?.message || ""}`,
+  );
+
 // --- Component ---
 
 export default function LobbyR2() {
@@ -61,13 +96,25 @@ export default function LobbyR2() {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [authenticationChecked, setAuthenticationChecked] = useState(false);
+  const [isCheckingRound, setIsCheckingRound] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [roundStatus, setRoundStatus] = useState<
     "LOBBY" | "IN_PROGRESS" | "COMPLETED" | "LOCKED"
   >("LOBBY");
+
   const hasNavigated = useRef(false);
+  const hasAttemptedJoin = useRef(false);
+  const requestedStateOnProgress = useRef(false);
+  const joinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isAdmin = userRole === "ADMIN";
+
+  const clearJoinTimeout = useCallback(() => {
+    if (joinTimeoutRef.current) {
+      clearTimeout(joinTimeoutRef.current);
+      joinTimeoutRef.current = null;
+    }
+  }, []);
 
   // Functions
   const handleStartRound = () => {
@@ -82,123 +129,102 @@ export default function LobbyR2() {
     });
   };
 
-  useEffect(() => {
-    if (!socket || !isConnected || !authenticationChecked) return;
-
-    socket.emit("user:current-round", {}, (response: CurrentRoundResponse) => {
-      console.log("Current round response:", response);
-
-      if (!response.success) {
-        showErrorToast(response.error || "Failed to check round status");
-        router.back();
-        return;
-      }
-
-      const currentRound = response.currentRound;
-
-      if (!currentRound) {
-        showErrorToast("No active round found");
-        router.back();
-        return;
-      }
-
-      if (currentRound.currentRoundNumber !== 2) {
-        showErrorToast("Round 2 is not the current round");
-        router.back();
-        return;
-      }
-
-      if (currentRound.currentRoundStatus !== "LOBBY") {
-        showErrorToast(
-          `Round 2 is currently ${currentRound.currentRoundStatus.toLowerCase()}. Cannot join lobby.`,
-        );
-        console.log("Current round status:", currentRound.currentRoundStatus);
-        router.back();
-        return;
-      }
-
-      console.log("Round status valid, proceeding to get state");
-    });
-  }, [socket, isConnected, authenticationChecked, router]);
-
   // Authentication check
   useEffect(() => {
     if (!authLoading) setAuthenticationChecked(true);
     if (!authLoading && !userId) router.push("/dashboard");
   }, [authLoading, userId, router]);
 
-  // 🔑 Join Round 2 lobby and fetch state
+  // Round status check
   useEffect(() => {
-    if (!socket || !isConnected || !authenticationChecked || socketLoading) {
-      console.debug("[R2 Lobby] Waiting for socket/auth:", {
-        hasSocket: !!socket,
-        isConnected,
-        authenticationChecked,
-        socketLoading,
-      });
-      return;
-    }
+    if (!socket || !isConnected || !authenticationChecked) return;
 
-    console.debug("[R2 Lobby] Emitting round2:join");
+    socket.emit("user:current-round", {}, (response?: CurrentRoundResponse) => {
+      console.log("[R2 Lobby] Current round response:", response);
 
-    // Set a timeout to prevent infinite loading
-    const joinTimeout = setTimeout(() => {
-      console.error("[R2 Lobby] Join/GetState timeout");
-      setIsLoading(false);
-      showErrorToast("Failed to connect to lobby. Please refresh.");
-    }, 10000); // 10 second timeout
-
-    socket.emit("round2:join", {}, (res?: SimpleSocketResponse) => {
-      if (!res?.success) {
-        console.error("[R2 Lobby] Failed to join lobby:", res);
-        clearTimeout(joinTimeout);
-        setIsLoading(false);
-        showErrorToast(res?.error || "Failed to join lobby");
+      if (!response?.success || !response.currentRound) {
+        showErrorToast(response?.error || "Failed to check round status");
+        router.back();
         return;
       }
 
-      // After successful join, request state
-      console.debug("[R2 Lobby] Emitting round2:getState after join");
-      socket.emit("round2:getState", (stateResponse: any) => {
-        clearTimeout(joinTimeout);
-        console.debug("[R2 Lobby] State response:", stateResponse);
+      const currentRound = response.currentRound;
+      const r2 = currentRound.rounds?.find((r) => r.roundNumber === 2);
+      const r2Status =
+        r2?.status ||
+        (currentRound.currentRoundNumber === 2
+          ? currentRound.currentRoundStatus
+          : null);
 
-        if (stateResponse?.success) {
-          const lobbyParticipants =
-            stateResponse.participants?.byStatus?.lobby || [];
-          setParticipants(lobbyParticipants);
-          setRoundStatus(stateResponse.round?.status || "LOBBY");
+      if (r2Status !== "LOBBY" && r2Status !== "IN_PROGRESS") {
+        showErrorToast(
+          r2Status
+            ? `Round 2 is currently ${r2Status.toLowerCase()}.`
+            : "Round 2 is not active",
+        );
+        router.back();
+        return;
+      }
 
-          // Auto-navigate if round started AND user has a role
-          const userRole = stateResponse.roundSpecific?.role;
-          if (
-            !hasNavigated.current &&
-            stateResponse.round?.status === "IN_PROGRESS" &&
-            userRole
-          ) {
-            hasNavigated.current = true;
-            console.debug(
-              "[R2 Lobby] Round started, navigating to role page:",
-              userRole,
-            );
-            showInfoToast(`Role assigned: ${userRole.toUpperCase()}`);
-            router.push(`/r2/${userRole}`);
-          }
-        } else {
-          console.error("[R2 Lobby] GetState failed:", stateResponse);
-          showErrorToast("Failed to get lobby state");
-        }
+      setIsCheckingRound(false);
+    });
+  }, [socket, isConnected, authenticationChecked, router]);
 
-        setIsLoading(false);
-      });
+  useEffect(() => {
+    if (!isConnected) {
+      hasAttemptedJoin.current = false;
+    }
+  }, [isConnected]);
+
+  // 🔑 Join Round 2 lobby and fetch state
+  useEffect(() => {
+    if (
+      !socket ||
+      !isConnected ||
+      !authenticationChecked ||
+      socketLoading ||
+      isCheckingRound ||
+      hasAttemptedJoin.current
+    ) {
+      return;
+    }
+
+    hasAttemptedJoin.current = true;
+    console.debug("[R2 Lobby] Emitting round2:join & round2:getState");
+
+    joinTimeoutRef.current = setTimeout(() => {
+      console.error("[R2 Lobby] Join/GetState timeout");
+      setIsLoading(false);
+      showErrorToast("Failed to connect to lobby. Please refresh.");
+    }, 10000);
+
+    const requestState = () => {
+      socket.emit("round2:getState");
+    };
+
+    socket.emit("round2:join", {}, (res?: SimpleSocketResponse) => {
+      if (res && res.success === false && !isAlreadyInRoundError(res)) {
+        console.warn("[R2 Lobby] Failed to join lobby:", res);
+        showErrorToast(res.error || res.message || "Failed to join lobby");
+      }
+
+      requestState();
     });
 
-    socket.emit("round2:getState");
+    requestState();
 
     return () => {
-      clearTimeout(joinTimeout);
+      clearJoinTimeout();
     };
-  }, [socket, isConnected, authenticationChecked, socketLoading, router]);
+  }, [
+    socket,
+    isConnected,
+    authenticationChecked,
+    socketLoading,
+    isCheckingRound,
+    router,
+    clearJoinTimeout,
+  ]);
 
   // Listen for lobby updates
   useEffect(() => {
@@ -212,13 +238,10 @@ export default function LobbyR2() {
       reason?: string;
     }) => {
       console.warn("[R2 LOBBY REDIRECT]", { target, reason });
-
+      clearJoinTimeout();
       showErrorToast(reason || "You were removed from Round 2");
 
-      // prevent double navigation
       hasNavigated.current = true;
-
-      // clean client state
       localStorage.removeItem("battlecode-round-2-code-store");
       sessionStorage.removeItem("r2_session_type");
       sessionStorage.removeItem("r2_context_id");
@@ -227,54 +250,94 @@ export default function LobbyR2() {
       router.replace("/dashboard");
     };
 
+    const goToRole = (role?: string) => {
+      if (hasNavigated.current || (role !== "elite" && role !== "challenger")) {
+        return false;
+      }
+      hasNavigated.current = true;
+      showInfoToast(`Role assigned: ${role.toUpperCase()}`);
+      router.push(`/r2/${role}`);
+      return true;
+    };
+
+    const roleFrom = (data: any, people: any[] = []) =>
+      data?.roundSpecific?.role ||
+      data?.currentUser?.role ||
+      people.find((p) => p.userId === userId || p.id === userId)?.role;
+
     const handleStateUpdate = (stateResponse: any) => {
       console.debug("[R2 Lobby] State update:", stateResponse);
+      clearJoinTimeout();
 
       if (stateResponse?.success) {
-        const lobbyParticipants =
-          stateResponse.participants?.byStatus?.lobby || [];
+        const lobbyParticipants = getLobbyParticipants(stateResponse) || [];
         setParticipants(lobbyParticipants);
         setRoundStatus(stateResponse.round?.status || "LOBBY");
 
-        // Auto-navigate if round started AND user has a role
-        const userRole = stateResponse.roundSpecific?.role;
-        if (
-          !hasNavigated.current &&
-          stateResponse.round?.status === "IN_PROGRESS" &&
-          userRole
-        ) {
-          hasNavigated.current = true;
-          console.debug(
-            "[R2 Lobby] Round started, navigating to role page:",
-            userRole,
-          );
-          showInfoToast(`Role assigned: ${userRole.toUpperCase()}`);
-          router.push(`/r2/${userRole}`);
+        if (stateResponse.round?.status === "IN_PROGRESS") {
+          goToRole(roleFrom(stateResponse, lobbyParticipants));
         }
 
-        // Ensure loading is false when we receive updates
         setIsLoading(false);
       }
     };
 
-    const handleLobbyUpdate = () => {
-      console.debug("[R2 Lobby] Lobby update → fetching state");
-      socket.emit("round2:getState", handleStateUpdate);
+    const handleLobbyUpdate = (data: any) => {
+      console.debug("[R2 Lobby] Lobby update received:", data);
+      const lobbyParticipants = getLobbyParticipants(data);
+      if (lobbyParticipants) {
+        setParticipants(lobbyParticipants);
+        setIsLoading(false);
+      } else {
+        socket.emit("round2:getState");
+      }
+
+      if (
+        hasNavigated.current ||
+        (data.round?.status ?? data.status) !== "IN_PROGRESS"
+      ) {
+        return;
+      }
+
+      if (
+        goToRole(
+          roleFrom(data, lobbyParticipants || data.participants?.all || []),
+        )
+      ) {
+        return;
+      }
+
+      if (!requestedStateOnProgress.current) {
+        requestedStateOnProgress.current = true;
+        socket.emit("round2:getState");
+      }
+    };
+
+    const handleRolesAssigned = (data: { role?: string }) => {
+      goToRole(data?.role);
     };
 
     socket.on("round2:lobby", handleLobbyUpdate);
     socket.on("round2:state", handleStateUpdate);
     socket.on("round2:redirect", handleRound2Redirect);
+    socket.on("round2:rolesAssigned", handleRolesAssigned);
 
     return () => {
       socket.off("round2:lobby", handleLobbyUpdate);
       socket.off("round2:state", handleStateUpdate);
       socket.off("round2:redirect", handleRound2Redirect);
+      socket.off("round2:rolesAssigned", handleRolesAssigned);
     };
-  }, [socket, isConnected, router]);
+  }, [socket, isConnected, router, userId, clearJoinTimeout]);
 
   // Early return for loading states
-  if (authLoading || !authenticationChecked || isLoading || socketLoading) {
+  if (
+    authLoading ||
+    !authenticationChecked ||
+    isCheckingRound ||
+    socketLoading ||
+    isLoading
+  ) {
     const loadingMessage = authLoading
       ? "Loading Authentication..."
       : socketLoading
@@ -307,13 +370,24 @@ export default function LobbyR2() {
         <CustomScrollbar className="h-full overflow-y-auto">
           <div className="grid grid-cols-3 gap-12 max-w-6xl mx-auto pb-6">
             {participants.length > 0 ? (
-              participants.map((participant, index) => (
-                <PlayerCard
-                  key={participant.userId || `participant-${index}`}
-                  username={participant.username}
-                  avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(participant.username)}&background=0e7490&color=fff`}
-                />
-              ))
+              participants.map((participant: any, index) => {
+                const displayName =
+                  participant.username ||
+                  participant.id ||
+                  participant.userId ||
+                  `Player ${index + 1}`;
+                const participantKey =
+                  participant.id ||
+                  participant.userId ||
+                  `participant-${index}`;
+                return (
+                  <PlayerCard
+                    key={participantKey}
+                    username={displayName}
+                    avatar={`https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0e7490&color=fff`}
+                  />
+                );
+              })
             ) : (
               <div className="col-span-3 flex items-center justify-center text-gray-400 text-base py-12">
                 No participants yet. Waiting for players to join...
