@@ -319,11 +319,6 @@ export default function Dashboard() {
     socket.emit("client:getLeaderboard");
     socket.emit("client:getCurrentRound");
 
-    // Poll round status every 5s to reflect admin changes across sessions
-    const pollInterval = setInterval(() => {
-      socket.emit("client:getCurrentRound");
-    }, 5000);
-
     // Cleanup function
     return () => {
       socket.off("server:leaderboard", handleLeaderboard);
@@ -332,7 +327,6 @@ export default function Dashboard() {
       socket.off("round1:adminAdded");
       socket.off("round2:adminAdded");
       socket.off("round3:adminAdded");
-      clearInterval(pollInterval);
     };
   }, [
     socket,
