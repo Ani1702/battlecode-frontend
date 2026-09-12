@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useSocket } from "@/contexts/SocketContext";
 import LoadingOverlay from "@/components/shared/LoadingOverlay";
+import CustomScrollbar from "@/components/shared/CustomScrollbar";
 import { BaseRoundState, Participant } from "@/types/roundState";
 
 interface RoundStatus {
@@ -37,6 +38,23 @@ interface CurrentRoundData {
   currentRoundStatus: string;
   rounds: RoundStatus[];
 }
+
+interface LeaderboardEntry {
+  rank: number;
+  id: string;
+  name: string;
+  username: string;
+  score: number;
+  currentRound: number;
+  regNo: string;
+  trend: string;
+}
+
+type LeaderboardPayload = {
+  success?: boolean;
+  error?: string;
+  leaderboard?: LeaderboardEntry[];
+};
 
 const TIMER_DRIFT_SECONDS = 2;
 
@@ -225,6 +243,8 @@ export default function Admin() {
   const [isRoundActive, setIsRoundActive] = useState(false);
   const [currentUser, setCurrentUser] = useState<Participant | null>(null);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLocked, setLeaderboardLocked] = useState(false);
 
   const { socket } = useSocket();
   const router = useRouter();
@@ -262,6 +282,53 @@ export default function Admin() {
       socket.off("admin:error", handleAdminError); // <-- ADD THIS
     };
   }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const applyLeaderboard = (data: LeaderboardPayload) => {
+      if (data?.success === false) {
+        setLeaderboardLocked(true);
+        return;
+      }
+      if (Array.isArray(data?.leaderboard)) {
+        setLeaderboard(data.leaderboard);
+        setLeaderboardLocked(false);
+      }
+    };
+
+    const requestLeaderboard = () => {
+      socket.emit("user:leaderboard", applyLeaderboard);
+    };
+
+    socket.on("server:leaderboard", applyLeaderboard);
+    socket.on("connect", requestLeaderboard);
+    socket.on("admin:reset:success", requestLeaderboard);
+    requestLeaderboard();
+
+    return () => {
+      socket.off("server:leaderboard", applyLeaderboard);
+      socket.off("connect", requestLeaderboard);
+      socket.off("admin:reset:success", requestLeaderboard);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket || !currentRoundData) return;
+    const locked =
+      currentRoundData.currentRoundNumber === 3 &&
+      currentRoundData.currentRoundStatus !== "LOCKED";
+    if (locked) {
+      setLeaderboardLocked(true);
+      return;
+    }
+    setLeaderboardLocked(false);
+    socket.emit("user:leaderboard");
+  }, [
+    socket,
+    currentRoundData?.currentRoundNumber,
+    currentRoundData?.currentRoundStatus,
+  ]);
 
   const addUserToRound = async (userEmail: string, roundNumber: number) => {
     console.log("[ADMIN ACTION] Adding user to round:", {
@@ -907,6 +974,13 @@ export default function Admin() {
     (currentRoundData?.currentRoundStatus === "IN_PROGRESS"
       ? currentRoundData.currentRoundNumber
       : null);
+
+  const isR3LeaderboardLocked =
+    currentRoundData?.currentRoundNumber === 3 &&
+    currentRoundData?.currentRoundStatus !== "LOCKED";
+  const showLeaderboardLocked = currentRoundData
+    ? isR3LeaderboardLocked
+    : leaderboardLocked;
 
   // After refresh, ask the active round for its deadline instead of only the default tab (round 0)
   useEffect(() => {
@@ -1581,7 +1655,7 @@ export default function Admin() {
                 <span className="text-red-400 font-semibold">
                   overwrite previous qualifications
                 </span>
-                .
+                . Use the live event leaderboard below for the current ranking.
               </p>
 
               <div className="flex flex-col md:flex-row gap-4 items-center">
@@ -1838,63 +1912,87 @@ export default function Admin() {
               </div>
             </div>
 
-            {/* Leaderboard Section (using match participants for consistency) */}
+            {/* Event-wide leaderboard from server:leaderboard */}
             <div className="mt-8 bg-gray-800/50 rounded-lg p-6">
-              <div className="flex items-center mb-4">
-                <img
-                  src="/leaderboard-img.svg"
-                  alt="Leaderboard Icon"
-                  width={16}
-                  height={16}
-                />
-                <p className="text-2xl text-orange-500 ml-2">
-                  Round {selectedRoundForMatches} Participants
+              <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+                <div className="flex items-center">
+                  <img
+                    src="/leaderboard-img.svg"
+                    alt="Leaderboard Icon"
+                    width={16}
+                    height={16}
+                  />
+                  <p className="text-2xl text-orange-500 ml-2">
+                    Live Leaderboard
+                  </p>
+                </div>
+                <p className="text-sm text-gray-400">
+                  {leaderboard.length}{" "}
+                  {leaderboard.length === 1 ? "player" : "players"}
                 </p>
               </div>
-              <div className="overflow-x-auto">
-                {Array.isArray(matchParticipants) &&
-                matchParticipants.length > 0 ? (
+              {showLeaderboardLocked && (
+                <p className="text-sm text-yellow-400 mb-4">
+                  Leaderboard updates are locked while Round 3 is live. Showing
+                  the last received list.
+                </p>
+              )}
+              <CustomScrollbar className="max-h-[32rem] overflow-y-auto overflow-x-auto">
+                {leaderboard.length > 0 ? (
                   <table className="w-full text-left text-sm text-white">
-                    <thead>
+                    <thead className="sticky top-0 bg-gray-800">
                       <tr className="border-b border-gray-700">
-                        <th className="py-2 px-3 font-bold">#</th>
+                        <th className="py-2 px-3 font-bold">Rank</th>
                         <th className="py-2 px-3 font-bold">Player</th>
                         <th className="py-2 px-3 font-bold">Score</th>
-                        <th className="py-2 px-3 font-bold">Status</th>
+                        <th className="py-2 px-3 font-bold">Round</th>
+                        <th className="py-2 px-3 font-bold">Reg No</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[...matchParticipants]
-                        .sort(
-                          (a, b) => (b.eventScore ?? 0) - (a.eventScore ?? 0),
-                        )
-                        .map((p, idx) => (
-                          <tr
-                            key={`${p.userId}-${idx}`}
-                            className="border-gray-800 hover:bg-white/5 transition"
-                          >
-                            <td className="py-2 px-3">{idx + 1}</td>
-                            <td className="py-2 px-3 max-w-[100px] truncate">
-                              {p.username}
-                            </td>
-                            <td className="py-2 px-3 font-mono text-cyan-400">
-                              {p.eventScore ?? 0}
-                            </td>
-                            <td className="py-2 px-3 text-sm">
-                              {activeUserStatusLabel(p)}
-                            </td>
-                          </tr>
-                        ))}
+                      {leaderboard.map((entry, idx) => (
+                        <tr
+                          key={entry.id || idx}
+                          className="border-gray-800 hover:bg-white/5 transition"
+                        >
+                          <td className="py-2 px-3">{entry.rank}</td>
+                          <td className="py-2 px-3">
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {entry.username && entry.username !== "Not Set"
+                                  ? entry.username
+                                  : entry.name || "Unknown"}
+                              </span>
+                              {entry.username &&
+                                entry.username !== "Not Set" &&
+                                entry.name && (
+                                  <span className="text-xs text-gray-400">
+                                    {entry.name}
+                                  </span>
+                                )}
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 font-mono text-cyan-400">
+                            {entry.score}
+                          </td>
+                          <td className="py-2 px-3">{entry.currentRound}</td>
+                          <td className="py-2 px-3 text-gray-300">
+                            {entry.regNo || "—"}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400">
+                  <div className="flex items-center justify-center py-8 text-gray-400">
                     <p>
-                      No active participants in Round {selectedRoundForMatches}.
+                      {showLeaderboardLocked
+                        ? "Leaderboard is locked during Round 3."
+                        : "Waiting for leaderboard..."}
                     </p>
                   </div>
                 )}
-              </div>
+              </CustomScrollbar>
             </div>
           </div>
         </div>
